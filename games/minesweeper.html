@@ -3,9 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Win95 Minesweeper - High Fidelity</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <title>Win95 Minesweeper - Secure Edition</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" 
+          integrity="sha384-9ndCyUaIbzAi2FUVXJi0CjmCapSmO7SnpJef0486qhLnuZ2cdeRhO02iuK6FUUVM" crossorigin="anonymous">
+    
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js" 
+            integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script>
+
     <style>
         :root {
             --win-gray: #c0c0c0;
@@ -64,7 +69,6 @@
 
         #minefield { display: grid; border: 3px solid; border-color: var(--win-shadow) var(--win-white) var(--win-white) var(--win-shadow); }
         
-        /* Cell Graphics */
         .cell { 
             width: 30px; height: 30px; background-color: var(--win-gray); 
             border: 3px solid; border-color: var(--win-white) var(--win-shadow) var(--win-shadow) var(--win-white); 
@@ -73,29 +77,17 @@
         }
         .cell.revealed { border: 1px solid #7b7b7b; background-color: #bdbdbd; }
 
-        /* The Custom Flag Graphic */
-        .flag-icon {
-            position: relative; width: 14px; height: 18px;
-        }
-        .flag-pole {
-            position: absolute; left: 4px; top: 2px; width: 2px; height: 14px; background: black;
-        }
+        .flag-icon { position: relative; width: 14px; height: 18px; }
+        .flag-pole { position: absolute; left: 4px; top: 2px; width: 2px; height: 14px; background: black; }
         .flag-banner {
-            position: absolute; left: 6px; top: 2px;
-            width: 0; height: 0;
-            border-top: 5px solid transparent;
-            border-bottom: 5px solid transparent;
-            border-left: 8px solid red;
+            position: absolute; left: 6px; top: 2px; width: 0; height: 0;
+            border-top: 5px solid transparent; border-bottom: 5px solid transparent; border-left: 8px solid red;
         }
-        .flag-base {
-            position: absolute; left: 2px; top: 14px; width: 6px; height: 2px; background: black;
-        }
+        .flag-base { position: absolute; left: 2px; top: 14px; width: 6px; height: 2px; background: black; }
 
-        /* Mine Graphics */
         .cell.mine-hit { background-color: red !important; }
-        .mine-revealed::after { content: '💣'; font-size: 16px; }
+        .cell.mine-revealed::after { content: '💣'; font-size: 16px; }
         
-        /* The Misflagged X */
         .cell.misflagged .flag-icon { opacity: 0.5; }
         .cell.misflagged::before { 
             content: '✕'; position: absolute; color: red; font-size: 28px; 
@@ -104,7 +96,6 @@
 
         .cell.hint-flash { background-color: #ffd700 !important; border: 2px solid white; }
         
-        /* Typography */
         .n-1 { color: blue; } .n-2 { color: green; } .n-3 { color: red; } .n-4 { color: darkblue; }
         .n-5 { color: darkred; } .n-6 { color: teal; } .n-7 { color: black; } .n-8 { color: gray; }
 
@@ -163,11 +154,14 @@
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" 
+        integrity="sha384-geWF76RCwLtnZ8qwWowPQNguL3RmwHVBC9FhGdlKrxdiJJigb/j/68SIy3Te4Bkz" crossorigin="anonymous"></script>
+
 <script>
     let rows, cols, mines, grid, timer, sec, gameOver, flags, revealed, first;
     let cellHoldTimer, faceHoldTimer;
     const HOLD_DELAY = 500;
+    const FLAG_HTML = '<div class="flag-icon"><div class="flag-pole"></div><div class="flag-banner"></div><div class="flag-base"></div></div>';
 
     const levels = {
         beginner: { r: 9, c: 9, m: 10, base: 20 },
@@ -175,8 +169,6 @@
         expert: { r: 16, c: 30, m: 99, base: 190 }
     };
     let currentLvl = 'beginner';
-
-    const FLAG_HTML = '<div class="flag-icon"><div class="flag-pole"></div><div class="flag-banner"></div><div class="flag-base"></div></div>';
 
     function closeMenus() {
         $(".menu-content").hide();
@@ -191,7 +183,7 @@
 
     $("#help-trigger").on('click', function() {
         closeMenus();
-        alert('Controls:\n- Left Click: Dig\n- Right Click / Hold: Flag\n- Hold Smiley: Hint (+5s)');
+        alert('Controls:\n- Left Click: Dig\n- Right Click / Hold Cell: Flag\n- Hold Smiley: Hint (+5s)');
     });
 
     $("#btn-new-game").on('click', function() {
@@ -226,18 +218,12 @@
         for (let r = 0; r < rows; r++) {
             for (let c = 0; c < cols; c++) {
                 const $c = $('<div class="cell"></div>').appendTo($f);
-                
                 $c.on('contextmenu', (e) => { e.preventDefault(); handleAction(r, c, true); });
-
                 $c.on('mousedown touchstart', (e) => {
                     if (gameOver || e.which === 3) return;
                     $('#reset-btn').text('😮');
-                    cellHoldTimer = setTimeout(() => {
-                        handleAction(r, c, true);
-                        cellHoldTimer = null;
-                    }, HOLD_DELAY);
+                    cellHoldTimer = setTimeout(() => { handleAction(r, c, true); cellHoldTimer = null; }, HOLD_DELAY);
                 });
-
                 $c.on('mouseup touchend mouseleave', (e) => {
                     if (gameOver) return;
                     if (cellHoldTimer) {
@@ -247,7 +233,6 @@
                     }
                     if(!gameOver) $('#reset-btn').text('🙂');
                 });
-
                 grid[r][c] = { isM: false, rev: false, flg: false, n: 0, $el: $c };
             }
         }
@@ -259,9 +244,7 @@
         faceWasLongPress = false;
         if (gameOver) return;
         $('#reset-btn').text('😮');
-        faceHoldTimer = setTimeout(() => {
-            if (!first) { giveHint(); faceWasLongPress = true; }
-        }, 800);
+        faceHoldTimer = setTimeout(() => { if (!first) { giveHint(); faceWasLongPress = true; } }, 800);
     });
 
     $(document).on('mouseup touchend', function(e) {
@@ -322,10 +305,7 @@
         if (cell.rev || cell.flg) return;
         cell.rev = true; cell.$el.addClass('revealed').removeClass('outset');
         revealed++;
-        if (cell.isM) { 
-            if(isClick) cell.$el.addClass('mine-hit');
-            end(false); return; 
-        }
+        if (cell.isM) { if(isClick) cell.$el.addClass('mine-hit'); end(false); return; }
         if (cell.n > 0) { cell.$el.text(cell.n).addClass('n-'+cell.n); }
         else { for(let i=-1; i<=1; i++) for(let j=-1; j<=1; j++) if(grid[r+i] && grid[r+i][c+j]) reveal(r+i, c+j); }
         if (revealed === (rows * cols) - mines) end(true);
@@ -338,11 +318,8 @@
         $('#reset-btn').text(win ? '😎' : '😵');
         if (!win) {
             grid.flat().forEach(c => { 
-                if (c.isM && !c.flg) {
-                    c.$el.addClass('mine-revealed').addClass('revealed').removeClass('outset');
-                } else if (!c.isM && c.flg) {
-                    c.$el.addClass('misflagged').addClass('revealed').removeClass('outset');
-                }
+                if (c.isM && !c.flg) { c.$el.addClass('mine-revealed').addClass('revealed').removeClass('outset'); } 
+                else if (!c.isM && c.flg) { c.$el.addClass('misflagged').addClass('revealed').removeClass('outset'); }
             });
         } else {
             grid.flat().forEach(c => { if(c.isM && !c.flg) { c.flg = true; c.$el.append(FLAG_HTML); } });
@@ -352,7 +329,7 @@
     }
 
     function getScores() {
-        let s = JSON.parse(localStorage.getItem('ms_final_v10') || '{}');
+        let s = JSON.parse(localStorage.getItem('ms_final_v11') || '{}');
         if (!s[currentLvl]) {
             const ai = ["Gemini", "DeepBlue", "Clippy", "Woz", "Ada", "Turing", "Hopper", "Carmack", "Gates", "Jobs"];
             s[currentLvl] = ai.map((name, i) => ({ name, time: levels[currentLvl].base + (i * 10) }));
@@ -363,7 +340,7 @@
     function saveScore(name, time) {
         let s = getScores(); s[currentLvl].push({ name: name.substring(0, 12), time });
         s[currentLvl].sort((a,b) => a.time - b.time); s[currentLvl] = s[currentLvl].slice(0, 10);
-        localStorage.setItem('ms_final_v10', JSON.stringify(s));
+        localStorage.setItem('ms_final_v11', JSON.stringify(s));
         showLeaderboard();
     }
 
