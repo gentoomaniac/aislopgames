@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Nokia Snake Retro - Seamless Migration</title>
+    <title>Nokia Snake Retro - D-Pad Controls</title>
     <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -96,17 +96,43 @@
             outline: none;
         }
 
+        /* Updated D-Pad Styling */
         .keypad {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 12px;
-            margin-top: 25px;
+            grid-template-columns: repeat(3, 55px);
+            grid-template-rows: repeat(3, 35px);
+            gap: 10px;
+            margin-top: 20px;
+            justify-content: center;
         }
+        
         .key {
-            width: 55px; height: 35px;
             background: #bdc3c7;
-            border-radius: 50% 50% 40% 40%;
+            border-radius: 8px;
             box-shadow: 0 4px #7f8c8d;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 1.2rem;
+            color: #2c3e50;
+            user-select: none;
+        }
+
+        .key:active {
+            transform: translateY(4px);
+            box-shadow: 0 0 #7f8c8d;
+        }
+
+        .key.empty {
+            background: transparent;
+            box-shadow: none;
+            cursor: default;
+        }
+        
+        .key.empty:active {
+            transform: none;
         }
     </style>
 </head>
@@ -130,9 +156,17 @@
             <canvas id="gameCanvas" width="240" height="240"></canvas>
         </div>
     </div>
-    <div class="keypad">
-        <div class="key"></div><div class="key"></div><div class="key"></div>
-        <div class="key"></div><div class="key"></div><div class="key"></div>
+    
+    <div class="keypad" id="dpad">
+        <div class="key empty"></div>
+        <div class="key dir-btn" data-dir="U">▲</div>
+        <div class="key empty"></div>
+        <div class="key dir-btn" data-dir="L">◀</div>
+        <div class="key dir-btn" data-dir="OK">OK</div>
+        <div class="key dir-btn" data-dir="R">▶</div>
+        <div class="key empty"></div>
+        <div class="key dir-btn" data-dir="D">▼</div>
+        <div class="key empty"></div>
     </div>
 </div>
 
@@ -142,17 +176,18 @@ const ctx = canvas.getContext('2d');
 const overlay = document.getElementById('ui-overlay');
 const contentBox = document.getElementById('content-box');
 const scoreDisplay = document.getElementById('score-board');
+const dpad = document.getElementById('dpad');
 
 const GRID = 12; 
 const TILE_COUNT = canvas.width / GRID;
 
 const DIFFICULTIES = ['EASY', 'MEDIUM', 'HARD', 'PROGRESSIVE'];
-let diffIdx = 1; // Default to MEDIUM
+let diffIdx = 1; 
 let currentSpeed = 140;
 
 let snake, food, bonus, dx, dy, score, gameTimeout;
 let gameState = 'MENU'; 
-let currentView = 'MAIN'; // MAIN, SCORES, INPUT, CRASHED
+let currentView = 'MAIN'; 
 let menuIdx = 0;
 let foodEatenCount = 0;
 let bonusTimer = 0;
@@ -172,12 +207,11 @@ const DEFAULTS = {
 
 const CURRENT_VERSION_KEY = 'retro_snake_v8';
 
-// Migration Logic to prevent data loss
+// Migration Logic
 function migrateData() {
-    if (localStorage.getItem(CURRENT_VERSION_KEY)) return; // Already migrated
+    if (localStorage.getItem(CURRENT_VERSION_KEY)) return; 
 
     let oldData = null;
-    // Check older structured versions (v7, v6, v5)
     for (let v = 7; v >= 5; v--) {
         const stored = localStorage.getItem('retro_snake_v' + v);
         if (stored) {
@@ -190,17 +224,15 @@ function migrateData() {
     if (oldData) {
         DIFFICULTIES.forEach(diff => {
             let diffScores = oldData[diff] || [...baseDefaults];
-            // Sort and crop safely to Top 3
             newData[diff] = diffScores.sort((a,b) => b.score - a.score).slice(0, 3);
         });
     } else {
-        newData = DEFAULTS; // Completely fresh install
+        newData = DEFAULTS;
     }
     
     localStorage.setItem(CURRENT_VERSION_KEY, JSON.stringify(newData));
 }
 
-// Run migration on load
 migrateData();
 
 const getScores = () => JSON.parse(localStorage.getItem(CURRENT_VERSION_KEY));
@@ -234,7 +266,6 @@ function init() {
 function loop() {
     const head = {x: snake[0].x + dx, y: snake[0].y + dy};
     
-    // Collisions
     if (head.x < 0 || head.x >= TILE_COUNT || head.y < 0 || head.y >= TILE_COUNT || 
         snake.some(p => p.x === head.x && p.y === head.y)) return end();
 
@@ -454,6 +485,20 @@ function handleInput(dir) {
     }
 }
 
+// Map the physical/virtual D-Pad Events
+function triggerKeypadEvent(e) {
+    const btn = e.target.closest('.dir-btn');
+    if (!btn) return;
+    e.preventDefault(); // Prevents double-firing from ghost clicks
+    
+    const dir = btn.getAttribute('data-dir');
+    if (dir) handleInput(dir);
+}
+
+dpad.addEventListener('mousedown', triggerKeypadEvent);
+dpad.addEventListener('touchstart', triggerKeypadEvent, {passive: false});
+
+// Key Controls
 window.onkeydown = e => {
     const isTyping = document.activeElement && document.activeElement.id === 'pName';
     
@@ -470,15 +515,21 @@ window.onkeydown = e => {
     }
 };
 
+// Swipes (Kept alive for the main screen)
 let tsX, tsY;
-window.ontouchstart = e => { tsX = e.touches[0].clientX; tsY = e.touches[0].clientY; };
-window.ontouchend = e => {
-    if (e.target.classList.contains('menu-item') || e.target.id === 'pName') return; 
+window.addEventListener('touchstart', e => { 
+    if (e.target.closest('#dpad')) return; // ignore swipes starting on the dpad
+    tsX = e.touches[0].clientX; 
+    tsY = e.touches[0].clientY; 
+}, {passive: false});
+
+window.addEventListener('touchend', e => {
+    if (e.target.closest('#dpad') || e.target.classList.contains('menu-item') || e.target.id === 'pName') return; 
 
     let diffX = e.changedTouches[0].clientX - tsX, diffY = e.changedTouches[0].clientY - tsY;
     if (Math.abs(diffX) < 15 && Math.abs(diffY) < 15) handleInput('OK');
     else Math.abs(diffX) > Math.abs(diffY) ? handleInput(diffX > 0 ? 'R' : 'L') : handleInput(diffY > 0 ? 'D' : 'U');
-};
+});
 
 showMenu();
 </script>
