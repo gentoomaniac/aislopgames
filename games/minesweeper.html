@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Win95 Minesweeper - Pro Edition</title>
+    <title>Win95 Minesweeper - Chording Pro</title>
     
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" 
           integrity="sha384-9ndCyUaIbzAi2FUVXJi0CjmCapSmO7SnpJef0486qhLnuZ2cdeRhO02iuK6FUUVM" crossorigin="anonymous">
@@ -68,6 +68,7 @@
         }
 
         #minefield { display: grid; border: 3px solid; border-color: var(--win-shadow) var(--win-white) var(--win-white) var(--win-shadow); }
+        
         .cell { 
             width: 30px; height: 30px; background-color: var(--win-gray); 
             border: 3px solid; border-color: var(--win-white) var(--win-shadow) var(--win-shadow) var(--win-white); 
@@ -182,7 +183,7 @@
 
     $("#help-trigger").on('click', function() {
         closeMenus();
-        alert('Controls:\n- Left Click: New Game\n- Right Click / Long Press Smiley: Hint (+5s)\n- Long press cells to flag.');
+        alert('Hold Smiley: Hint (+5s)\nRight-Click Number: Chord Sweep\nDouble-Tap Number: Chord Sweep');
     });
 
     $("#btn-new-game").on('click', function() {
@@ -202,7 +203,7 @@
     });
 
     $("#btn-scores").on('click', function() { closeMenus(); showLeaderboard(); });
-    $(document).on('click', function() { closeMenus(); });
+    $(document).on('click', closeMenus);
 
     function initGame() {
         clearInterval(timer);
@@ -224,11 +225,25 @@
                 
                 $c.on('contextmenu', (e) => {
                     e.preventDefault();
-                    handleAction(r, c, true);
+                    if (gameOver) return;
+                    if (grid[r][c].rev && grid[r][c].n > 0) handleChord(r, c);
+                    else handleAction(r, c, true);
                 });
 
+                let lastTap = 0;
                 $c.on('mousedown touchstart', (e) => {
                     if (gameOver || (e.type === 'mousedown' && e.which === 3)) return;
+                    
+                    const now = Date.now();
+                    if (now - lastTap < 300) {
+                        if (grid[r][c].rev) {
+                            clearTimeout(cellHoldTimer);
+                            handleChord(r, c);
+                            return;
+                        }
+                    }
+                    lastTap = now;
+
                     $('#reset-btn').text('😮');
                     if (cellHoldTimer) clearTimeout(cellHoldTimer);
                     cellHoldTimer = setTimeout(() => {
@@ -252,43 +267,47 @@
         }
     }
 
-    // --- UPDATED SMILEY LOGIC ---
+    function handleChord(r, c) {
+        const cell = grid[r][c];
+        let flagCount = 0;
+        let neighbors = [];
+
+        for (let i = -1; i <= 1; i++) {
+            for (let j = -1; j <= 1; j++) {
+                if (i === 0 && j === 0) continue;
+                if (grid[r+i] && grid[r+i][c+j]) {
+                    let n = grid[r+i][c+j];
+                    neighbors.push({r: r+i, c: c+j, data: n});
+                    if (n.flg) flagCount++;
+                }
+            }
+        }
+
+        if (flagCount === cell.n) {
+            neighbors.forEach(n => {
+                if (!n.data.flg && !n.data.rev) reveal(n.r, n.c, true);
+            });
+        }
+    }
+
     let faceWasLongPress = false;
-
-    $('#reset-btn').on('contextmenu', function(e) {
-        e.preventDefault(); // Disable browser right-click menu on smiley
-    });
-
-    $('#reset-btn').on('mousedown touchstart', function(e) {
+    $('#reset-btn').on('contextmenu', (e) => e.preventDefault());
+    $('#reset-btn').on('mousedown touchstart', (e) => {
         e.preventDefault();
         faceWasLongPress = false;
-        
-        // Visual feedback
         $('#reset-btn').text('😮');
-
-        // Only handle Right Click (which=3) or Touch for Hint long-press
         if (e.type === 'touchstart' || e.which === 3) {
             faceHoldTimer = setTimeout(() => {
-                if (!first && !gameOver) { 
-                    giveHint(); 
-                    faceWasLongPress = true; 
-                }
+                if (!first && !gameOver) { giveHint(); faceWasLongPress = true; }
             }, 800);
         }
     });
 
-    $(document).on('mouseup touchend', function(e) {
-        if (faceHoldTimer || $('#reset-btn').is(e.target) || $(e.target).closest('#reset-btn').length > 0) {
+    $(document).on('mouseup touchend', (e) => {
+        if (faceHoldTimer || $(e.target).closest('#reset-btn').length > 0) {
             clearTimeout(faceHoldTimer);
             faceHoldTimer = null;
-
-            // If it was a LEFT CLICK (which=1) and NOT a long press, trigger New Game
-            if (!faceWasLongPress && (e.which === 1 || e.type === 'touchend')) {
-                 if ($(e.target).closest('#reset-btn').length > 0) {
-                    confirmNewGame();
-                 }
-            }
-            
+            if (!faceWasLongPress && ($(e.target).closest('#reset-btn').length > 0)) confirmNewGame();
             if (!gameOver) $('#reset-btn').text('🙂');
         }
     });
@@ -342,7 +361,7 @@
         cell.rev = true; cell.$el.addClass('revealed').removeClass('outset');
         revealed++;
         if (cell.isM) { if(isClick) cell.$el.addClass('mine-hit'); end(false); return; }
-        if (cell.n > 0) { cell.$el.text(cell.n).addClass('n-'+cell.n); }
+        if (cell.n > 0) cell.$el.text(cell.n).addClass('n-'+cell.n);
         else { for(let i=-1; i<=1; i++) for(let j=-1; j<=1; j++) if(grid[r+i] && grid[r+i][c+j]) reveal(r+i, c+j); }
         if (revealed === (rows * cols) - mines) end(true);
     }
@@ -354,12 +373,8 @@
         $('#reset-btn').text(win ? '😎' : '😵');
         if (!win) {
             grid.flat().forEach(c => { 
-                if (c.isM && !c.flg) { 
-                    c.$el.addClass('mine-revealed').addClass('revealed').removeClass('outset'); 
-                } 
-                else if (!c.isM && c.flg) { 
-                    c.$el.empty().addClass('misflagged').addClass('revealed').removeClass('outset'); 
-                }
+                if (c.isM && !c.flg) c.$el.addClass('mine-revealed').addClass('revealed').removeClass('outset');
+                else if (!c.isM && c.flg) c.$el.empty().addClass('misflagged').addClass('revealed').removeClass('outset');
             });
         } else {
             grid.flat().forEach(c => { if(c.isM && !c.flg) { c.flg = true; c.$el.append(FLAG_HTML); } });
@@ -369,7 +384,7 @@
     }
 
     function getScores() {
-        let s = JSON.parse(localStorage.getItem('ms_final_sri') || '{}');
+        let s = JSON.parse(localStorage.getItem('ms_final_chord') || '{}');
         if (!s[currentLvl]) {
             const ai = ["Gemini", "DeepBlue", "Clippy", "Woz", "Ada", "Turing", "Hopper", "Carmack", "Gates", "Jobs"];
             s[currentLvl] = ai.map((name, i) => ({ name, time: levels[currentLvl].base + (i * 10) }));
@@ -380,7 +395,7 @@
     function saveScore(name, time) {
         let s = getScores(); s[currentLvl].push({ name: name.substring(0, 12), time });
         s[currentLvl].sort((a,b) => a.time - b.time); s[currentLvl] = s[currentLvl].slice(0, 10);
-        localStorage.setItem('ms_final_sri', JSON.stringify(s));
+        localStorage.setItem('ms_final_chord', JSON.stringify(s));
         showLeaderboard();
     }
 
