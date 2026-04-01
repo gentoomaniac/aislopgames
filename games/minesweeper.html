@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Minesweeper</title>
+    <title>Win95 Minesweeper - High Fidelity</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <style>
@@ -40,7 +40,6 @@
             color: black; font-size: 10px; display: flex; align-items: center; justify-content: center; 
         }
 
-        /* Fixed Menu Logic */
         .menu-bar { font-size: 12px; display: flex; border-bottom: 1px solid var(--win-shadow); margin-bottom: 5px; position: relative; }
         .menu-dropdown { position: relative; }
         .menu-trigger { padding: 2px 8px; cursor: pointer; }
@@ -64,26 +63,54 @@
         }
 
         #minefield { display: grid; border: 3px solid; border-color: var(--win-shadow) var(--win-white) var(--win-white) var(--win-shadow); }
+        
+        /* Cell Graphics */
         .cell { 
             width: 30px; height: 30px; background-color: var(--win-gray); 
             border: 3px solid; border-color: var(--win-white) var(--win-shadow) var(--win-shadow) var(--win-white); 
             display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; 
+            position: relative;
         }
         .cell.revealed { border: 1px solid #7b7b7b; background-color: #bdbdbd; }
-        .cell.flagged::after { content: '🚩'; font-size: 14px; }
-        .cell.mine { background-color: red; }
+
+        /* The Custom Flag Graphic */
+        .flag-icon {
+            position: relative; width: 14px; height: 18px;
+        }
+        .flag-pole {
+            position: absolute; left: 4px; top: 2px; width: 2px; height: 14px; background: black;
+        }
+        .flag-banner {
+            position: absolute; left: 6px; top: 2px;
+            width: 0; height: 0;
+            border-top: 5px solid transparent;
+            border-bottom: 5px solid transparent;
+            border-left: 8px solid red;
+        }
+        .flag-base {
+            position: absolute; left: 2px; top: 14px; width: 6px; height: 2px; background: black;
+        }
+
+        /* Mine Graphics */
+        .cell.mine-hit { background-color: red !important; }
+        .mine-revealed::after { content: '💣'; font-size: 16px; }
+        
+        /* The Misflagged X */
+        .cell.misflagged .flag-icon { opacity: 0.5; }
+        .cell.misflagged::before { 
+            content: '✕'; position: absolute; color: red; font-size: 28px; 
+            z-index: 5; top: -4px; font-weight: bold;
+        }
+
         .cell.hint-flash { background-color: #ffd700 !important; border: 2px solid white; }
         
-        .score-box { background: var(--win-gray); padding: 10px; }
-        .score-list-container { 
-            background: var(--win-gray); border: 2px solid; 
-            border-color: var(--win-shadow) var(--win-white) var(--win-white) var(--win-shadow); 
-            height: 220px; 
-        }
-        .score-table { width: 100%; border-collapse: collapse; font-size: 13px; color: black; }
-        .score-table td { padding: 2px 5px; }
-
+        /* Typography */
         .n-1 { color: blue; } .n-2 { color: green; } .n-3 { color: red; } .n-4 { color: darkblue; }
+        .n-5 { color: darkred; } .n-6 { color: teal; } .n-7 { color: black; } .n-8 { color: gray; }
+
+        .score-box { background: var(--win-gray); padding: 10px; }
+        .score-list-container { background: var(--win-gray); border: 2px solid; border-color: var(--win-shadow) var(--win-white) var(--win-white) var(--win-shadow); height: 220px; }
+        .score-table { width: 100%; border-collapse: collapse; font-size: 13px; color: black; }
 
         @media (max-width: 600px) { .cell { width: 28px; height: 28px; } }
     </style>
@@ -149,7 +176,8 @@
     };
     let currentLvl = 'beginner';
 
-    // --- Fixed Menu Interactions ---
+    const FLAG_HTML = '<div class="flag-icon"><div class="flag-pole"></div><div class="flag-banner"></div><div class="flag-base"></div></div>';
+
     function closeMenus() {
         $(".menu-content").hide();
         $(".menu-trigger").removeClass("active");
@@ -163,14 +191,12 @@
 
     $("#help-trigger").on('click', function() {
         closeMenus();
-        alert('Hold Smiley for 1s for Hint (+5s)\nLong press cells to flag.');
+        alert('Controls:\n- Left Click: Dig\n- Right Click / Hold: Flag\n- Hold Smiley: Hint (+5s)');
     });
 
     $("#btn-new-game").on('click', function() {
         closeMenus();
-        if (first || gameOver || confirm("Reset current game?")) {
-            initGame();
-        }
+        if (first || gameOver || confirm("Reset current game?")) initGame();
     });
 
     $(".diff-opt").on('click', function() {
@@ -180,14 +206,9 @@
         initGame();
     });
 
-    $("#btn-scores").on('click', function() {
-        closeMenus();
-        showLeaderboard();
-    });
-
+    $("#btn-scores").on('click', function() { closeMenus(); showLeaderboard(); });
     $(document).on('click', function() { closeMenus(); });
 
-    // --- Game Logic ---
     function initGame() {
         clearInterval(timer);
         const config = levels[currentLvl];
@@ -206,8 +227,10 @@
             for (let c = 0; c < cols; c++) {
                 const $c = $('<div class="cell"></div>').appendTo($f);
                 
+                $c.on('contextmenu', (e) => { e.preventDefault(); handleAction(r, c, true); });
+
                 $c.on('mousedown touchstart', (e) => {
-                    if (gameOver) return;
+                    if (gameOver || e.which === 3) return;
                     $('#reset-btn').text('😮');
                     cellHoldTimer = setTimeout(() => {
                         handleAction(r, c, true);
@@ -235,13 +258,9 @@
         e.preventDefault();
         faceWasLongPress = false;
         if (gameOver) return;
-
         $('#reset-btn').text('😮');
         faceHoldTimer = setTimeout(() => {
-            if (!first) { 
-                giveHint(); 
-                faceWasLongPress = true; 
-            }
+            if (!first) { giveHint(); faceWasLongPress = true; }
         }, 800);
     });
 
@@ -251,9 +270,7 @@
             faceHoldTimer = null;
             if (!faceWasLongPress && $(e.target).closest('#reset-btn').length > 0) {
                 if (first || gameOver || confirm("Reset current game?")) initGame();
-            } else if (!gameOver) {
-                $('#reset-btn').text('🙂');
-            }
+            } else if (!gameOver) { $('#reset-btn').text('🙂'); }
         }
     });
 
@@ -273,13 +290,15 @@
         const cell = grid[r][c];
         if (isFlag) {
             if (cell.rev) return;
-            cell.flg = !cell.flg; cell.$el.toggleClass('flagged');
+            cell.flg = !cell.flg;
+            cell.$el.empty();
+            if (cell.flg) cell.$el.append(FLAG_HTML);
             flags += cell.flg ? 1 : -1;
             $('#mine-count').text(String(Math.max(0, mines - flags)).padStart(3, '0'));
         } else {
             if (cell.flg || cell.rev) return;
             if (first) { spawnMines(r, c); startClock(); first = false; }
-            reveal(r, c);
+            reveal(r, c, true);
         }
     }
 
@@ -298,12 +317,15 @@
         }
     }
 
-    function reveal(r, c) {
+    function reveal(r, c, isClick = false) {
         const cell = grid[r][c];
         if (cell.rev || cell.flg) return;
         cell.rev = true; cell.$el.addClass('revealed').removeClass('outset');
         revealed++;
-        if (cell.isM) { end(false); return; }
+        if (cell.isM) { 
+            if(isClick) cell.$el.addClass('mine-hit');
+            end(false); return; 
+        }
         if (cell.n > 0) { cell.$el.text(cell.n).addClass('n-'+cell.n); }
         else { for(let i=-1; i<=1; i++) for(let j=-1; j<=1; j++) if(grid[r+i] && grid[r+i][c+j]) reveal(r+i, c+j); }
         if (revealed === (rows * cols) - mines) end(true);
@@ -315,16 +337,22 @@
         gameOver = true; clearInterval(timer);
         $('#reset-btn').text(win ? '😎' : '😵');
         if (!win) {
-            grid.flat().forEach(c => { if(c.isM) c.$el.text('💣').addClass('mine'); });
+            grid.flat().forEach(c => { 
+                if (c.isM && !c.flg) {
+                    c.$el.addClass('mine-revealed').addClass('revealed').removeClass('outset');
+                } else if (!c.isM && c.flg) {
+                    c.$el.addClass('misflagged').addClass('revealed').removeClass('outset');
+                }
+            });
         } else {
-            grid.flat().forEach(c => { if(c.isM && !c.flg) { c.flg = true; c.$el.addClass('flagged'); } });
+            grid.flat().forEach(c => { if(c.isM && !c.flg) { c.flg = true; c.$el.append(FLAG_HTML); } });
             $('#mine-count').text('000');
             setTimeout(() => { const n = prompt("High Score! Enter name:"); if (n) saveScore(n, sec); }, 300);
         }
     }
 
     function getScores() {
-        let s = JSON.parse(localStorage.getItem('ms_final_v7') || '{}');
+        let s = JSON.parse(localStorage.getItem('ms_final_v10') || '{}');
         if (!s[currentLvl]) {
             const ai = ["Gemini", "DeepBlue", "Clippy", "Woz", "Ada", "Turing", "Hopper", "Carmack", "Gates", "Jobs"];
             s[currentLvl] = ai.map((name, i) => ({ name, time: levels[currentLvl].base + (i * 10) }));
@@ -335,7 +363,7 @@
     function saveScore(name, time) {
         let s = getScores(); s[currentLvl].push({ name: name.substring(0, 12), time });
         s[currentLvl].sort((a,b) => a.time - b.time); s[currentLvl] = s[currentLvl].slice(0, 10);
-        localStorage.setItem('ms_final_v7', JSON.stringify(s));
+        localStorage.setItem('ms_final_v10', JSON.stringify(s));
         showLeaderboard();
     }
 
