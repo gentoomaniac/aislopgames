@@ -43,12 +43,15 @@
         #game-wrapper {
             position: relative;
             flex-grow: 1;
+            width: 100%;
             max-width: 800px;
+            max-height: 85vh; /* Prevents vertical overflow on standard desktop/portrait */
             aspect-ratio: 4/3;
             background-color: var(--bg-color);
             box-shadow: 0 0 20px rgba(255, 0, 85, 0.2);
             border: 2px solid #333;
             cursor: crosshair;
+            touch-action: none; /* CRITICAL: Prevents browser scrolling when swiping paddle */
         }
 
         canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
@@ -89,12 +92,33 @@
             filter: drop-shadow(0 0 5px rgba(255,255,255,0.3));
         }
 
+        /* Responsive Breakpoint - Portrait Mobile */
         @media (max-width: 900px) {
             body { padding: 10px; }
             #app-container { flex-direction: column; align-items: center; }
             #legend { width: 100%; max-width: 800px; flex-direction: row; flex-wrap: wrap; justify-content: space-around; gap: 10px; padding: 10px; }
             .legend-title { width: 100%; margin-bottom: 0; padding-bottom: 5px; }
             .legend-item { width: auto; min-width: 120px; gap: 8px; }
+        }
+
+        /* Responsive Breakpoint - Landscape Mobile (The Fix) */
+        @media (max-width: 900px) and (orientation: landscape) {
+            body { padding: 0; align-items: stretch; }
+            #app-container { flex-direction: row; align-items: center; justify-content: center; margin: 0 auto; height: 100vh; }
+            #legend { display: none !important; } /* Hide the powerups to save space */
+            
+            #game-wrapper {
+                max-height: 100vh; /* Lock height to exact screen bounds */
+                max-width: calc(100vh * (4/3)); /* Scale width perfectly to match 4:3 ratio based on height */
+                border: none; /* Optional: clean up edges on small phones */
+            }
+
+            /* Shrink menu elements so they don't overflow the smaller physical screen */
+            h1 { font-size: 14px; margin-bottom: 5px; }
+            h2 { font-size: 12px; }
+            .diff-container { margin: 5px 0; }
+            button { padding: 8px 12px; margin: 4px; font-size: 10px; }
+            #controls-hint { display: none; }
         }
 
         /* UI Overlays */
@@ -177,7 +201,7 @@
             </div>
             <button id="start-btn"><i class="fa-solid fa-play"></i> Play Game</button>
             <button id="leaderboard-btn"><i class="fa-solid fa-trophy"></i> High Scores</button>
-            <div id="controls-hint">Move: Arrows/Mouse | Launch: Click/Space | Pause: 'P' | Exit: 'E'</div>
+            <div id="controls-hint">Move: Arrows/Swipe | Launch: Click/Tap | Pause: 'P' | Exit: 'E'</div>
         </div>
 
         <div id="intermission-screen" class="overlay hidden">
@@ -344,7 +368,22 @@ function launchBall() {
 }
 
 const gameWrapper = document.getElementById('game-wrapper');
-gameWrapper.addEventListener("touchmove", (e) => { if(gameState === 'PLAYING') { e.preventDefault(); trackCursor(e.touches[0].clientX); } }, { passive: false });
+
+// Ensure touch starts update the paddle immediately without waiting for a move
+gameWrapper.addEventListener("touchstart", (e) => { 
+    if(gameState === 'PLAYING') { 
+        e.preventDefault(); 
+        trackCursor(e.touches[0].clientX); 
+    } 
+}, { passive: false });
+
+gameWrapper.addEventListener("touchmove", (e) => { 
+    if(gameState === 'PLAYING') { 
+        e.preventDefault(); 
+        trackCursor(e.touches[0].clientX); 
+    } 
+}, { passive: false });
+
 canvas.addEventListener('pointerdown', () => { if(gameState === 'PLAYING') launchBall(); });
 gameWrapper.addEventListener("mousemove", (e) => trackCursor(e.clientX));
 
