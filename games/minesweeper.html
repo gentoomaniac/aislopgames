@@ -24,6 +24,10 @@
             font-family: 'Tahoma', sans-serif;
             display: flex; justify-content: center; align-items: center;
             height: 100vh; margin: 0; touch-action: none;
+            
+            /* Crucial for mobile: Disables system text selection and iOS long-press popups */
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
             user-select: none;
         }
 
@@ -162,6 +166,7 @@
 
     let rows, cols, mines, grid, timer, sec, gameOver, flags, revealed, first;
     let cellHoldTimer, faceHoldTimer;
+    let blockContextMenu = false; // Prevents the double-triggering of contextmenu
     const HOLD_DELAY = 500;
     const FLAG_HTML = '<div class="flag-icon"><div class="flag-pole"></div><div class="flag-banner"></div><div class="flag-base"></div></div>';
 
@@ -227,7 +232,13 @@
                 
                 $c.on('contextmenu', (e) => {
                     e.preventDefault();
-                    if (gameOver) return;
+                    if (gameOver || blockContextMenu) return;
+                    
+                    if (cellHoldTimer) {
+                        clearTimeout(cellHoldTimer);
+                        cellHoldTimer = null;
+                    }
+                    
                     if (grid[r][c].rev && grid[r][c].n > 0) handleChord(r, c);
                     else handleCycleMark(r, c);
                 });
@@ -239,7 +250,7 @@
                     const now = Date.now();
                     if (now - lastTap < 300) {
                         if (grid[r][c].rev) {
-                            clearTimeout(cellHoldTimer);
+                            if (cellHoldTimer) clearTimeout(cellHoldTimer);
                             handleChord(r, c);
                             return;
                         }
@@ -248,9 +259,14 @@
 
                     $('#reset-btn').text('😮');
                     if (cellHoldTimer) clearTimeout(cellHoldTimer);
+                    
                     cellHoldTimer = setTimeout(() => {
+                        blockContextMenu = true; // Lock context menu
+                        setTimeout(() => blockContextMenu = false, 500); // Unlock after a half second
+                        
                         handleCycleMark(r, c); 
                         cellHoldTimer = null;
+                        if (!gameOver) $('#reset-btn').text('🙂');
                     }, HOLD_DELAY);
                 });
 
@@ -293,7 +309,7 @@
     let faceWasLongPress = false;
     $('#reset-btn').on('contextmenu', (e) => e.preventDefault());
     $('#reset-btn').on('mousedown touchstart', (e) => {
-        e.preventDefault();
+        if (e.type === 'touchstart') e.preventDefault();
         faceWasLongPress = false;
         $('#reset-btn').text('😮');
         if (e.type === 'touchstart' || e.which === 3) {
@@ -307,13 +323,15 @@
         if (faceHoldTimer || $(e.target).closest('#reset-btn').length > 0) {
             clearTimeout(faceHoldTimer);
             faceHoldTimer = null;
-            if (!faceWasLongPress && ($(e.target).closest('#reset-btn').length > 0)) confirmNewGame();
+            if (!faceWasLongPress && ($(e.target).closest('#reset-btn').length > 0)) {
+                if (e.which === 1 || e.type === 'touchend') confirmNewGame();
+            }
             if (!gameOver) $('#reset-btn').text('🙂');
         }
     });
 
     function giveHint() {
-        let safeCells = grid.flat().filter(c => !c.isM && !c.rev);
+        let safeCells = grid.flat().filter(c => !c.isM && !c.rev && !c.flg);
         if (safeCells.length > 0) {
             const hint = safeCells[Math.floor(Math.random() * safeCells.length)];
             hint.$el.addClass('hint-flash');
@@ -330,7 +348,7 @@
 
         cell.$el.empty();
         
-        // Cycle: None -> Flag -> Question -> None
+        // Cycle Pattern: None -> Flag -> Question -> None
         if (!cell.flg && !cell.qst) {
             cell.flg = true;
             cell.$el.append(FLAG_HTML);
@@ -342,7 +360,6 @@
             flags--;
         } else {
             cell.qst = false;
-            cell.$el.text('');
         }
 
         $('#mine-count').text(String(Math.max(0, mines - flags)).padStart(3, '0'));
@@ -352,7 +369,6 @@
         if (gameOver) return;
         const cell = grid[r][c];
         
-        // In the original game, clicking a flag or question mark with the left mouse button does nothing
         if (cell.flg || cell.qst || cell.rev) return;
 
         if (first) { spawnMines(r, c); startClock(); first = false; }
