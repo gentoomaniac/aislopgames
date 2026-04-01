@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Nokia Snake Retro - Seamless Migration</title>
+    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --nokia-shell: #5d6d7e;
+            --lcd-bg: #94af13;
+            --lcd-pixel: rgba(0, 0, 0, 0.8);
+        }
+
+        body {
+            background: #1a252f;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            font-family: 'VT323', monospace;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        .phone-body {
+            background: var(--nokia-shell);
+            width: 320px;
+            height: 600px;
+            border-radius: 45px;
+            position: relative;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            border: 5px solid #455a64;
+        }
+
+        .earpiece {
+            width: 50px;
+            height: 6px;
+            background: #222;
+            border-radius: 10px;
+            margin: 25px 0 15px;
+        }
+
+        .screen-container {
+            background: #222;
+            padding: 12px;
+            border-radius: 4px;
+            border: 4px solid #333;
+        }
+
+        .lcd {
+            background: var(--lcd-bg);
+            width: 240px;
+            height: 240px;
+            position: relative;
+            box-shadow: inset 0 0 15px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+
+        canvas { display: block; image-rendering: pixelated; }
+
+        #ui-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            background: var(--lcd-bg);
+            z-index: 10;
+            text-align: center;
+        }
+
+        h1 { margin: 0; font-size: 2.2rem; line-height: 1; }
+        .menu-item { cursor: pointer; padding: 2px 8px; font-size: 1.4rem; transition: background 0.1s; }
+        .menu-item.active, .menu-item:hover { background: var(--lcd-pixel); color: var(--lcd-bg); }
+
+        #score-board {
+            position: absolute;
+            top: 2px; right: 5px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            z-index: 5;
+        }
+
+        input {
+            background: transparent;
+            border: 2px solid black;
+            font-family: 'VT323', monospace;
+            font-size: 1.2rem;
+            width: 120px;
+            text-align: center;
+            margin-top: 10px;
+            outline: none;
+        }
+
+        .keypad {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-top: 25px;
+        }
+        .key {
+            width: 55px; height: 35px;
+            background: #bdc3c7;
+            border-radius: 50% 50% 40% 40%;
+            box-shadow: 0 4px #7f8c8d;
+        }
+    </style>
+</head>
+<body>
+
+<div class="phone-body">
+    <div class="earpiece"></div>
+    <div class="screen-container">
+        <div class="lcd">
+            <div id="score-board">0000</div>
+            <div id="ui-overlay">
+                <div id="content-box">
+                    <h1 id="menu-title">SNAKE</h1>
+                    <div id="menu-options">
+                        <div class="menu-item active" data-action="start">START</div>
+                        <div class="menu-item" data-action="diff">DIFF: MEDIUM</div>
+                        <div class="menu-item" data-action="scores">SCORES</div>
+                    </div>
+                </div>
+            </div>
+            <canvas id="gameCanvas" width="240" height="240"></canvas>
+        </div>
+    </div>
+    <div class="keypad">
+        <div class="key"></div><div class="key"></div><div class="key"></div>
+        <div class="key"></div><div class="key"></div><div class="key"></div>
+    </div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const overlay = document.getElementById('ui-overlay');
+const contentBox = document.getElementById('content-box');
+const scoreDisplay = document.getElementById('score-board');
+
+const GRID = 12; 
+const TILE_COUNT = canvas.width / GRID;
+
+const DIFFICULTIES = ['EASY', 'MEDIUM', 'HARD', 'PROGRESSIVE'];
+let diffIdx = 1; // Default to MEDIUM
+let currentSpeed = 140;
+
+let snake, food, bonus, dx, dy, score, gameTimeout;
+let gameState = 'MENU'; 
+let currentView = 'MAIN'; // MAIN, SCORES, INPUT, CRASHED
+let menuIdx = 0;
+let foodEatenCount = 0;
+let bonusTimer = 0;
+
+const baseDefaults = [
+    {name: 'MASTER', score: 500},
+    {name: 'PLAYER', score: 300},
+    {name: 'NEWBIE', score: 100}
+];
+
+const DEFAULTS = {
+    EASY: [...baseDefaults],
+    MEDIUM: [...baseDefaults],
+    HARD: [...baseDefaults],
+    PROGRESSIVE: [...baseDefaults]
+};
+
+const CURRENT_VERSION_KEY = 'retro_snake_v8';
+
+// Migration Logic to prevent data loss
+function migrateData() {
+    if (localStorage.getItem(CURRENT_VERSION_KEY)) return; // Already migrated
+
+    let oldData = null;
+    // Check older structured versions (v7, v6, v5)
+    for (let v = 7; v >= 5; v--) {
+        const stored = localStorage.getItem('retro_snake_v' + v);
+        if (stored) {
+            try { oldData = JSON.parse(stored); break; } 
+            catch(e) {}
+        }
+    }
+
+    let newData = {};
+    if (oldData) {
+        DIFFICULTIES.forEach(diff => {
+            let diffScores = oldData[diff] || [...baseDefaults];
+            // Sort and crop safely to Top 3
+            newData[diff] = diffScores.sort((a,b) => b.score - a.score).slice(0, 3);
+        });
+    } else {
+        newData = DEFAULTS; // Completely fresh install
+    }
+    
+    localStorage.setItem(CURRENT_VERSION_KEY, JSON.stringify(newData));
+}
+
+// Run migration on load
+migrateData();
+
+const getScores = () => JSON.parse(localStorage.getItem(CURRENT_VERSION_KEY));
+const saveScore = (n, s, difficulty) => {
+    let allScores = getScores();
+    if (!allScores[difficulty]) allScores[difficulty] = [];
+    allScores[difficulty].push({name: n.toUpperCase().substring(0, 10), score: s});
+    allScores[difficulty] = allScores[difficulty].sort((a,b) => b.score - a.score).slice(0, 3);
+    localStorage.setItem(CURRENT_VERSION_KEY, JSON.stringify(allScores));
+};
+
+function init() {
+    snake = [{x: 10, y: 10}];
+    dx = 1; dy = 0; score = 0; foodEatenCount = 0;
+    bonus = null;
+    
+    let diff = DIFFICULTIES[diffIdx];
+    if (diff === 'EASY') currentSpeed = 200;       
+    if (diff === 'MEDIUM') currentSpeed = 140;     
+    if (diff === 'HARD') currentSpeed = 85;        
+    if (diff === 'PROGRESSIVE') currentSpeed = 180; 
+
+    genFood();
+    gameState = 'PLAYING';
+    currentView = 'GAME';
+    overlay.style.display = 'none';
+    if(gameTimeout) clearTimeout(gameTimeout);
+    loop(); 
+}
+
+function loop() {
+    const head = {x: snake[0].x + dx, y: snake[0].y + dy};
+    
+    // Collisions
+    if (head.x < 0 || head.x >= TILE_COUNT || head.y < 0 || head.y >= TILE_COUNT || 
+        snake.some(p => p.x === head.x && p.y === head.y)) return end();
+
+    snake.unshift(head);
+
+    if (head.x === food.x && head.y === food.y) {
+        score += 10;
+        foodEatenCount++;
+        genFood();
+        
+        if (foodEatenCount % 5 === 0) genBonus();
+
+        if (DIFFICULTIES[diffIdx] === 'PROGRESSIVE') {
+            currentSpeed = Math.max(40, currentSpeed - 3); 
+        }
+    } else if (bonus && head.x === bonus.x && head.y === bonus.y) {
+        score += bonus.value;
+        bonus = null;
+        
+        if (DIFFICULTIES[diffIdx] === 'PROGRESSIVE') {
+            currentSpeed = Math.max(40, currentSpeed - 3); 
+        }
+    } else {
+        snake.pop();
+    }
+
+    if (bonus) {
+        bonusTimer--;
+        if (bonusTimer <= 0) bonus = null;
+    }
+
+    draw();
+    gameTimeout = setTimeout(loop, currentSpeed);
+}
+
+function genFood() {
+    let valid = false;
+    while(!valid){
+        food = {x: Math.floor(Math.random()*TILE_COUNT), y: Math.floor(Math.random()*TILE_COUNT)};
+        valid = !snake.some(p => p.x === food.x && p.y === food.y);
+    }
+}
+
+function genBonus() {
+    let valid = false;
+    while(!valid){
+        bonus = {
+            x: Math.floor(Math.random()*TILE_COUNT), 
+            y: Math.floor(Math.random()*TILE_COUNT),
+            value: Math.random() > 0.7 ? 50 : 20
+        };
+        valid = !snake.some(p => p.x === bonus.x && p.y === bonus.y) && (bonus.x !== food.x || bonus.y !== food.y);
+    }
+    bonusTimer = Math.floor(4000 / currentSpeed); 
+}
+
+function drawPixel(x, y) {
+    ctx.fillRect(x * GRID + 1, y * GRID + 1, GRID - 2, GRID - 2);
+}
+
+function drawFruit(x, y) {
+    ctx.fillStyle = 'black';
+    ctx.fillRect(x * GRID + 4, y * GRID + 4, GRID - 8, GRID - 8);
+}
+
+function drawBonus(x, y, flicker) {
+    if (flicker % 4 > 1) { 
+        ctx.fillStyle = 'black';
+        ctx.fillRect(x * GRID + 3, y * GRID + 3, GRID - 6, GRID - 6);
+    }
+}
+
+function draw() {
+    ctx.fillStyle = '#94af13';
+    ctx.fillRect(0,0,240,240);
+    scoreDisplay.innerText = score.toString().padStart(4, '0');
+
+    ctx.fillStyle = 'black';
+    snake.forEach(p => drawPixel(p.x, p.y));
+
+    drawFruit(food.x, food.y);
+
+    if (bonus) {
+        drawBonus(bonus.x, bonus.y, bonusTimer);
+    }
+}
+
+function end() {
+    clearTimeout(gameTimeout);
+    
+    const currDiff = DIFFICULTIES[diffIdx];
+    const allScores = getScores();
+    const s = allScores[currDiff] || [];
+    
+    let isHighScore = false;
+    if (s.length < 3) {
+        isHighScore = true;
+    } else if (score > s[s.length - 1].score) {
+        isHighScore = true;
+    }
+
+    gameState = 'INPUT';
+    overlay.style.display = 'flex';
+    menuIdx = 0;
+
+    if (isHighScore) {
+        currentView = 'INPUT';
+        contentBox.innerHTML = `
+            <h1>HIGH SCORE!</h1>
+            <div style="font-size:1.2rem">${currDiff}</div>
+            <div>SCORE: ${score}</div>
+            <input type="text" id="pName" maxlength="8" placeholder="YOUR NAME" autofocus>
+            <div class="menu-item active" style="margin-top:10px" data-action="submit">SAVE</div>
+        `;
+        setTimeout(() => {
+            let inp = document.getElementById('pName');
+            if(inp) inp.focus();
+        }, 10);
+    } else {
+        currentView = 'CRASHED';
+        contentBox.innerHTML = `
+            <h1>CRASHED!</h1>
+            <div style="font-size:1.2rem">${currDiff}</div>
+            <div>SCORE: ${score}</div>
+            <div class="menu-item active" style="margin-top:15px" data-action="main">MENU</div>
+        `;
+    }
+}
+
+function showMenu() {
+    gameState = 'MENU';
+    currentView = 'MAIN';
+    menuIdx = 0;
+    overlay.style.display = 'flex';
+    contentBox.innerHTML = `
+        <h1 id="menu-title">SNAKE</h1>
+        <div id="menu-options">
+            <div class="menu-item active" data-action="start">START</div>
+            <div class="menu-item" data-action="diff">DIFF: ${DIFFICULTIES[diffIdx]}</div>
+            <div class="menu-item" data-action="scores">SCORES</div>
+        </div>
+    `;
+}
+
+function showHighScores() {
+    gameState = 'MENU';
+    currentView = 'SCORES';
+    const allScores = getScores();
+    const currDiff = DIFFICULTIES[diffIdx];
+    const s = allScores[currDiff] || [];
+    
+    contentBox.innerHTML = `<h1>TOP 3</h1>
+        <div style="font-size:1.2rem; margin-bottom: 5px;">&lt; ${currDiff} &gt;</div>` + 
+        s.map(i => `<div style="font-size:1.2rem">${i.name}: ${i.score}</div>`).join('') +
+        `<div class="menu-item active" data-action="main" style="margin-top:10px">BACK</div>`;
+    menuIdx = 0; 
+}
+
+function changeDifficulty(step) {
+    diffIdx = (diffIdx + step + DIFFICULTIES.length) % DIFFICULTIES.length;
+    const diffEl = document.querySelector('[data-action="diff"]');
+    if (diffEl) diffEl.innerText = 'DIFF: ' + DIFFICULTIES[diffIdx];
+}
+
+function doAction(act) {
+    if (!act) return;
+    if (act === 'start') init();
+    if (act === 'scores') showHighScores();
+    if (act === 'main') showMenu();
+    if (act === 'diff') changeDifficulty(1);
+    if (act === 'submit') {
+        let pNameInput = document.getElementById('pName');
+        saveScore(pNameInput ? (pNameInput.value || 'ANON') : 'ANON', score, DIFFICULTIES[diffIdx]);
+        showMenu();
+    }
+}
+
+overlay.addEventListener('click', (e) => {
+    if (e.target.classList.contains('menu-item')) {
+        doAction(e.target.getAttribute('data-action'));
+    }
+});
+
+function handleInput(dir) {
+    if (gameState === 'PLAYING') {
+        if (dir === 'U' && dy === 0) { dx = 0; dy = -1; }
+        if (dir === 'D' && dy === 0) { dx = 0; dy = 1; }
+        if (dir === 'L' && dx === 0) { dx = -1; dy = 0; }
+        if (dir === 'R' && dx === 0) { dx = 1; dy = 0; }
+        return;
+    } 
+    
+    if (currentView === 'SCORES') {
+        if (dir === 'L') { changeDifficulty(-1); showHighScores(); }
+        if (dir === 'R') { changeDifficulty(1); showHighScores(); }
+        if (dir === 'OK') doAction('main');
+        return;
+    }
+
+    const items = document.querySelectorAll('.menu-item');
+    if (!items.length) return;
+
+    if (dir === 'U') menuIdx = (menuIdx - 1 + items.length) % items.length;
+    if (dir === 'D') menuIdx = (menuIdx + 1) % items.length;
+    
+    if (currentView === 'MAIN' && (dir === 'L' || dir === 'R')) {
+        const currentAction = items[menuIdx].getAttribute('data-action');
+        if (currentAction === 'diff') {
+            changeDifficulty(dir === 'R' ? 1 : -1);
+        }
+    }
+
+    items.forEach((it, i) => it.classList.toggle('active', i === menuIdx));
+    
+    if (dir === 'OK') {
+        doAction(items[menuIdx]?.getAttribute('data-action'));
+    }
+}
+
+window.onkeydown = e => {
+    const isTyping = document.activeElement && document.activeElement.id === 'pName';
+    
+    if (!isTyping) { 
+        if (e.key === 'ArrowUp' || e.key === 'w') handleInput('U');
+        if (e.key === 'ArrowDown' || e.key === 's') handleInput('D');
+        if (e.key === 'ArrowLeft' || e.key === 'a') handleInput('L');
+        if (e.key === 'ArrowRight' || e.key === 'd') handleInput('R');
+    }
+    
+    if (e.key === 'Enter') {
+        if (isTyping) document.activeElement.blur(); 
+        handleInput('OK');
+    }
+};
+
+let tsX, tsY;
+window.ontouchstart = e => { tsX = e.touches[0].clientX; tsY = e.touches[0].clientY; };
+window.ontouchend = e => {
+    if (e.target.classList.contains('menu-item') || e.target.id === 'pName') return; 
+
+    let diffX = e.changedTouches[0].clientX - tsX, diffY = e.changedTouches[0].clientY - tsY;
+    if (Math.abs(diffX) < 15 && Math.abs(diffY) < 15) handleInput('OK');
+    else Math.abs(diffX) > Math.abs(diffY) ? handleInput(diffX > 0 ? 'R' : 'L') : handleInput(diffY > 0 ? 'D' : 'U');
+};
+
+showMenu();
+</script>
+</body>
+</html>
