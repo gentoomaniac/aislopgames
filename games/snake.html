@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Nokia Snake Retro - D-Pad Controls</title>
+    <title>Nokia Snake Retro - Navigation Refined</title>
     <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -26,8 +26,9 @@
 
         .phone-body {
             background: var(--nokia-shell);
-            width: 320px;
-            height: 600px;
+            width: 340px;
+            height: 680px; 
+            max-height: 98vh; 
             border-radius: 45px;
             position: relative;
             box-shadow: 0 20px 50px rgba(0,0,0,0.6);
@@ -43,6 +44,7 @@
             background: #222;
             border-radius: 10px;
             margin: 25px 0 15px;
+            flex-shrink: 0;
         }
 
         .screen-container {
@@ -50,6 +52,7 @@
             padding: 12px;
             border-radius: 4px;
             border: 4px solid #333;
+            flex-shrink: 0;
         }
 
         .lcd {
@@ -96,28 +99,52 @@
             outline: none;
         }
 
-        /* Updated D-Pad Styling */
-        .keypad {
+        /* --- T9 Integrated Layout --- */
+        #keypad-area {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: auto;
+            margin-bottom: 30px; 
+            gap: 15px;
+            width: 100%;
+        }
+
+        .soft-keys, .numpad {
             display: grid;
-            grid-template-columns: repeat(3, 55px);
-            grid-template-rows: repeat(3, 35px);
-            gap: 10px;
-            margin-top: 20px;
+            grid-template-columns: repeat(3, 65px); 
+            gap: 12px 20px; 
             justify-content: center;
+        }
+
+        .soft-keys {
+            grid-template-rows: 35px;
+        }
+
+        .numpad {
+            grid-template-rows: repeat(4, 45px); 
         }
         
         .key {
             background: #bdc3c7;
-            border-radius: 8px;
+            border-radius: 10px;
             box-shadow: 0 4px #7f8c8d;
-            cursor: pointer;
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
             font-weight: bold;
-            font-size: 1.2rem;
+            font-size: 1.5rem;
             color: #2c3e50;
             user-select: none;
+            cursor: pointer;
+            line-height: 1;
+        }
+
+        .key .sub {
+            font-size: 0.8rem;
+            color: #4a6278;
+            margin-top: 4px;
         }
 
         .key:active {
@@ -125,14 +152,10 @@
             box-shadow: 0 0 #7f8c8d;
         }
 
-        .key.empty {
-            background: transparent;
-            box-shadow: none;
-            cursor: default;
-        }
-        
-        .key.empty:active {
-            transform: none;
+        .key.fake {
+            font-size: 1.3rem;
+            color: #4a6278; 
+            flex-direction: row; 
         }
     </style>
 </head>
@@ -140,6 +163,7 @@
 
 <div class="phone-body">
     <div class="earpiece"></div>
+    
     <div class="screen-container">
         <div class="lcd">
             <div id="score-board">0000</div>
@@ -157,16 +181,32 @@
         </div>
     </div>
     
-    <div class="keypad" id="dpad">
-        <div class="key empty"></div>
-        <div class="key dir-btn" data-dir="U">▲</div>
-        <div class="key empty"></div>
-        <div class="key dir-btn" data-dir="L">◀</div>
-        <div class="key dir-btn" data-dir="OK">OK</div>
-        <div class="key dir-btn" data-dir="R">▶</div>
-        <div class="key empty"></div>
-        <div class="key dir-btn" data-dir="D">▼</div>
-        <div class="key empty"></div>
+    <div id="keypad-area">
+        
+        <div class="soft-keys">
+            <div class="key fake">—</div>
+            <div class="key dir-btn" data-dir="C" style="font-size: 1.3rem;">C</div>
+            <div class="key fake">—</div>
+        </div>
+
+        <div class="numpad">
+            <div class="key fake">1</div>
+            <div class="key dir-btn" data-dir="U"><span>2</span><span class="sub">▲</span></div>
+            <div class="key fake">3</div>
+            
+            <div class="key dir-btn" data-dir="L"><span>4</span><span class="sub">◀</span></div>
+            <div class="key dir-btn" data-dir="OK"><span>5</span><span class="sub">OK</span></div>
+            <div class="key dir-btn" data-dir="R"><span>6</span><span class="sub">▶</span></div>
+            
+            <div class="key fake">7</div>
+            <div class="key dir-btn" data-dir="D"><span>8</span><span class="sub">▼</span></div>
+            <div class="key fake">9</div>
+            
+            <div class="key fake">*</div>
+            <div class="key fake">0</div>
+            <div class="key fake">#</div>
+        </div>
+
     </div>
 </div>
 
@@ -176,7 +216,7 @@ const ctx = canvas.getContext('2d');
 const overlay = document.getElementById('ui-overlay');
 const contentBox = document.getElementById('content-box');
 const scoreDisplay = document.getElementById('score-board');
-const dpad = document.getElementById('dpad');
+const keypadArea = document.getElementById('keypad-area');
 
 const GRID = 12; 
 const TILE_COUNT = canvas.width / GRID;
@@ -207,7 +247,6 @@ const DEFAULTS = {
 
 const CURRENT_VERSION_KEY = 'retro_snake_v8';
 
-// Migration Logic
 function migrateData() {
     if (localStorage.getItem(CURRENT_VERSION_KEY)) return; 
 
@@ -435,7 +474,7 @@ function doAction(act) {
     if (act === 'start') init();
     if (act === 'scores') showHighScores();
     if (act === 'main') showMenu();
-    if (act === 'diff') changeDifficulty(1);
+    // Intentionally removed "diff" from OK activation so it only cycles on left/right
     if (act === 'submit') {
         let pNameInput = document.getElementById('pName');
         saveScore(pNameInput ? (pNameInput.value || 'ANON') : 'ANON', score, DIFFICULTIES[diffIdx]);
@@ -450,6 +489,13 @@ overlay.addEventListener('click', (e) => {
 });
 
 function handleInput(dir) {
+    // 'C' Back/Exit Key handling
+    if (dir === 'C') {
+        if (gameTimeout) clearTimeout(gameTimeout);
+        showMenu();
+        return;
+    }
+
     if (gameState === 'PLAYING') {
         if (dir === 'U' && dy === 0) { dx = 0; dy = -1; }
         if (dir === 'D' && dy === 0) { dx = 0; dy = 1; }
@@ -471,6 +517,7 @@ function handleInput(dir) {
     if (dir === 'U') menuIdx = (menuIdx - 1 + items.length) % items.length;
     if (dir === 'D') menuIdx = (menuIdx + 1) % items.length;
     
+    // Left/Right handle difficulty toggles safely
     if (currentView === 'MAIN' && (dir === 'L' || dir === 'R')) {
         const currentAction = items[menuIdx].getAttribute('data-action');
         if (currentAction === 'diff') {
@@ -485,46 +532,54 @@ function handleInput(dir) {
     }
 }
 
-// Map the physical/virtual D-Pad Events
 function triggerKeypadEvent(e) {
-    const btn = e.target.closest('.dir-btn');
+    const btn = e.target.closest('.key');
     if (!btn) return;
-    e.preventDefault(); // Prevents double-firing from ghost clicks
+    e.preventDefault(); 
     
-    const dir = btn.getAttribute('data-dir');
-    if (dir) handleInput(dir);
+    if (btn.classList.contains('dir-btn')) {
+        const dir = btn.getAttribute('data-dir');
+        if (dir) handleInput(dir);
+    }
 }
 
-dpad.addEventListener('mousedown', triggerKeypadEvent);
-dpad.addEventListener('touchstart', triggerKeypadEvent, {passive: false});
+keypadArea.addEventListener('mousedown', triggerKeypadEvent);
+keypadArea.addEventListener('touchstart', triggerKeypadEvent, {passive: false});
 
-// Key Controls
+// Desktop Key Controls
 window.onkeydown = e => {
     const isTyping = document.activeElement && document.activeElement.id === 'pName';
     
-    if (!isTyping) { 
-        if (e.key === 'ArrowUp' || e.key === 'w') handleInput('U');
-        if (e.key === 'ArrowDown' || e.key === 's') handleInput('D');
-        if (e.key === 'ArrowLeft' || e.key === 'a') handleInput('L');
-        if (e.key === 'ArrowRight' || e.key === 'd') handleInput('R');
+    // Always allow Escape to trigger 'C' and exit safely
+    if (e.key === 'Escape') {
+        if (isTyping) document.activeElement.blur();
+        handleInput('C');
+        return;
     }
     
-    if (e.key === 'Enter') {
+    if (!isTyping) { 
+        if (e.key === 'ArrowUp' || e.key === 'w' || e.key === '2') handleInput('U');
+        if (e.key === 'ArrowDown' || e.key === 's' || e.key === '8') handleInput('D');
+        if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === '4') handleInput('L');
+        if (e.key === 'ArrowRight' || e.key === 'd' || e.key === '6') handleInput('R');
+        if (e.key.toLowerCase() === 'c' || e.key === 'Backspace') handleInput('C');
+    }
+    
+    if (e.key === 'Enter' || (!isTyping && e.key === '5')) {
         if (isTyping) document.activeElement.blur(); 
         handleInput('OK');
     }
 };
 
-// Swipes (Kept alive for the main screen)
 let tsX, tsY;
 window.addEventListener('touchstart', e => { 
-    if (e.target.closest('#dpad')) return; // ignore swipes starting on the dpad
+    if (e.target.closest('#keypad-area')) return; 
     tsX = e.touches[0].clientX; 
     tsY = e.touches[0].clientY; 
 }, {passive: false});
 
 window.addEventListener('touchend', e => {
-    if (e.target.closest('#dpad') || e.target.classList.contains('menu-item') || e.target.id === 'pName') return; 
+    if (e.target.closest('#keypad-area') || e.target.classList.contains('menu-item') || e.target.id === 'pName') return; 
 
     let diffX = e.changedTouches[0].clientX - tsX, diffY = e.changedTouches[0].clientY - tsY;
     if (Math.abs(diffX) < 15 && Math.abs(diffY) < 15) handleInput('OK');
