@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Chroma Breakout - AislopGames</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+        :root {
+            --bg-color: #0f0f1b;
+            --ui-bg: rgba(15, 15, 27, 0.95);
+            --text-main: #f0f0f0;
+            --accent: #ff0055;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+        
+        body {
+            background-color: #000;
+            color: var(--text-main);
+            font-family: 'Press Start 2P', monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow-x: hidden;
+            padding: 20px;
+        }
+
+        /* Layout Container */
+        #app-container {
+            display: flex;
+            gap: 20px;
+            align-items: stretch;
+            width: 100%;
+            max-width: 1100px;
+            justify-content: center;
+        }
+
+        /* Legend Sidebar */
+        #legend {
+            background: var(--ui-bg);
+            border: 2px solid #333;
+            box-shadow: 0 0 15px rgba(0, 255, 204, 0.1);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            width: 250px;
+            min-width: 200px;
+            border-radius: 8px;
+        }
+
+        .legend-title {
+            color: #00ffcc;
+            font-size: 14px;
+            text-align: center;
+            border-bottom: 2px solid #333;
+            padding-bottom: 10px;
+            margin-bottom: 10px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            font-size: 10px;
+            line-height: 1.4;
+        }
+
+        .legend-emoji {
+            font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+            font-size: 24px;
+            filter: drop-shadow(0 0 5px rgba(255,255,255,0.3));
+        }
+
+        /* Game Wrapper */
+        #game-wrapper {
+            position: relative;
+            flex-grow: 1;
+            max-width: 800px;
+            aspect-ratio: 4/3;
+            background-color: var(--bg-color);
+            box-shadow: 0 0 20px rgba(255, 0, 85, 0.2);
+            border: 2px solid #333;
+            cursor: crosshair;
+        }
+
+        canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+
+        /* Responsive Breakpoint */
+        @media (max-width: 900px) {
+            body { padding: 10px; }
+            #app-container { flex-direction: column; align-items: center; }
+            #legend { width: 100%; max-width: 800px; flex-direction: row; flex-wrap: wrap; justify-content: space-around; gap: 10px; padding: 15px; }
+            .legend-title { width: 100%; margin-bottom: 0; }
+            .legend-item { width: 45%; gap: 10px; }
+        }
+
+        /* UI Overlays */
+        .overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--ui-bg); display: flex; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 10; text-align: center;
+        }
+
+        .hidden { display: none !important; }
+
+        h1 { color: var(--accent); font-size: 2.5vw; margin-bottom: 20px; text-shadow: 2px 2px 0px #000; }
+        @media (min-width: 800px) { h1 { font-size: 24px; } }
+        
+        h2 { color: #00ffcc; font-size: 1.5vw; margin-bottom: 10px; }
+        @media (min-width: 800px) { h2 { font-size: 16px; } }
+
+        button {
+            background: transparent; color: var(--text-main); border: 2px solid var(--text-main);
+            padding: 15px 20px; margin: 10px; font-family: inherit; font-size: 12px;
+            cursor: pointer; transition: all 0.2s; text-transform: uppercase;
+        }
+
+        button:hover, button.active { background: var(--accent); border-color: var(--accent); color: #fff; transform: scale(1.05); }
+
+        .diff-container { margin: 20px 0; }
+        .diff-btn { font-size: 10px; padding: 10px; }
+
+        /* HUD */
+        #hud {
+            position: absolute; top: 10px; left: 10px; right: 10px; display: flex;
+            justify-content: space-between; font-size: 12px; pointer-events: none;
+            z-index: 5; text-shadow: 1px 1px 0 #000;
+        }
+
+        /* High Score Table */
+        .lb-controls { display: flex; align-items: center; justify-content: center; gap: 20px; margin-bottom: 15px; font-size: 12px; color: var(--accent); }
+        .lb-controls i { cursor: pointer; transition: transform 0.2s; padding: 10px; }
+        .lb-controls i:hover { transform: scale(1.3); color: #fff; }
+        #lb-diff-display { min-width: 100px; color: #fff; }
+        .kb-hint { font-size: 8px; color: #888; margin-top: -10px; margin-bottom: 10px; }
+
+        table { border-collapse: collapse; width: 80%; margin: 0 auto 15px auto; font-size: 10px; }
+        th, td { border: 1px solid #444; padding: 8px; text-align: center; }
+        th { color: var(--accent); }
+        .empty-row td { color: #555; }
+
+        @keyframes flash { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+        .flash-text { animation: flash 1s infinite; color: #00ffcc; font-size: 10px; margin-bottom: 15px;}
+
+        #controls-hint { position: absolute; bottom: 20px; width: 100%; text-align: center; font-size: 8px; color: #888; pointer-events: none; }
+    </style>
+</head>
+<body>
+
+<div id="app-container">
+    
+    <div id="legend">
+        <h3 class="legend-title"><i class="fa-solid fa-circle-info"></i> POWER-UPS</h3>
+        <div class="legend-item">
+            <span class="legend-emoji">💰</span>
+            <span><strong>+50 Pts</strong><br>Instantly adds to your score.</span>
+        </div>
+        <div class="legend-item">
+            <span class="legend-emoji">🫧</span>
+            <span><strong>Multi-Ball</strong><br>Spawns two extra balls.</span>
+        </div>
+        <div class="legend-item">
+            <span class="legend-emoji">⚡</span>
+            <span><strong>Laser Paddle</strong><br>Shoots blocks automatically.</span>
+        </div>
+        <div class="legend-item">
+            <span class="legend-emoji">↔️</span>
+            <span><strong>Expand</strong><br>Makes your paddle 50% wider.</span>
+        </div>
+        <div class="legend-item">
+            <span class="legend-emoji">🔨</span>
+            <span><strong>Smash</strong><br>Ball destroys hard blocks instantly.</span>
+        </div>
+    </div>
+
+    <div id="game-wrapper">
+        <div id="hud" class="hidden">
+            <div><i class="fa-solid fa-star"></i> <span id="score-display">0</span></div>
+            <div>LVL: <span id="level-display">1</span></div>
+            <div><i class="fa-solid fa-heart"></i> <span id="lives-display">3</span></div>
+        </div>
+
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+        <div id="menu-screen" class="overlay">
+            <h1>CHROMA BREAKOUT</h1>
+            <div class="diff-container">
+                <p style="font-size: 10px; margin-bottom: 10px;">Select Difficulty</p>
+                <button class="diff-btn" data-diff="Easy">Easy</button>
+                <button class="diff-btn active" data-diff="Medium">Normal</button>
+                <button class="diff-btn" data-diff="Hard">Hard</button>
+            </div>
+            <button id="start-btn"><i class="fa-solid fa-play"></i> Play Game</button>
+            <button id="leaderboard-btn"><i class="fa-solid fa-trophy"></i> High Scores</button>
+            <div id="controls-hint">Move: Arrows/Mouse | Launch: Click/Space | Pause: 'P' | Exit: 'E'</div>
+        </div>
+
+        <div id="intermission-screen" class="overlay hidden">
+            <h1 id="intermission-title" style="color: #00ffcc;">LEVEL CLEARED!</h1>
+            <p style="font-size: 12px; margin-bottom: 20px;">Current Score: <span id="intermission-score">0</span></p>
+            <button id="continue-btn"><i class="fa-solid fa-forward-step"></i> Next Level</button>
+        </div>
+
+        <div id="game-over-screen" class="overlay hidden">
+            <h1 id="end-title">GAME OVER</h1>
+            <h2 style="color: #ffd700;">NEW HIGH SCORE!</h2>
+            <p style="font-size: 12px; margin-bottom: 10px;">Score: <span id="final-score"></span></p>
+            <input type="text" id="player-name" placeholder="ENTER NAME" maxlength="10" style="padding: 10px; font-family: inherit; font-size: 14px; text-transform: uppercase; text-align: center; width: 200px; margin-bottom: 20px; background: #222; color: #fff; border: 2px solid #555;">
+            <br>
+            <button id="save-score-btn">Save Score</button>
+        </div>
+
+        <div id="leaderboard-screen" class="overlay hidden">
+            <h2>HIGH SCORES</h2>
+            <div class="lb-controls">
+                <i id="lb-prev" class="fa-solid fa-chevron-left"></i>
+                <span id="lb-diff-display">NORMAL</span>
+                <i id="lb-next" class="fa-solid fa-chevron-right"></i>
+            </div>
+            <div class="kb-hint">(Use Left/Right Arrows)</div>
+            <table>
+                <thead>
+                    <tr><th>RANK</th><th>NAME</th><th>SCORE</th><th>LVL</th></tr>
+                </thead>
+                <tbody id="score-table-body"></tbody>
+            </table>
+            <div id="new-game-hint" class="flash-text hidden">PRESS 'N' FOR NEW GAME</div>
+            <button id="close-leaderboard-btn">Main Menu</button>
+        </div>
+    </div>
+</div>
+
+<script>
+/**
+ * CHROMA BREAKOUT - Game Engine
+ */
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+let gameState = 'MENU';
+let animationId;
+let difficulty = 'Medium';
+let timeTicks = 0; 
+
+const diffSettings = {
+    'Easy': { ballSpeed: 1.8, paddleWidth: 120, damage: 1 },
+    'Medium': { ballSpeed: 3.0, paddleWidth: 100, damage: 1 },
+    'Hard': { ballSpeed: 4.2, paddleWidth: 80, damage: 1 }
+};
+
+let score = 0, lives = 3, currentLevelIdx = 0;
+let paddle = { x: 350, y: 550, width: 100, height: 15, speed: 8, dx: 0, effects: {} };
+let balls = [], bricks = [], drops = [], lasers = [];
+
+const BALL_RADIUS = 6, BRICK_PADDING = 2, BRICK_OFFSET_TOP = 60, BRICK_OFFSET_LEFT = 10;
+let BASE_DROP_RATE = 0.15; 
+
+// EMOJI POWERUP CONFIGURATION
+const POWERUPS = {
+    POINTS: { icon: '💰', effect: () => addScore(50) },
+    MULTI: { icon: '🫧', effect: () => spawnExtraBalls() },
+    LASER: { icon: '⚡', effect: () => activateLaser() },
+    EXPAND: { icon: '↔️', effect: () => activateExpand() },
+    BREAK: { icon: '🔨', effect: () => activateEasyBreak() }
+};
+const dropTypes = Object.keys(POWERUPS);
+
+// Level Data (Minified)
+const gameLevels = [
+    { name: "Welcome", extras: 1.0, blocks: [
+        [1,1,1,1,1,1,1,1,1,1], [2,2,2,2,2,2,2,2,2,2], [3,3,3,3,3,3,3,3,3,3], [2,2,2,2,2,2,2,2,2,2], [1,1,1,1,1,1,1,1,1,1]
+    ]},
+    { name: "The Wall", extras: 0.8, blocks: [
+        [3,3,3,3,3,3,3,3,3,3], [3,0,0,0,0,0,0,0,0,3], [3,0,2,2,2,2,2,2,0,3], [3,0,2,1,1,1,1,2,0,3], [3,0,2,2,2,2,2,2,0,3]
+    ]},
+    { name: "Checkerboard", extras: 1.5, blocks: [
+        [3,1,3,1,3,1,3,1,3,1], [1,3,1,3,1,3,1,3,1,3], [2,1,2,1,2,1,2,1,2,1], [1,2,1,2,1,2,1,2,1,2], [1,1,1,1,1,1,1,1,1,1]
+    ]}
+];
+
+// Input handling
+let rightPressed = false, leftPressed = false;
+
+document.addEventListener("keydown", (e) => {
+    let key = e.key.toLowerCase();
+    
+    if (key === 'n' && gameState === 'LEADERBOARD' && !document.getElementById('new-game-hint').classList.contains('hidden')) {
+        startGame(); return;
+    }
+    if (key === 'e' && ['PLAYING', 'PAUSED', 'INTERMISSION'].includes(gameState)) {
+        exitToMenu(); return;
+    }
+    if (key === 'p' && ['PLAYING', 'PAUSED'].includes(gameState)) {
+        togglePause(); return;
+    }
+    if ((e.key === " " || e.key === "ArrowUp") && gameState === 'PLAYING') launchBall();
+
+    if (gameState === 'PLAYING') {
+        if (e.key === "Right" || e.key === "ArrowRight") rightPressed = true;
+        else if (e.key === "Left" || e.key === "ArrowLeft") leftPressed = true;
+    } else if (gameState === 'LEADERBOARD') {
+        if (e.key === "Right" || e.key === "ArrowRight") document.getElementById('lb-next').click();
+        else if (e.key === "Left" || e.key === "ArrowLeft") document.getElementById('lb-prev').click();
+    }
+});
+
+document.addEventListener("keyup", (e) => {
+    if (gameState === 'PLAYING') {
+        if (e.key === "Right" || e.key === "ArrowRight") rightPressed = false;
+        else if (e.key === "Left" || e.key === "ArrowLeft") leftPressed = false;
+    }
+});
+
+function togglePause() {
+    if (gameState === 'PLAYING') {
+        gameState = 'PAUSED'; cancelAnimationFrame(animationId);
+        document.getElementById('intermission-title').innerText = "PAUSED";
+        document.getElementById('intermission-title').style.color = "#ff0055";
+        document.getElementById('intermission-score').innerText = score;
+        document.getElementById('continue-btn').innerHTML = '<i class="fa-solid fa-play"></i> Resume';
+        document.getElementById('intermission-screen').classList.remove('hidden');
+    } else if (gameState === 'PAUSED') {
+        document.getElementById('intermission-screen').classList.add('hidden');
+        gameState = 'PLAYING'; update();
+    }
+}
+
+function exitToMenu() {
+    gameState = 'MENU'; cancelAnimationFrame(animationId);
+    ['hud', 'intermission-screen', 'game-over-screen', 'leaderboard-screen'].forEach(id => {
+        document.getElementById(id).classList.add('hidden');
+    });
+    document.getElementById('menu-screen').classList.remove('hidden');
+    ctx.fillStyle = '#0f0f1b'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+function trackCursor(clientX) {
+    if (gameState !== 'PLAYING') return;
+    let rect = canvas.getBoundingClientRect(), scaleX = canvas.width / rect.width;
+    paddle.x = ((clientX - rect.left) * scaleX) - paddle.renderWidth / 2;
+    if(paddle.x < 0) paddle.x = 0;
+    if(paddle.x + paddle.renderWidth > canvas.width) paddle.x = canvas.width - paddle.renderWidth;
+}
+
+function launchBall() {
+    if (gameState !== 'PLAYING') return;
+    balls.forEach(ball => {
+        if (!ball.active) {
+            ball.active = true;
+            ball.dx = ball.speed * Math.sin(ball.startAngle);
+            ball.dy = -ball.speed * Math.cos(ball.startAngle);
+        }
+    });
+}
+
+const gameWrapper = document.getElementById('game-wrapper');
+gameWrapper.addEventListener("touchmove", (e) => { if(gameState === 'PLAYING') { e.preventDefault(); trackCursor(e.touches[0].clientX); } }, { passive: false });
+canvas.addEventListener('pointerdown', () => { if(gameState === 'PLAYING') launchBall(); });
+gameWrapper.addEventListener("mousemove", (e) => trackCursor(e.clientX));
+
+function spawnBall(isExtra = false, baseX = null, baseY = null) {
+    let speed = diffSettings[difficulty].ballSpeed;
+    let startAngle = (Math.random() * (Math.PI / 4)) - (Math.PI / 8); 
+    
+    if (isExtra && baseX && baseY) {
+        balls.push({ x: baseX, y: baseY, dx: speed * Math.sin(startAngle + Math.PI/6), dy: -speed * Math.cos(startAngle + Math.PI/6), active: true });
+        balls.push({ x: baseX, y: baseY, dx: speed * Math.sin(startAngle - Math.PI/6), dy: -speed * Math.cos(startAngle - Math.PI/6), active: true });
+    } else {
+        balls.push({ x: paddle.renderX + paddle.renderWidth / 2, y: paddle.y - BALL_RADIUS - 1, dx: 0, dy: 0, speed: speed, startAngle: startAngle, active: false });
+    }
+}
+
+function initLevel(levelIdx) {
+    if(levelIdx >= gameLevels.length) { endGame(true); return; }
+    const levelData = gameLevels[levelIdx];
+    document.getElementById('level-display').innerText = levelIdx + 1;
+    
+    bricks = [];
+    const rows = levelData.blocks.length, cols = levelData.blocks[0].length;
+    const brickWidth = (canvas.width - (BRICK_OFFSET_LEFT * 2) - (BRICK_PADDING * (cols - 1))) / cols;
+    const brickHeight = 20;
+
+    for (let r = 0; r < rows; r++) {
+        bricks[r] = [];
+        for (let c = 0; c < cols; c++) {
+            let h = levelData.blocks[r][c];
+            bricks[r][c] = { 
+                x: BRICK_OFFSET_LEFT + (c * (brickWidth + BRICK_PADDING)), 
+                y: BRICK_OFFSET_TOP + (r * (brickHeight + BRICK_PADDING)), 
+                width: brickWidth, height: brickHeight, status: h, maxStatus: h, baseHue: Math.floor((c / cols) * 360)
+            };
+        }
+    }
+    
+    paddle.width = diffSettings[difficulty].paddleWidth; paddle.renderWidth = paddle.width; 
+    paddle.x = (canvas.width - paddle.width) / 2; paddle.effects = {};
+    balls = []; spawnBall(); drops = []; lasers = [];
+}
+
+function spawnExtraBalls() { if(balls.length > 0) spawnBall(true, balls[0].x, balls[0].y); }
+function activateLaser() { paddle.effects.laser = 300; }
+function activateExpand() { paddle.effects.expand = 600; }
+function activateEasyBreak() { paddle.effects.break = 600; }
+
+function addScore(pts) { score += pts; document.getElementById('score-display').innerText = score; }
+function updateHUD() { document.getElementById('score-display').innerText = score; document.getElementById('lives-display').innerText = lives; }
+
+function fireLaser() {
+    if(paddle.effects.laser && paddle.effects.laser % 30 === 0) {
+        lasers.push({x: paddle.x + 5, y: paddle.y, width: 3, height: 10, dy: -10});
+        lasers.push({x: paddle.x + paddle.renderWidth - 8, y: paddle.y, width: 3, height: 10, dy: -10});
+    }
+}
+
+function collisionDetection() {
+    let activeBricks = 0;
+    const dmg = paddle.effects.break > 0 ? 3 : diffSettings[difficulty].damage;
+
+    for (let r = 0; r < bricks.length; r++) {
+        for (let c = 0; c < bricks[r].length; c++) {
+            let b = bricks[r][c];
+            if (b.status > 0) {
+                activeBricks++;
+                balls.forEach(ball => {
+                    if (!ball.active) return;
+                    if (ball.x > b.x && ball.x < b.x + b.width && ball.y > b.y && ball.y < b.y + b.height) {
+                        ball.dy = -ball.dy; b.status -= dmg; addScore(10 * b.maxStatus);
+                        if (b.status <= 0) {
+                            b.status = 0;
+                            if (Math.random() < BASE_DROP_RATE * gameLevels[currentLevelIdx].extras) {
+                                drops.push({ x: b.x + b.width/2, y: b.y, type: dropTypes[Math.floor(Math.random() * dropTypes.length)], dy: 3 });
+                            }
+                        }
+                    }
+                });
+                for(let l=lasers.length-1; l>=0; l--) {
+                    let laser = lasers[l];
+                    if (laser.x > b.x && laser.x < b.x + b.width && laser.y > b.y && laser.y < b.y + b.height) {
+                        b.status -= 1; addScore(5 * b.maxStatus); lasers.splice(l, 1);
+                    }
+                }
+            }
+        }
+    }
+
+    if (activeBricks === 0) {
+        if (currentLevelIdx + 1 >= gameLevels.length) { currentLevelIdx++; initLevel(currentLevelIdx); } 
+        else {
+            gameState = 'INTERMISSION'; cancelAnimationFrame(animationId);
+            document.getElementById('intermission-title').innerText = "LEVEL CLEARED!";
+            document.getElementById('intermission-title').style.color = "#00ffcc";
+            document.getElementById('intermission-score').innerText = score;
+            document.getElementById('continue-btn').innerHTML = '<i class="fa-solid fa-forward-step"></i> Next Level';
+            document.getElementById('intermission-screen').classList.remove('hidden');
+        }
+    }
+}
+
+function drawBricks() {
+    for (let r = 0; r < bricks.length; r++) {
+        for (let c = 0; c < bricks[r].length; c++) {
+            let b = bricks[r][c];
+            if (b.status > 0) {
+                ctx.beginPath(); ctx.rect(b.x, b.y, b.width, b.height); ctx.fillStyle = `hsl(${b.baseHue}, 80%, 50%)`; ctx.fill();
+                let stroke = b.status * 2; ctx.lineWidth = stroke; ctx.strokeStyle = `hsl(${b.baseHue}, 80%, 20%)`;
+                ctx.strokeRect(b.x + stroke/2, b.y + stroke/2, b.width - stroke, b.height - stroke); ctx.closePath();
+            }
+        }
+    }
+}
+
+function drawPaddle() {
+    let currentWidth = paddle.effects.expand > 0 ? paddle.width * 1.5 : paddle.width;
+    let renderX = paddle.x; if(renderX + currentWidth > canvas.width) renderX = canvas.width - currentWidth;
+    ctx.beginPath(); ctx.rect(renderX, paddle.y, currentWidth, paddle.height);
+    ctx.fillStyle = paddle.effects.laser > 0 ? '#ff0055' : '#f0f0f0'; ctx.fill();
+    ctx.strokeStyle = '#555'; ctx.lineWidth = 2; ctx.stroke(); ctx.closePath();
+    paddle.renderWidth = currentWidth; paddle.renderX = renderX;
+}
+
+function drawBalls() {
+    let hasInactive = false;
+    balls.forEach(ball => {
+        if (!ball.active) hasInactive = true;
+        ctx.beginPath(); ctx.arc(ball.x, ball.y, BALL_RADIUS, 0, Math.PI * 2);
+        ctx.fillStyle = '#fff'; ctx.fill(); ctx.shadowBlur = 10; ctx.shadowColor = '#fff'; ctx.closePath(); ctx.shadowBlur = 0;
+    });
+    if (hasInactive && Math.floor(timeTicks / 30) % 2 === 0) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)'; ctx.font = '10px "Press Start 2P"';
+        ctx.textAlign = 'center'; ctx.fillText("CLICK TO LAUNCH", canvas.width / 2, paddle.y - 40);
+    }
+}
+
+function drawDrops() {
+    for (let i = drops.length - 1; i >= 0; i--) {
+        let d = drops[i], pData = POWERUPS[d.type];
+        
+        ctx.font = '24px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        // Add subtle glow to emoji
+        ctx.shadowBlur = 10; ctx.shadowColor = '#fff';
+        ctx.fillText(pData.icon, d.x, d.y);
+        ctx.shadowBlur = 0; 
+        
+        d.y += d.dy;
+        if (d.y + 12 > paddle.y && d.y - 12 < paddle.y + paddle.height && d.x + 12 > paddle.renderX && d.x - 12 < paddle.renderX + paddle.renderWidth) {
+            pData.effect(); drops.splice(i, 1);
+        } else if (d.y > canvas.height) { drops.splice(i, 1); }
+    }
+}
+
+function drawLasers() {
+    ctx.fillStyle = '#ff0055';
+    for(let i = lasers.length - 1; i >= 0; i--) {
+        let l = lasers[i]; ctx.fillRect(l.x, l.y, l.width, l.height); l.y += l.dy; if(l.y < 0) lasers.splice(i, 1);
+    }
+}
+
+function manageEffects() { for(let key in paddle.effects) { if(paddle.effects[key] > 0) paddle.effects[key]--; } }
+
+function update() {
+    if(gameState !== 'PLAYING') return;
+    timeTicks++; ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    drawBricks(); drawDrops(); drawLasers(); drawPaddle(); drawBalls();
+    collisionDetection(); manageEffects(); fireLaser();
+
+    if (rightPressed) { paddle.x += paddle.speed; if (paddle.x + paddle.renderWidth > canvas.width) paddle.x = canvas.width - paddle.renderWidth; } 
+    else if (leftPressed) { paddle.x -= paddle.speed; if (paddle.x < 0) paddle.x = 0; }
+
+    for (let i = balls.length - 1; i >= 0; i--) {
+        let ball = balls[i];
+        if (!ball.active) { ball.x = paddle.renderX + paddle.renderWidth / 2; ball.y = paddle.y - BALL_RADIUS - 1; continue; }
+
+        ball.x += ball.dx; ball.y += ball.dy;
+
+        if (ball.x + ball.dx > canvas.width - BALL_RADIUS || ball.x + ball.dx < BALL_RADIUS) ball.dx = -ball.dx;
+        if (ball.y + ball.dy < BALL_RADIUS) ball.dy = -ball.dy;
+        else if (ball.y + ball.dy > paddle.y - BALL_RADIUS) {
+            if (ball.x > paddle.renderX && ball.x < paddle.renderX + paddle.renderWidth) {
+                let hitPoint = ball.x - (paddle.renderX + paddle.renderWidth / 2);
+                let normalizedHit = hitPoint / (paddle.renderWidth / 2);
+                let bounceAngle = normalizedHit * (Math.PI / 5); 
+                let currentSpeed = diffSettings[difficulty].ballSpeed;
+                ball.dx = currentSpeed * Math.sin(bounceAngle); ball.dy = -currentSpeed * Math.cos(bounceAngle);
+            } else if (ball.y > canvas.height) { balls.splice(i, 1); }
+        }
+    }
+
+    if (balls.length === 0) {
+        lives--; updateHUD();
+        if (lives === 0) { endGame(false); } else { paddle.effects = {}; spawnBall(); }
+    }
+    animationId = requestAnimationFrame(update);
+}
+
+function startGame() {
+    document.getElementById('menu-screen').classList.add('hidden');
+    document.getElementById('leaderboard-screen').classList.add('hidden');
+    document.getElementById('hud').classList.remove('hidden');
+    score = 0; lives = 3; currentLevelIdx = 0; timeTicks = 0;
+    updateHUD(); initLevel(currentLevelIdx); gameState = 'PLAYING'; update();
+}
+
+function endGame(victory) {
+    gameState = 'GAMEOVER'; cancelAnimationFrame(animationId);
+    document.getElementById('hud').classList.add('hidden');
+    document.getElementById('end-title').innerText = victory ? "YOU WIN!" : "GAME OVER";
+    document.getElementById('end-title').style.color = victory ? "#00ffcc" : "#ff0055";
+    document.getElementById('final-score').innerText = score;
+
+    if (checkIsHighScore(score, difficulty)) {
+        document.getElementById('game-over-screen').classList.remove('hidden');
+        const nameInput = document.getElementById('player-name');
+        nameInput.value = ''; nameInput.focus();
+    } else { showPostGameLeaderboard(); }
+}
+
+function showPostGameLeaderboard() {
+    gameState = 'LEADERBOARD'; lbDiffIndex = DIFF_ORDER.indexOf(difficulty);
+    document.getElementById('game-over-screen').classList.add('hidden');
+    document.getElementById('menu-screen').classList.add('hidden');
+    document.getElementById('leaderboard-screen').classList.remove('hidden');
+    document.getElementById('new-game-hint').classList.remove('hidden'); 
+    renderLeaderboard();
+}
+
+/** HIGH SCORE DATA */
+const DB_KEY = 'aislop_breakout_scores_v4'; const DIFF_ORDER = ['Easy', 'Medium', 'Hard']; let lbDiffIndex = 1; 
+
+const DEFAULT_SCORES = {
+    'Easy': [{ name: "SUZIE", score: 10000, level: 3 }, { name: "JONATHAN", score: 9000, level: 3 }, { name: "ALEXIS", score: 8000, level: 3 }, { name: "NEO", score: 7000, level: 2 }, { name: "MIA", score: 6000, level: 2 }, { name: "PLAYER_ONE", score: 5000, level: 2 }, { name: "SAM", score: 4000, level: 2 }, { name: "NOBODY", score: 3000, level: 1 }, { name: "TIMOTHY", score: 2000, level: 1 }, { name: "CUB", score: 1000, level: 1 }],
+    'Medium': [{ name: "BOB_BOSS", score: 20000, level: 3 }, { name: "MAXWELL", score: 18000, level: 3 }, { name: "RAYMOND", score: 16000, level: 3 }, { name: "LEONARDO", score: 14000, level: 3 }, { name: "EVANGELINE", score: 12000, level: 2 }, { name: "ANON", score: 10000, level: 2 }, { name: "DANIEL", score: 8000, level: 2 }, { name: "GAMERGIRL", score: 6000, level: 1 }, { name: "JIMBO", score: 4000, level: 1 }, { name: "NEWKID", score: 2000, level: 1 }],
+    'Hard': [{ name: "SUPER_CPU", score: 30000, level: 3 }, { name: "ARCADE_ACE", score: 27000, level: 3 }, { name: "THE_PRO", score: 24000, level: 3 }, { name: "GOD_MODE", score: 21000, level: 3 }, { name: "T_REX", score: 18000, level: 3 }, { name: "STARFOX", score: 15000, level: 2 }, { name: "RED_LEADER", score: 12000, level: 2 }, { name: "BLUE_ROGUE", score: 9000, level: 2 }, { name: "ASH_KETCH", score: 6000, level: 1 }, { name: "NOOB", score: 3000, level: 1 }]
+};
+
+function getHighScores() {
+    let data = localStorage.getItem(DB_KEY);
+    if (!data) { localStorage.setItem(DB_KEY, JSON.stringify(DEFAULT_SCORES)); return JSON.parse(JSON.stringify(DEFAULT_SCORES)); }
+    try { return JSON.parse(data); } catch(e) { return JSON.parse(JSON.stringify(DEFAULT_SCORES)); }
+}
+
+function checkIsHighScore(score, diff) {
+    let scores = getHighScores()[diff] || [];
+    if (scores.length < 10) return true; return score > scores[scores.length - 1].score;
+}
+
+function saveHighScore(name, score, level, diff) {
+    let allScores = getHighScores(); if (!allScores[diff]) allScores[diff] = [];
+    allScores[diff].push({ name: name || "ANON", score: score, level: level });
+    allScores[diff].sort((a, b) => b.score - a.score || b.level - a.level);
+    allScores[diff] = allScores[diff].slice(0, 10); localStorage.setItem(DB_KEY, JSON.stringify(allScores));
+}
+
+function renderLeaderboard() {
+    let currentDiff = DIFF_ORDER[lbDiffIndex];
+    document.getElementById('lb-diff-display').innerText = currentDiff === 'Medium' ? 'NORMAL' : currentDiff.toUpperCase();
+    const tbody = document.getElementById('score-table-body'); tbody.innerHTML = '';
+    const scores = getHighScores()[currentDiff] || [];
+    
+    for (let i = 0; i < 10; i++) {
+        let tr = document.createElement('tr');
+        if (scores[i]) { tr.innerHTML = `<td>${i + 1}</td><td>${scores[i].name.toUpperCase()}</td><td>${scores[i].score}</td><td>${scores[i].level}</td>`; } 
+        else { tr.className = 'empty-row'; tr.innerHTML = `<td>${i + 1}</td><td>---</td><td>0</td><td>-</td>`; }
+        tbody.appendChild(tr);
+    }
+}
+
+document.querySelectorAll('.diff-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active')); e.target.classList.add('active'); difficulty = e.target.dataset.diff;
+    });
+});
+
+document.getElementById('lb-prev').addEventListener('click', () => { lbDiffIndex = (lbDiffIndex - 1 + DIFF_ORDER.length) % DIFF_ORDER.length; renderLeaderboard(); });
+document.getElementById('lb-next').addEventListener('click', () => { lbDiffIndex = (lbDiffIndex + 1) % DIFF_ORDER.length; renderLeaderboard(); });
+document.getElementById('start-btn').addEventListener('click', startGame);
+
+document.getElementById('continue-btn').addEventListener('click', () => {
+    document.getElementById('intermission-screen').classList.add('hidden');
+    if (gameState === 'INTERMISSION') { currentLevelIdx++; initLevel(currentLevelIdx); }
+    gameState = 'PLAYING'; update();
+});
+
+document.getElementById('leaderboard-btn').addEventListener('click', () => {
+    gameState = 'LEADERBOARD'; lbDiffIndex = DIFF_ORDER.indexOf(difficulty);
+    document.getElementById('new-game-hint').classList.add('hidden'); 
+    document.getElementById('menu-screen').classList.add('hidden'); document.getElementById('leaderboard-screen').classList.remove('hidden'); renderLeaderboard();
+});
+
+document.getElementById('close-leaderboard-btn').addEventListener('click', () => {
+    gameState = 'MENU'; document.getElementById('leaderboard-screen').classList.add('hidden'); document.getElementById('menu-screen').classList.remove('hidden');
+});
+
+function commitScore() {
+    saveHighScore(document.getElementById('player-name').value.trim() || 'ANONYMOUS', score, currentLevelIdx + 1, difficulty);
+    showPostGameLeaderboard();
+}
+
+document.getElementById('save-score-btn').addEventListener('click', commitScore);
+document.getElementById('player-name').addEventListener('keydown', (e) => { if (e.key === 'Enter') commitScore(); });
+
+ctx.fillStyle = '#0f0f1b'; ctx.fillRect(0,0, canvas.width, canvas.height);
+</script>
+</body>
+</html>
