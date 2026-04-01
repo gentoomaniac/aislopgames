@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Chroma Breakout - AislopGames</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
 
@@ -29,6 +28,13 @@
             padding: 20px;
         }
 
+        /* Forces emojis to render in full color instead of monochrome text fallbacks */
+        .emoji-icon {
+            font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+            font-style: normal;
+            font-weight: normal;
+        }
+
         /* Layout Container */
         #app-container {
             display: flex;
@@ -45,13 +51,13 @@
             flex-grow: 1;
             width: 100%;
             max-width: 800px;
-            max-height: 85vh; /* Prevents vertical overflow on standard desktop/portrait */
+            max-height: 85vh;
             aspect-ratio: 4/3;
             background-color: var(--bg-color);
             box-shadow: 0 0 20px rgba(255, 0, 85, 0.2);
             border: 2px solid #333;
             cursor: crosshair;
-            touch-action: none; /* CRITICAL: Prevents browser scrolling when swiping paddle */
+            touch-action: none;
         }
 
         canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
@@ -64,19 +70,11 @@
             padding: 15px;
             display: flex;
             flex-direction: column;
+            justify-content: center;
             gap: 15px;
             width: 150px;
             min-width: 140px;
             border-radius: 8px;
-        }
-
-        .legend-title {
-            color: #00ffcc;
-            font-size: 12px;
-            text-align: center;
-            border-bottom: 2px solid #333;
-            padding-bottom: 10px;
-            margin-bottom: 5px;
         }
 
         .legend-item {
@@ -92,28 +90,25 @@
             filter: drop-shadow(0 0 5px rgba(255,255,255,0.3));
         }
 
-        /* Responsive Breakpoint - Portrait Mobile */
+        /* Responsive Breakpoints */
         @media (max-width: 900px) {
             body { padding: 10px; }
             #app-container { flex-direction: column; align-items: center; }
             #legend { width: 100%; max-width: 800px; flex-direction: row; flex-wrap: wrap; justify-content: space-around; gap: 10px; padding: 10px; }
-            .legend-title { width: 100%; margin-bottom: 0; padding-bottom: 5px; }
             .legend-item { width: auto; min-width: 120px; gap: 8px; }
         }
 
-        /* Responsive Breakpoint - Landscape Mobile (The Fix) */
         @media (max-width: 900px) and (orientation: landscape) {
             body { padding: 0; align-items: stretch; }
             #app-container { flex-direction: row; align-items: center; justify-content: center; margin: 0 auto; height: 100vh; }
-            #legend { display: none !important; } /* Hide the powerups to save space */
+            #legend { display: none !important; }
             
             #game-wrapper {
-                max-height: 100vh; /* Lock height to exact screen bounds */
-                max-width: calc(100vh * (4/3)); /* Scale width perfectly to match 4:3 ratio based on height */
-                border: none; /* Optional: clean up edges on small phones */
+                max-height: 100vh;
+                max-width: calc(100vh * (4/3));
+                border: none;
             }
 
-            /* Shrink menu elements so they don't overflow the smaller physical screen */
             h1 { font-size: 14px; margin-bottom: 5px; }
             h2 { font-size: 12px; }
             .diff-container { margin: 5px 0; }
@@ -162,8 +157,8 @@
 
         /* High Score Table */
         .lb-controls { display: flex; align-items: center; justify-content: center; gap: 20px; margin-bottom: 15px; font-size: 12px; color: var(--accent); }
-        .lb-controls i { cursor: pointer; transition: transform 0.2s; padding: 10px; }
-        .lb-controls i:hover { transform: scale(1.3); color: #fff; }
+        .lb-controls .btn-icon { cursor: pointer; transition: transform 0.2s; padding: 10px; font-size: 16px; }
+        .lb-controls .btn-icon:hover { transform: scale(1.3); }
         #lb-diff-display { min-width: 100px; color: #fff; }
         .kb-hint { font-size: 8px; color: #888; margin-top: -10px; margin-bottom: 10px; }
 
@@ -183,10 +178,10 @@
 <div id="app-container">
     <div id="game-wrapper">
         <div id="hud" class="hidden">
-            <div class="hud-section hud-left"><i class="fa-solid fa-star"></i> <span id="score-display">0</span></div>
+            <div class="hud-section hud-left"><span class="emoji-icon">🪙</span> <span id="score-display">0</span></div>
             <div class="hud-section hud-center">LVL: <span id="level-display">1</span></div>
             <div id="active-powerups"></div>
-            <div class="hud-section hud-right"><i class="fa-solid fa-heart"></i> <span id="lives-display">3</span></div>
+            <div class="hud-section hud-right"><span class="emoji-icon">❤️</span> <span id="lives-display">3</span></div>
         </div>
 
         <canvas id="gameCanvas" width="800" height="600"></canvas>
@@ -199,15 +194,15 @@
                 <button class="diff-btn active" data-diff="Medium">Normal</button>
                 <button class="diff-btn" data-diff="Hard">Hard</button>
             </div>
-            <button id="start-btn"><i class="fa-solid fa-play"></i> Play Game</button>
-            <button id="leaderboard-btn"><i class="fa-solid fa-trophy"></i> High Scores</button>
+            <button id="start-btn"><span class="emoji-icon">▶️</span> Play Game</button>
+            <button id="leaderboard-btn"><span class="emoji-icon">🏆</span> High Scores</button>
             <div id="controls-hint">Move: Arrows/Swipe | Launch: Click/Tap | Pause: 'P' | Exit: 'E'</div>
         </div>
 
         <div id="intermission-screen" class="overlay hidden">
             <h1 id="intermission-title" style="color: #00ffcc;">LEVEL CLEARED!</h1>
             <p style="font-size: 12px; margin-bottom: 20px;">Current Score: <span id="intermission-score">0</span></p>
-            <button id="continue-btn"><i class="fa-solid fa-forward-step"></i> Next Level</button>
+            <button id="continue-btn"><span class="emoji-icon">⏭️</span> Next Level</button>
         </div>
 
         <div id="game-over-screen" class="overlay hidden">
@@ -222,9 +217,9 @@
         <div id="leaderboard-screen" class="overlay hidden">
             <h2>HIGH SCORES</h2>
             <div class="lb-controls">
-                <i id="lb-prev" class="fa-solid fa-chevron-left"></i>
+                <span id="lb-prev" class="btn-icon emoji-icon">◀️</span>
                 <span id="lb-diff-display">NORMAL</span>
-                <i id="lb-next" class="fa-solid fa-chevron-right"></i>
+                <span id="lb-next" class="btn-icon emoji-icon">▶️</span>
             </div>
             <div class="kb-hint">(Use Left/Right Arrows)</div>
             <table>
@@ -239,12 +234,12 @@
     </div>
     
     <div id="legend" class="hidden">
-        <h3 class="legend-title"><i class="fa-solid fa-bolt"></i> POWER-UPS</h3>
         <div class="legend-item"><span class="legend-emoji">💰</span><span>+50 Pts</span></div>
         <div class="legend-item"><span class="legend-emoji">🫧</span><span>Multi-Ball</span></div>
         <div class="legend-item"><span class="legend-emoji">⚡</span><span>Laser</span></div>
         <div class="legend-item"><span class="legend-emoji">↔️</span><span>Expand paddle</span></div>
-        <div class="legend-item"><span class="legend-emoji">🔨</span><span>weaker blocks</span></div>
+        <div class="legend-item"><span class="legend-emoji">🔨</span><span>Weaker blocks</span></div>
+        <div class="legend-item"><span class="legend-emoji">🍄</span><span style="color: #ff0055;">Invert controls</span></div>
     </div>
 </div>
 
@@ -280,12 +275,14 @@ let balls = [], bricks = [], drops = [], lasers = [];
 const BALL_RADIUS = 6, BRICK_PADDING = 2, BRICK_OFFSET_TOP = 60, BRICK_OFFSET_LEFT = 10;
 let BASE_DROP_RATE = 0.15; 
 
+// Added the INVERT negative power-up
 const POWERUPS = {
     POINTS: { icon: '💰', effect: () => addScore(50) },
     MULTI: { icon: '🫧', effect: () => spawnExtraBalls() },
     LASER: { icon: '⚡', effect: () => activateLaser() },
     EXPAND: { icon: '↔️', effect: () => activateExpand() },
-    BREAK: { icon: '🔨', effect: () => activateEasyBreak() }
+    BREAK: { icon: '🔨', effect: () => activateEasyBreak() },
+    INVERT: { icon: '🍄', effect: () => activateInvert() }
 };
 const dropTypes = Object.keys(POWERUPS);
 
@@ -331,7 +328,7 @@ function togglePause() {
         document.getElementById('intermission-title').innerText = "PAUSED";
         document.getElementById('intermission-title').style.color = "#ff0055";
         document.getElementById('intermission-score').innerText = score;
-        document.getElementById('continue-btn').innerHTML = '<i class="fa-solid fa-play"></i> Resume';
+        document.getElementById('continue-btn').innerHTML = '<span class="emoji-icon">▶️</span> Resume';
         document.getElementById('intermission-screen').classList.remove('hidden');
     } else if (gameState === 'PAUSED') {
         document.getElementById('intermission-screen').classList.add('hidden');
@@ -351,7 +348,14 @@ function exitToMenu() {
 function trackCursor(clientX) {
     if (gameState !== 'PLAYING') return;
     let rect = canvas.getBoundingClientRect(), scaleX = canvas.width / rect.width;
-    paddle.x = ((clientX - rect.left) * scaleX) - paddle.renderWidth / 2;
+    let targetX = ((clientX - rect.left) * scaleX) - paddle.renderWidth / 2;
+    
+    // Invert Absolute Mouse/Touch Controls
+    if (paddle.effects.invert && paddle.effects.invert > 0) {
+        targetX = canvas.width - targetX - paddle.renderWidth;
+    }
+
+    paddle.x = targetX;
     if(paddle.x < 0) paddle.x = 0;
     if(paddle.x + paddle.renderWidth > canvas.width) paddle.x = canvas.width - paddle.renderWidth;
 }
@@ -427,9 +431,12 @@ function initLevel(levelIdx) {
 }
 
 function spawnExtraBalls() { if(balls.length > 0) spawnBall(true, balls[0].x, balls[0].y); }
-function activateLaser() { paddle.effects.laser = Math.floor(600 * (gameLevels[currentLevelIdx].powerupDuration || 1.0)); } 
-function activateExpand() { paddle.effects.expand = Math.floor(900 * (gameLevels[currentLevelIdx].powerupDuration || 1.0)); } 
-function activateEasyBreak() { paddle.effects.break = Math.floor(900 * (gameLevels[currentLevelIdx].powerupDuration || 1.0)); } 
+
+// Modified Powerups: Durations stack! Invert adds 7 seconds (420 frames at 60fps).
+function activateLaser() { paddle.effects.laser = (paddle.effects.laser || 0) + Math.floor(600 * (gameLevels[currentLevelIdx].powerupDuration || 1.0)); } 
+function activateExpand() { paddle.effects.expand = (paddle.effects.expand || 0) + Math.floor(900 * (gameLevels[currentLevelIdx].powerupDuration || 1.0)); } 
+function activateEasyBreak() { paddle.effects.break = (paddle.effects.break || 0) + Math.floor(900 * (gameLevels[currentLevelIdx].powerupDuration || 1.0)); } 
+function activateInvert() { paddle.effects.invert = (paddle.effects.invert || 0) + 420; }
 
 function addScore(pts) { score += pts; document.getElementById('score-display').innerText = score; }
 function updateHUD() { document.getElementById('score-display').innerText = score; document.getElementById('lives-display').innerText = lives; }
@@ -480,12 +487,20 @@ function sweptAABB(bx, by, br, vx, vy, boxX, boxY, boxW, boxH) {
 function updateLogic() {
     timeTicks++;
     
-    // Paddle Movement
+    // Paddle Movement & Control Inversion Layer
     let currentWidth = paddle.effects.expand > 0 ? paddle.width * 1.5 : paddle.width;
     paddle.renderWidth = currentWidth;
     
-    if (rightPressed) { paddle.x += paddle.speed; if (paddle.x + paddle.renderWidth > canvas.width) paddle.x = canvas.width - paddle.renderWidth; } 
-    else if (leftPressed) { paddle.x -= paddle.speed; if (paddle.x < 0) paddle.x = 0; }
+    let moveR = rightPressed;
+    let moveL = leftPressed;
+    
+    if (paddle.effects.invert && paddle.effects.invert > 0) {
+        moveR = leftPressed;
+        moveL = rightPressed;
+    }
+    
+    if (moveR) { paddle.x += paddle.speed; if (paddle.x + paddle.renderWidth > canvas.width) paddle.x = canvas.width - paddle.renderWidth; } 
+    else if (moveL) { paddle.x -= paddle.speed; if (paddle.x < 0) paddle.x = 0; }
     
     paddle.renderX = paddle.x;
 
@@ -636,7 +651,7 @@ function updateLogic() {
             document.getElementById('intermission-title').innerText = "LEVEL CLEARED!";
             document.getElementById('intermission-title').style.color = "#00ffcc";
             document.getElementById('intermission-score').innerText = score;
-            document.getElementById('continue-btn').innerHTML = '<i class="fa-solid fa-forward-step"></i> Next Level';
+            document.getElementById('continue-btn').innerHTML = '<span class="emoji-icon">⏭️</span> Next Level';
             document.getElementById('intermission-screen').classList.remove('hidden');
         }
     }
@@ -657,7 +672,12 @@ function manageEffects() {
             if(key === 'laser') icon = POWERUPS.LASER.icon;
             if(key === 'expand') icon = POWERUPS.EXPAND.icon;
             if(key === 'break') icon = POWERUPS.BREAK.icon;
-            activeHTML += `<span style="margin: 0 5px; display: inline-block;">${icon} ${seconds}s</span>`;
+            if(key === 'invert') icon = POWERUPS.INVERT.icon;
+            
+            // Format color logic strictly for the HUD so the inverted timer displays red.
+            let colorFormat = key === 'invert' ? 'color: #ff0055;' : '';
+            
+            activeHTML += `<span style="margin: 0 5px; display: inline-block; ${colorFormat}"><span class="emoji-icon">${icon}</span> ${seconds}s</span>`;
         } else {
             delete paddle.effects[key];
         }
@@ -684,7 +704,17 @@ function drawAll() {
     for (let i = drops.length - 1; i >= 0; i--) {
         let d = drops[i], pData = POWERUPS[d.type];
         ctx.font = '24px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.shadowBlur = 10; ctx.shadowColor = '#fff';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; 
+        
+        // Red pulsating glow exclusively for the INVERT mushroom power-down
+        if (d.type === 'INVERT') {
+            ctx.shadowBlur = 10 + Math.abs(Math.sin(timeTicks * 0.1)) * 15;
+            ctx.shadowColor = '#ff0000';
+        } else {
+            ctx.shadowBlur = 10; 
+            ctx.shadowColor = '#fff';
+        }
+        
         ctx.fillText(pData.icon, d.x, d.y); ctx.shadowBlur = 0; 
     }
 
