@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Minesweeper</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        :root {
+            --win-gray: #c0c0c0;
+            --win-white: #ffffff;
+            --win-shadow: #808080;
+            --win-blue: #000080;
+        }
+
+        body {
+            background-color: #008080;
+            font-family: 'Tahoma', sans-serif;
+            display: flex; justify-content: center; align-items: center;
+            height: 100vh; margin: 0; touch-action: none;
+            user-select: none;
+        }
+
+        .outset { border: 2px solid; border-color: var(--win-white) var(--win-shadow) var(--win-shadow) var(--win-white); }
+        .inset { border: 2px solid; border-color: var(--win-shadow) var(--win-white) var(--win-white) var(--win-shadow); }
+
+        .window { background-color: var(--win-gray); padding: 3px; display: inline-block; box-shadow: 2px 2px 0px black; }
+        
+        .title-bar { 
+            background: linear-gradient(90deg, var(--win-blue), #1084d0); 
+            color: white; padding: 3px 5px; display: flex; 
+            justify-content: space-between; align-items: center; 
+            font-weight: bold; font-size: 14px; 
+        }
+
+        .win-btn { 
+            width: 16px; height: 14px; background: var(--win-gray); 
+            border: 1px solid; border-color: var(--win-white) var(--win-shadow) var(--win-shadow) var(--win-white); 
+            color: black; font-size: 10px; display: flex; align-items: center; justify-content: center; 
+        }
+
+        /* Fixed Menu Logic */
+        .menu-bar { font-size: 12px; display: flex; border-bottom: 1px solid var(--win-shadow); margin-bottom: 5px; position: relative; }
+        .menu-dropdown { position: relative; }
+        .menu-trigger { padding: 2px 8px; cursor: pointer; }
+        .menu-trigger.active { background: var(--win-blue); color: white; }
+        
+        .menu-content { 
+            display: none; position: absolute; background: var(--win-gray); 
+            min-width: 150px; z-index: 1000; box-shadow: 2px 2px 5px rgba(0,0,0,0.5); 
+            border: 2px solid; border-color: var(--win-white) var(--win-shadow) var(--win-shadow) var(--win-white);
+        }
+        .menu-content div { padding: 4px 10px; cursor: pointer; display: flex; justify-content: space-between; color: black; }
+        .menu-content div:hover { background: var(--win-blue); color: white; }
+
+        .game-panel { padding: 6px; }
+        .status-bar { display: flex; justify-content: space-between; align-items: center; padding: 5px; margin-bottom: 6px; }
+        
+        .digit-display { 
+            background-color: black; color: #ff0000; 
+            font-family: 'Courier New', monospace; font-weight: bold; 
+            font-size: 22px; padding: 0 5px; min-width: 55px; text-align: center; 
+        }
+
+        #minefield { display: grid; border: 3px solid; border-color: var(--win-shadow) var(--win-white) var(--win-white) var(--win-shadow); }
+        .cell { 
+            width: 30px; height: 30px; background-color: var(--win-gray); 
+            border: 3px solid; border-color: var(--win-white) var(--win-shadow) var(--win-shadow) var(--win-white); 
+            display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; 
+        }
+        .cell.revealed { border: 1px solid #7b7b7b; background-color: #bdbdbd; }
+        .cell.flagged::after { content: '🚩'; font-size: 14px; }
+        .cell.mine { background-color: red; }
+        .cell.hint-flash { background-color: #ffd700 !important; border: 2px solid white; }
+        
+        .score-box { background: var(--win-gray); padding: 10px; }
+        .score-list-container { 
+            background: var(--win-gray); border: 2px solid; 
+            border-color: var(--win-shadow) var(--win-white) var(--win-white) var(--win-shadow); 
+            height: 220px; 
+        }
+        .score-table { width: 100%; border-collapse: collapse; font-size: 13px; color: black; }
+        .score-table td { padding: 2px 5px; }
+
+        .n-1 { color: blue; } .n-2 { color: green; } .n-3 { color: red; } .n-4 { color: darkblue; }
+
+        @media (max-width: 600px) { .cell { width: 28px; height: 28px; } }
+    </style>
+</head>
+<body>
+
+<div class="window outset">
+    <div class="title-bar">
+        <span>Minesweeper</span>
+        <div style="display:flex; gap:2px">
+            <div class="win-btn">_</div><div class="win-btn">□</div><div class="win-btn" style="margin-left:2px">✕</div>
+        </div>
+    </div>
+    
+    <div class="menu-bar">
+        <div class="menu-dropdown">
+            <div class="menu-trigger" id="game-menu-trigger">Game</div>
+            <div class="menu-content" id="game-menu-content">
+                <div id="btn-new-game">New</div>
+                <hr style="margin:2px 0; border-top: 1px solid gray;">
+                <div class="diff-opt" data-lvl="beginner">Beginner <span id="check-beginner"></span></div>
+                <div class="diff-opt" data-lvl="intermediate">Intermediate <span id="check-intermediate"></span></div>
+                <div class="diff-opt" data-lvl="expert">Expert <span id="check-expert"></span></div>
+                <hr style="margin:2px 0; border-top: 1px solid gray;">
+                <div id="btn-scores">Best Times...</div>
+            </div>
+        </div>
+        <div class="menu-trigger" id="help-trigger">Help</div>
+    </div>
+
+    <div class="game-panel">
+        <div class="status-bar inset">
+            <div id="mine-count" class="digit-display">000</div>
+            <div id="reset-btn" class="outset" style="width:36px; height:36px; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size: 22px;">🙂</div>
+            <div id="timer" class="digit-display">000</div>
+        </div>
+        <div id="minefield"></div>
+    </div>
+</div>
+
+<div class="modal fade" id="scoreModal" tabindex="-1">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content window outset">
+            <div class="title-bar"><span id="score-title">Scores</span></div>
+            <div class="score-box">
+                <div class="score-list-container"><table class="score-table"><tbody id="score-list"></tbody></table></div>
+                <button class="btn btn-sm outset w-100 mt-2" data-bs-dismiss="modal" style="background:var(--win-gray); border-radius:0;">OK</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    let rows, cols, mines, grid, timer, sec, gameOver, flags, revealed, first;
+    let cellHoldTimer, faceHoldTimer;
+    const HOLD_DELAY = 500;
+
+    const levels = {
+        beginner: { r: 9, c: 9, m: 10, base: 20 },
+        intermediate: { r: 16, c: 16, m: 40, base: 85 },
+        expert: { r: 16, c: 30, m: 99, base: 190 }
+    };
+    let currentLvl = 'beginner';
+
+    // --- Fixed Menu Interactions ---
+    function closeMenus() {
+        $(".menu-content").hide();
+        $(".menu-trigger").removeClass("active");
+    }
+
+    $("#game-menu-trigger").on('click', function(e) {
+        e.stopPropagation();
+        $(this).toggleClass("active");
+        $("#game-menu-content").toggle();
+    });
+
+    $("#help-trigger").on('click', function() {
+        closeMenus();
+        alert('Hold Smiley for 1s for Hint (+5s)\nLong press cells to flag.');
+    });
+
+    $("#btn-new-game").on('click', function() {
+        closeMenus();
+        if (first || gameOver || confirm("Reset current game?")) {
+            initGame();
+        }
+    });
+
+    $(".diff-opt").on('click', function() {
+        const lvl = $(this).data('lvl');
+        closeMenus();
+        currentLvl = lvl;
+        initGame();
+    });
+
+    $("#btn-scores").on('click', function() {
+        closeMenus();
+        showLeaderboard();
+    });
+
+    $(document).on('click', function() { closeMenus(); });
+
+    // --- Game Logic ---
+    function initGame() {
+        clearInterval(timer);
+        const config = levels[currentLvl];
+        rows = config.r; cols = config.c; mines = config.m;
+        sec = 0; revealed = 0; flags = 0; gameOver = false; first = true;
+        
+        $('.diff-opt span').text('');
+        $(`#check-${currentLvl}`).text('✓');
+
+        $('#timer').text('000'); $('#mine-count').text(String(mines).padStart(3, '0')); $('#reset-btn').text('🙂');
+        
+        const $f = $('#minefield').empty().css('grid-template-columns', `repeat(${cols}, auto)`);
+        grid = Array.from({ length: rows }, () => []);
+
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+                const $c = $('<div class="cell"></div>').appendTo($f);
+                
+                $c.on('mousedown touchstart', (e) => {
+                    if (gameOver) return;
+                    $('#reset-btn').text('😮');
+                    cellHoldTimer = setTimeout(() => {
+                        handleAction(r, c, true);
+                        cellHoldTimer = null;
+                    }, HOLD_DELAY);
+                });
+
+                $c.on('mouseup touchend mouseleave', (e) => {
+                    if (gameOver) return;
+                    if (cellHoldTimer) {
+                        clearTimeout(cellHoldTimer);
+                        cellHoldTimer = null;
+                        if (e.type !== 'mouseleave') handleAction(r, c, false);
+                    }
+                    if(!gameOver) $('#reset-btn').text('🙂');
+                });
+
+                grid[r][c] = { isM: false, rev: false, flg: false, n: 0, $el: $c };
+            }
+        }
+    }
+
+    let faceWasLongPress = false;
+    $('#reset-btn').on('mousedown touchstart', function(e) {
+        e.preventDefault();
+        faceWasLongPress = false;
+        if (gameOver) return;
+
+        $('#reset-btn').text('😮');
+        faceHoldTimer = setTimeout(() => {
+            if (!first) { 
+                giveHint(); 
+                faceWasLongPress = true; 
+            }
+        }, 800);
+    });
+
+    $(document).on('mouseup touchend', function(e) {
+        if (faceHoldTimer) {
+            clearTimeout(faceHoldTimer);
+            faceHoldTimer = null;
+            if (!faceWasLongPress && $(e.target).closest('#reset-btn').length > 0) {
+                if (first || gameOver || confirm("Reset current game?")) initGame();
+            } else if (!gameOver) {
+                $('#reset-btn').text('🙂');
+            }
+        }
+    });
+
+    function giveHint() {
+        let safeCells = grid.flat().filter(c => !c.isM && !c.rev);
+        if (safeCells.length > 0) {
+            const hint = safeCells[Math.floor(Math.random() * safeCells.length)];
+            hint.$el.addClass('hint-flash');
+            sec += 5;
+            $('#timer').text(String(Math.min(sec, 999)).padStart(3, '0'));
+            setTimeout(() => hint.$el.removeClass('hint-flash'), 1500);
+        }
+    }
+
+    function handleAction(r, c, isFlag) {
+        if (gameOver) return;
+        const cell = grid[r][c];
+        if (isFlag) {
+            if (cell.rev) return;
+            cell.flg = !cell.flg; cell.$el.toggleClass('flagged');
+            flags += cell.flg ? 1 : -1;
+            $('#mine-count').text(String(Math.max(0, mines - flags)).padStart(3, '0'));
+        } else {
+            if (cell.flg || cell.rev) return;
+            if (first) { spawnMines(r, c); startClock(); first = false; }
+            reveal(r, c);
+        }
+    }
+
+    function spawnMines(exR, exC) {
+        let p = 0;
+        while (p < mines) {
+            let r = Math.floor(Math.random() * rows), c = Math.floor(Math.random() * cols);
+            if (!grid[r][c].isM && (Math.abs(r-exR) > 1 || Math.abs(c-exC) > 1)) { grid[r][c].isM = true; p++; }
+        }
+        for(let r=0; r<rows; r++) for(let c=0; c<cols; c++) {
+            if(!grid[r][c].isM) {
+                let count = 0;
+                for(let i=-1; i<=1; i++) for(let j=-1; j<=1; j++) if(grid[r+i] && grid[r+i][c+j]?.isM) count++;
+                grid[r][c].n = count;
+            }
+        }
+    }
+
+    function reveal(r, c) {
+        const cell = grid[r][c];
+        if (cell.rev || cell.flg) return;
+        cell.rev = true; cell.$el.addClass('revealed').removeClass('outset');
+        revealed++;
+        if (cell.isM) { end(false); return; }
+        if (cell.n > 0) { cell.$el.text(cell.n).addClass('n-'+cell.n); }
+        else { for(let i=-1; i<=1; i++) for(let j=-1; j<=1; j++) if(grid[r+i] && grid[r+i][c+j]) reveal(r+i, c+j); }
+        if (revealed === (rows * cols) - mines) end(true);
+    }
+
+    function startClock() { timer = setInterval(() => { sec++; $('#timer').text(String(Math.min(sec, 999)).padStart(3, '0')); }, 1000); }
+
+    function end(win) {
+        gameOver = true; clearInterval(timer);
+        $('#reset-btn').text(win ? '😎' : '😵');
+        if (!win) {
+            grid.flat().forEach(c => { if(c.isM) c.$el.text('💣').addClass('mine'); });
+        } else {
+            grid.flat().forEach(c => { if(c.isM && !c.flg) { c.flg = true; c.$el.addClass('flagged'); } });
+            $('#mine-count').text('000');
+            setTimeout(() => { const n = prompt("High Score! Enter name:"); if (n) saveScore(n, sec); }, 300);
+        }
+    }
+
+    function getScores() {
+        let s = JSON.parse(localStorage.getItem('ms_final_v7') || '{}');
+        if (!s[currentLvl]) {
+            const ai = ["Gemini", "DeepBlue", "Clippy", "Woz", "Ada", "Turing", "Hopper", "Carmack", "Gates", "Jobs"];
+            s[currentLvl] = ai.map((name, i) => ({ name, time: levels[currentLvl].base + (i * 10) }));
+        }
+        return s;
+    }
+
+    function saveScore(name, time) {
+        let s = getScores(); s[currentLvl].push({ name: name.substring(0, 12), time });
+        s[currentLvl].sort((a,b) => a.time - b.time); s[currentLvl] = s[currentLvl].slice(0, 10);
+        localStorage.setItem('ms_final_v7', JSON.stringify(s));
+        showLeaderboard();
+    }
+
+    function showLeaderboard() {
+        const s = getScores()[currentLvl]; const $l = $('#score-list').empty();
+        $('#score-title').text(currentLvl.toUpperCase() + " Ranking");
+        s.forEach((x, i) => $l.append(`<tr><td style="width:25px">${i+1}.</td><td>${x.name}</td><td class="text-end">${x.time}s</td></tr>`));
+        new bootstrap.Modal('#scoreModal').show();
+    }
+
+    $(document).ready(initGame);
+</script>
+</body>
+</html>

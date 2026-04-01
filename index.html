@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vibe Games Dashboard</title>
+    <style>
+        :root {
+            --bg: #fdfdfd;
+            --card-bg: #ffffff;
+            --text: #222;
+            --accent: #0070f3;
+            --border: #eaeaea;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg);
+            color: var(--text);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        /* Logo & Header */
+        header {
+            text-align: center;
+            padding: 4rem 1rem 2rem;
+            width: 100%;
+        }
+        .logo {
+            width: 360px; /* Adjust size as needed */
+            height: auto;
+            margin-bottom: 1.5rem;
+        }
+        h1 { margin: 0; font-weight: 800; letter-spacing: -1px; }
+        .subtitle { color: #666; margin-top: 0.5rem; }
+
+        /* Game Grid */
+        .container {
+            width: 100%;
+            max-width: 1000px;
+            padding: 2rem;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            box-sizing: border-box;
+        }
+        .game-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            color: inherit;
+        }
+        .game-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.05);
+            border-color: var(--accent);
+        }
+        .game-card img {
+            width: 100%;
+            height: 180px;
+            object-fit: cover;
+            background: #f0f0f0;
+            border-bottom: 1px solid var(--border);
+        }
+        .game-card-info { padding: 1.5rem; }
+        .game-card-info h3 { margin: 0 0 0.5rem; font-size: 1.25rem; }
+        .game-card-info p { margin: 0; font-size: 0.95rem; color: #555; line-height: 1.4; }
+
+        /* Footer & Impressum */
+        footer {
+            width: 100%;
+            max-width: 800px;
+            margin-top: 5rem;
+            padding: 2rem;
+            font-size: 0.85rem;
+            line-height: 1.6;
+            color: #666;
+            box-sizing: border-box;
+        }
+        .impressum-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 2rem;
+            margin-top: 1.5rem;
+        }
+        .github-link {
+            display: block;
+            text-align: center;
+            margin-top: 2rem;
+            font-weight: bold;
+            color: var(--accent);
+            text-decoration: none;
+        }
+        .github-link:hover { text-decoration: underline; }
+        .logo-divider {
+            max-width: 100%; 
+            height: 10px;
+            background-image: url('divider.png');
+            background-repeat: no-repeat;
+            background-position: 0 -20px; 
+            margin: 0 auto; 
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <img src="logo.png" alt="Logo" class="logo">
+        <p class="subtitle">Vibe-coded minimalist browser games. Free and Open Source.</p>
+    </header>
+
+    <main class="container">
+        <a href="games/sudoku.html" class="game-card">
+            <img src="screenshots/game1.png" alt="Screenshot of Game 1">
+            <div class="game-card-info">
+                <h3>Sudoku</h3>
+                <p>A classic sudoku in material design.</p>
+            </div>
+        </a>
+
+        <a href="games/minesweeper.html" class="game-card">
+            <img src="screenshots/game2.png" alt="Screenshot of Game 2">
+            <div class="game-card-info">
+                <h3>Minesweeper</h3>
+                <p>Minesweeper in a win95 theme</p>
+            </div>
+        </a>
+    </main>
+
+    <a href="https://github.com/gentoomaniac/aislopgames" class="github-link">
+        View Source & Support on GitHub →
+    </a>
+
+    <footer>
+        <div class="logo-divider"></div>
+        <div class="impressum-grid">
+            <div>
+                <strong>Impressum (Legal Notice)</strong><br>
+                [Your Full Name]<br>
+                [Street Address]<br>
+                [Postal Code, City]<br>
+                Sweden<br>
+                Email: [Your Email]
+            </div>
+            <div>
+                <strong>Privacy & Tech</strong><br>
+                Hosting: Statichost.eu (Sweden)<br>
+                Data: No cookies used. LocalStorage is used for save states only. No personal data is collected or stored.
+            </div>
+        </div>
+        <p style="margin-top: 2rem; text-align: center;">
+            All software provided "AS IS" under the MIT License. Use at your own risk.
+        </p>
+    </footer>
+
+</body>
+</html>
