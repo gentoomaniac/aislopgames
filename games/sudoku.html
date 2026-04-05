@@ -114,7 +114,6 @@
         }
 
         .settings-toggles { display: flex; flex-direction: column; gap: 16px; margin-top: 5px; }
-        /* Removed border-bottom so options flow cleanly within sections */
         .setting-row { display: flex; justify-content: space-between; align-items: center; padding-bottom: 12px; }
         .setting-row:last-child { padding-bottom: 0; }
         .setting-label { font-size: 0.95rem; color: var(--text-main); }
@@ -240,11 +239,21 @@
         /* --- ANIMATIONS --- */
         @keyframes popIn { 0% { transform: scale(0); opacity: 0; } 80% { transform: scale(1.1); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
         .anim-pop { animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; opacity: 0; }
+        
+        @keyframes waveFlash {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.15); background-color: var(--highlight-bg); box-shadow: 0 4px 12px var(--cell-focus-shadow); border-radius: 6px; z-index: 15; }
+            100% { transform: scale(1); }
+        }
+        .anim-wave { animation: waveFlash 0.5s ease-in-out forwards; position: relative; z-index: 10 !important; }
+
         @keyframes shake { 0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-4px); } 40%, 80% { transform: translateX(4px); } }
         .anim-shake { animation: shake 0.4s ease-in-out; }
-        .animations-disabled .anim-pop, .animations-disabled .anim-shake, .animations-disabled #firework-canvas { animation: none !important; transition: none !important; transform: none !important; opacity: 1 !important; display: none !important; }
+        .animations-disabled .anim-pop, .animations-disabled .anim-shake, .animations-disabled .anim-wave, .animations-disabled #firework-canvas { animation: none !important; transition: none !important; transform: none !important; opacity: 1 !important; display: none !important; }
 
-        #firework-canvas { position: absolute; top: -100px; left: -100px; width: calc(100% + 200px); height: calc(100% + 300px); pointer-events: none; z-index: 5; display: none; }
+        /* Z-Index 100 pushes fireworks in front of the card */
+        #firework-canvas { position: absolute; top: -50px; left: -50px; width: calc(100% + 100px); height: calc(100% + 100px); pointer-events: none; z-index: 100; display: none; }
+        
         #message { min-height: 24px; font-weight: 500; font-size: 1.1rem; margin-top: 0.5rem; text-align: center; width: 100%;}
         .msg-success { color: #4caf50 !important; }
         .msg-error { color: var(--error-text) !important; }
@@ -455,6 +464,8 @@
         let noteMode = false;
         let selectedCell = null; 
         let selectedPadNum = null; 
+        
+        let canInterruptFireworks = false;
 
         // Core Dynamic Grid Resizing
         let gridSize = 9;
@@ -490,6 +501,13 @@
             $difficulty.on('change', saveGameState);
             $('.num-tile').on('click', handlePadClick);
             $(document).on('keydown', handleKeyboardInput);
+            
+            // Allow interruption of fireworks
+            $(document).on('mousedown touchstart keydown', function() {
+                if (canInterruptFireworks && $fireworkCanvas.is(':visible')) {
+                    stopFireworks();
+                }
+            });
         });
 
         function initPickers() {
@@ -1020,7 +1038,7 @@
             animationsEnabled = !$animToggle.is(':checked');
             if (!animationsEnabled) {
                 $body.addClass('animations-disabled'); stopFireworks(); 
-                $('#sudoku-board input').removeClass('anim-pop anim-shake').css('animation-delay', '0ms');
+                $('#sudoku-board input').removeClass('anim-pop anim-shake anim-wave').css('animation-delay', '0ms');
             } else $body.removeClass('animations-disabled');
             saveGameState();
         }
@@ -1125,7 +1143,7 @@
                 const r = Math.floor(index / gridSize); const c = index % gridSize;
                 const val = currentBoard[r][c]; const $input = $(this);
                 
-                $input.val(val === 0 ? '' : val).removeClass('given anim-pop anim-shake error-cell hint-highlight highlight-match selected-cell constraint-line').css('animation-delay', '0ms');
+                $input.val(val === 0 ? '' : val).removeClass('given anim-pop anim-shake anim-wave error-cell hint-highlight highlight-match selected-cell constraint-line').css('animation-delay', '0ms');
                 if (val !== 0) $input.addClass('given');
 
                 if (animated && animationsEnabled) {
@@ -1244,6 +1262,22 @@
                 setStatus('Puzzle Solved Automatically.', 'neutral'); saveGameState(); 
             }, (staggerIndex * 15) + 100);
         }
+        
+        function triggerWaveAnimation() {
+            if (!animationsEnabled) return;
+            const $inputs = $('#sudoku-board input');
+            $inputs.each(function() {
+                const $input = $(this);
+                const r = parseInt($input.attr('data-row'));
+                const c = parseInt($input.attr('data-col'));
+                const delay = (r + c) * 50; 
+                
+                setTimeout(() => {
+                    $input.addClass('anim-wave');
+                    setTimeout(() => $input.removeClass('anim-wave'), 600);
+                }, delay);
+            });
+        }
 
         function checkWinCondition(triggerEffects = true) {
             let board = getBoardState();
@@ -1263,48 +1297,132 @@
             if (isComplete) {
                 if (!hasErrors) {
                     setStatus('🎉 BRILLIANT! You solved it!', 'success');
-                    clearHighlights(); selectCell(null); if (animationsEnabled && triggerEffects) startFireworks();
+                    clearHighlights(); selectCell(null); 
+                    if (animationsEnabled && triggerEffects) {
+                        triggerWaveAnimation();
+                        startFireworks();
+                    }
                 } else if (hardModeEnabled) setStatus('Board filled, but there are mistakes!', 'error');
             }
         }
 
-        // --- Firework Engine ---
+        // --- Realistic Firework Engine ---
         const ctx = $fireworkCanvas[0].getContext('2d');
-        let particles = []; let fireworkInterval; let animationFrameId;
-        function resizeCanvas() { $fireworkCanvas[0].width = $fireworkCanvas.outerWidth(); $fireworkCanvas[0].height = $fireworkCanvas.outerHeight(); }
+        let particles = []; 
+        let fireworkInterval; 
+        let animationFrameId;
+        let isFiring = false;
 
-        class Particle {
-            constructor(x, y, color) {
-                this.x = x; this.y = y; this.color = color;
-                this.velocityX = (Math.random() - 0.5) * 8; this.velocityY = (Math.random() * -10) - 2; 
-                this.gravity = 0.25; this.friction = 0.96; this.life = 100 + Math.random() * 50; this.opacity = 1; this.size = Math.random() * 3 + 1;
-            }
-            update() { this.velocityY += this.gravity; this.velocityX *= this.friction; this.velocityY *= this.friction; this.x += this.velocityX; this.y += this.velocityY; this.life -= 2; this.opacity = Math.max(0, this.life / 150); }
-            draw() { ctx.globalAlpha = this.opacity; ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fillStyle = this.color; ctx.fill(); }
+        function resizeCanvas() { 
+            $fireworkCanvas[0].width = $fireworkCanvas.outerWidth(); 
+            $fireworkCanvas[0].height = $fireworkCanvas.outerHeight(); 
         }
 
-        function createFirework() {
-            const x = Math.random() * $fireworkCanvas.width(); const y = ($fireworkCanvas.height() * 0.3) + (Math.random() * $fireworkCanvas.height() * 0.4);
-            const colors = ['#ff4081', '#3f51b5', '#00e676', '#ffeb3b', '#ff9100', '#00b0ff']; const color = colors[Math.floor(Math.random() * colors.length)];
-            for (let i = 0; i < 40; i++) particles.push(new Particle(x, y, color));
+        class Particle {
+            constructor(x, y, hue) {
+                this.x = x; 
+                this.y = y; 
+                this.color = `hsl(${hue}, 100%, 60%)`;
+                this.angle = Math.random() * Math.PI * 2;
+                this.speed = Math.random() * 6 + 2; 
+                this.friction = 0.94;
+                this.gravity = 0.1;
+                this.life = Math.random() * 80 + 40;
+                this.opacity = 1;
+                this.size = Math.random() * 2.5 + 1.5;
+                this.coords = [];
+                for(let i=0; i<4; i++) this.coords.push([x,y]);
+            }
+            update() {
+                this.coords.pop();
+                this.coords.unshift([this.x, this.y]);
+                this.speed *= this.friction;
+                this.x += Math.cos(this.angle) * this.speed;
+                this.y += Math.sin(this.angle) * this.speed + this.gravity;
+                this.life -= 1;
+                this.opacity = Math.max(0, this.life / 60);
+            }
+            draw() {
+                ctx.globalAlpha = this.opacity;
+                ctx.beginPath();
+                const last = this.coords[this.coords.length - 1];
+                ctx.moveTo(last[0], last[1]);
+                ctx.lineTo(this.x, this.y);
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = this.size;
+                ctx.lineCap = 'round';
+                ctx.stroke();
+            }
+        }
+
+        function createExplosion() {
+            const x = ($fireworkCanvas.width() * 0.2) + Math.random() * ($fireworkCanvas.width() * 0.6); 
+            const y = ($fireworkCanvas.height() * 0.1) + Math.random() * ($fireworkCanvas.height() * 0.4);
+            const baseHue = Math.floor(Math.random() * 360);
+            
+            for (let i = 0; i < 70; i++) {
+                const hue = baseHue + (Math.random() * 30 - 15);
+                particles.push(new Particle(x, y, hue));
+            }
         }
 
         function particleLoop() {
             if (!animationsEnabled) return;
-            ctx.clearRect(0, 0, $fireworkCanvas[0].width, $fireworkCanvas[0].height);
-            particles.forEach((p, index) => { p.update(); p.draw(); if (p.life <= 0) particles.splice(index, 1); });
-            if (particles.length > 0) animationFrameId = requestAnimationFrame(particleLoop); else $fireworkCanvas.hide();
+            
+            ctx.globalCompositeOperation = 'destination-out';
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.15)'; 
+            ctx.fillRect(0, 0, $fireworkCanvas[0].width, $fireworkCanvas[0].height);
+            ctx.globalCompositeOperation = 'source-over';
+
+            particles.forEach((p, index) => { 
+                p.update(); 
+                p.draw(); 
+                if (p.life <= 0) particles.splice(index, 1); 
+            });
+            
+            if (particles.length > 0 || isFiring) { 
+                animationFrameId = requestAnimationFrame(particleLoop); 
+            } else {
+                $fireworkCanvas.hide();
+                ctx.clearRect(0, 0, $fireworkCanvas[0].width, $fireworkCanvas[0].height);
+            }
         }
 
         function startFireworks() {
             if (!animationsEnabled) return;
-            stopFireworks(); resizeCanvas(); $fireworkCanvas.show(); particles = [];
-            fireworkInterval = setInterval(createFirework, 400); if (!animationFrameId) particleLoop();
+            stopFireworks(); 
+            resizeCanvas(); 
+            $fireworkCanvas.show(); 
+            particles = [];
+            isFiring = true;
+            canInterruptFireworks = false;
+            
+            let fwCount = 0;
+            
+            // Delay fireworks slightly so the wave effect goes first
+            setTimeout(() => {
+                canInterruptFireworks = true; // User can skip fireworks starting from now
+                fireworkInterval = setInterval(() => {
+                    createExplosion();
+                    fwCount++;
+                    if (fwCount > 15) { // Twice as long
+                        clearInterval(fireworkInterval);
+                        isFiring = false;
+                    }
+                }, 350);
+            }, 600); 
+            
+            if (!animationFrameId) particleLoop();
         }
 
         function stopFireworks() {
-            clearInterval(fireworkInterval); cancelAnimationFrame(animationFrameId); animationFrameId = null; particles = [];
-            if (ctx) ctx.clearRect(0, 0, $fireworkCanvas[0].width, $fireworkCanvas[0].height); $fireworkCanvas.hide();
+            clearInterval(fireworkInterval); 
+            cancelAnimationFrame(animationFrameId); 
+            animationFrameId = null; 
+            particles = [];
+            isFiring = false;
+            if (ctx) ctx.clearRect(0, 0, $fireworkCanvas[0].width, $fireworkCanvas[0].height); 
+            $fireworkCanvas.hide();
         }
 
         $(window).on('resize', () => { if ($fireworkCanvas.is(':visible')) resizeCanvas(); });
