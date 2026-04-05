@@ -184,9 +184,15 @@
         
         .cell input::-webkit-outer-spin-button, .cell input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         
-        .cell input.given { 
+        .cell input.given, .cell input.locked { 
             background-color: var(--cell-given-bg); font-weight: 700; cursor: default; 
             color: var(--cell-given-text) !important; -webkit-text-fill-color: var(--cell-given-text) !important;
+        }
+        /* Make locked inputs visually distinct from pure givens but still uneditable */
+        .cell input.locked {
+            background-color: var(--cell-bg);
+            color: var(--cell-input-text) !important; -webkit-text-fill-color: var(--cell-input-text) !important;
+            font-weight: 500;
         }
 
         /* --- NUMBER PAD --- */
@@ -212,7 +218,7 @@
         .num-tile:hover { background-color: var(--highlight-bg); }
         .num-tile.active-hl { background-color: var(--highlight-bg); box-shadow: inset 0 0 0 2px var(--cell-focus-shadow); }
         .num-tile.selected-num { background-color: var(--cell-focus-bg); box-shadow: inset 0 0 0 3px var(--link-color); transform: translateY(-2px); }
-        .num-tile.complete { opacity: 0.25; }
+        .num-tile.complete { opacity: 0.25; pointer-events: none; }
 
         /* Note Mode Specific Pad Styling */
         #number-pad.note-mode-active .num-tile {
@@ -232,8 +238,13 @@
         /* --- DYNAMIC CELL STATES --- */
         .cell input.constraint-line { background-color: rgba(211, 47, 47, 0.12) !important; }
         .highlight-match { background-color: var(--highlight-bg) !important; }
+        
         .cell input.selected-cell { background-color: var(--cell-focus-bg) !important; box-shadow: inset 0 0 0 2px var(--cell-focus-shadow) !important; }
-        .error-cell { color: var(--error-text) !important; -webkit-text-fill-color: var(--error-text) !important; background-color: var(--error-bg) !important; }
+        
+        /* Explicitly prioritize Error State over the standard selected cell visuals */
+        .cell input.error-cell { color: var(--error-text) !important; -webkit-text-fill-color: var(--error-text) !important; background-color: var(--error-bg) !important; }
+        .cell input.selected-cell.error-cell { box-shadow: inset 0 0 0 3px var(--error-text) !important; background-color: var(--error-bg) !important; }
+
         .hint-highlight { background-color: var(--hint-bg) !important; color: var(--hint-text) !important; -webkit-text-fill-color: var(--hint-text) !important; transition: background-color 1s ease-out; }
 
         /* --- ANIMATIONS --- */
@@ -613,29 +624,47 @@
             const $input = $(this); const val = $input.val();
             
             if (fastFillMode) {
-                if (val !== '') {
-                    if (selectedPadNum === val) {
+                if (selectedPadNum !== null && !$input.hasClass('given') && !$input.hasClass('locked') && String(val) !== String(selectedPadNum)) {
+                    // Instantly overwrite a wrongly placed number in Fast Fill Mode
+                    updateCellValue($input, selectedPadNum);
+                } else if (val !== '') {
+                    if ($(`.num-tile[data-val='${val}']`).hasClass('complete')) {
                         selectedPadNum = null;
                         $('.num-tile').removeClass('selected-num');
-                        highlightMatches('');
+                        clearHighlights();
                     } else {
-                        selectedPadNum = val;
-                        $('.num-tile').removeClass('selected-num');
-                        $(`.num-tile[data-val='${val}']`).addClass('selected-num');
-                        highlightMatches(val);
+                        if (selectedPadNum === val) {
+                            selectedPadNum = null;
+                            $('.num-tile').removeClass('selected-num');
+                            highlightMatches('');
+                        } else {
+                            selectedPadNum = val;
+                            $('.num-tile').removeClass('selected-num');
+                            $(`.num-tile[data-val='${val}']`).addClass('selected-num');
+                            highlightMatches(val);
+                        }
                     }
                 } else if (selectedPadNum !== null) { 
-                    if (!$input.hasClass('given')) updateCellValue($input, selectedPadNum); 
+                    if (!$input.hasClass('given') && !$input.hasClass('locked')) updateCellValue($input, selectedPadNum); 
                 }
             } else {
-                if (!$input.hasClass('given')) selectCell($input); else selectCell(null); 
-                if (val !== '') highlightMatches(val);
+                if (!$input.hasClass('given') && !$input.hasClass('locked')) selectCell($input); else selectCell(null); 
+                
+                if (val !== '') {
+                    if ($(`.num-tile[data-val='${val}']`).hasClass('complete')) clearHighlights();
+                    else highlightMatches(val);
+                } else {
+                    if (currentHighlightVal !== '') highlightMatches(currentHighlightVal);
+                }
             }
         }
 
         function handlePadClick() {
+            if ($(this).hasClass('complete')) return; // Completely block clicking used up numbers
+
             const val = $(this).attr('data-val');
             if(val > gridSize) return; 
+            
             if (fastFillMode) {
                 if (selectedPadNum === val) { selectedPadNum = null; $(this).removeClass('selected-num'); highlightMatches(''); } 
                 else { $('.num-tile').removeClass('selected-num'); $(this).addClass('selected-num'); selectedPadNum = val; highlightMatches(val); }
@@ -646,10 +675,13 @@
         }
 
         function handleKeyboardInput(e) {
-            if (fastFillMode || !selectedCell) return; 
+            if (fastFillMode || !selectedCell || selectedCell.hasClass('locked') || selectedCell.hasClass('given')) return; 
             const key = e.key;
             const validRegex = new RegExp('^[1-' + gridSize + ']$');
-            if (validRegex.test(key)) updateCellValue(selectedCell, key);
+            if (validRegex.test(key)) {
+                if ($(`.num-tile[data-val='${key}']`).hasClass('complete')) return;
+                updateCellValue(selectedCell, key);
+            }
             else if (key === 'Backspace' || key === 'Delete') updateCellValue(selectedCell, 'erase');
         }
 
@@ -715,8 +747,10 @@
                 let c = parseInt($input.attr('data-col'));
                 
                 if (board[r][c] !== 0 && hasConflict(board, r, c)) {
-                    if (!$input.hasClass('error-cell')) {
-                        $input.addClass('error-cell');
+                    if (!$input.hasClass('given') && !$input.hasClass('locked')) {
+                        if (!$input.hasClass('error-cell')) {
+                            $input.addClass('error-cell');
+                        }
                     }
                     errorFound = true;
                 } else {
@@ -836,7 +870,11 @@
 
             if (!hardModeEnabled) {
                 let board = getBoardState();
-                if (hasConflict(board, r, c)) {
+                
+                if (parseInt(val) === solutionBoard[r][c]) {
+                    $input.addClass('locked');
+                    if (animationsEnabled) { $input.addClass('anim-pop'); setTimeout(() => $input.removeClass('anim-pop'), 350); } 
+                } else if (hasConflict(board, r, c)) {
                     $input.addClass('error-cell');
                     if (animationsEnabled) $input.addClass('anim-shake');
                     if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
@@ -916,7 +954,17 @@
                     }
                 });
                 
-                if (!hardModeEnabled) updateErrors();
+                if (!hardModeEnabled) {
+                    $('#sudoku-board input').each(function(index) {
+                        if ($(this).val() !== '' && !$(this).hasClass('given')) {
+                            const r = Math.floor(index / gridSize); const c = index % gridSize;
+                            if (parseInt($(this).val()) === solutionBoard[r][c]) {
+                                $(this).addClass('locked');
+                            }
+                        }
+                    });
+                    updateErrors();
+                }
 
                 if ($('#toggle-auto-notes').is(':checked')) autoFillNotes();
                 else renderNotes();
@@ -964,11 +1012,18 @@
                 const val = $(this).val(); if (val !== '') counts[val]++;
             });
             
+            let activePadComplete = false;
+            
             $('.num-tile').each(function() {
                 const val = $(this).attr('data-val');
                 if(val <= gridSize) {
-                    if (counts[val] >= gridSize) $(this).addClass('complete').removeClass('active-hl selected-num');
-                    else $(this).removeClass('complete');
+                    if (counts[val] >= gridSize) {
+                        $(this).addClass('complete').removeClass('active-hl selected-num');
+                        if (currentHighlightVal === val) activePadComplete = true;
+                    }
+                    else {
+                        $(this).removeClass('complete');
+                    }
                 }
                 
                 $(this).removeClass('note-active');
@@ -982,7 +1037,12 @@
                 }
             });
             
-            if(selectedPadNum && counts[selectedPadNum] >= gridSize) { selectedPadNum = null; highlightMatches(''); }
+            if(selectedPadNum && counts[selectedPadNum] >= gridSize) { 
+                selectedPadNum = null; 
+                highlightMatches(''); 
+            } else if (activePadComplete) {
+                highlightMatches('');
+            }
         }
 
         function toggleHighlightSetting() {
@@ -1045,6 +1105,20 @@
 
         function toggleHardMode() {
             hardModeEnabled = $hardModeToggle.is(':checked');
+            if (!hardModeEnabled) {
+                $('#sudoku-board input').each(function() {
+                    const $input = $(this);
+                    if ($input.val() !== '' && !$input.hasClass('given')) {
+                        const r = parseInt($input.attr('data-row'));
+                        const c = parseInt($input.attr('data-col'));
+                        if (parseInt($input.val()) === solutionBoard[r][c]) {
+                            $input.addClass('locked').removeClass('error-cell anim-shake');
+                        }
+                    }
+                });
+            } else {
+                $('#sudoku-board input').removeClass('locked error-cell anim-shake');
+            }
             updateErrors();
             checkWinCondition(); saveGameState();
         }
@@ -1143,7 +1217,7 @@
                 const r = Math.floor(index / gridSize); const c = index % gridSize;
                 const val = currentBoard[r][c]; const $input = $(this);
                 
-                $input.val(val === 0 ? '' : val).removeClass('given anim-pop anim-shake anim-wave error-cell hint-highlight highlight-match selected-cell constraint-line').css('animation-delay', '0ms');
+                $input.val(val === 0 ? '' : val).removeClass('given locked anim-pop anim-shake anim-wave error-cell hint-highlight highlight-match selected-cell constraint-line').css('animation-delay', '0ms');
                 if (val !== 0) $input.addClass('given');
 
                 if (animated && animationsEnabled) {
@@ -1183,6 +1257,7 @@
                     const r = parseInt(randomInput.attr('data-row')); const c = parseInt(randomInput.attr('data-col'));
                     
                     randomInput.val(tempBoard[r][c]).removeClass('anim-shake error-cell selected-cell').addClass('hint-highlight'); selectCell(randomInput);
+                    if (!hardModeEnabled) randomInput.addClass('locked');
                     if (animationsEnabled) { randomInput.addClass('anim-pop'); setTimeout(() => randomInput.removeClass('anim-pop'), 400); }
                     setTimeout(() => randomInput.removeClass('hint-highlight'), 1200);
                     
@@ -1207,6 +1282,7 @@
                     const r = parseInt(randomInput.attr('data-row')); const c = parseInt(randomInput.attr('data-col'));
                     
                     randomInput.val(solutionBoard[r][c]).removeClass('anim-shake error-cell selected-cell').addClass('hint-highlight'); selectCell(randomInput);
+                    if (!hardModeEnabled) randomInput.addClass('locked');
                     if (animationsEnabled) { randomInput.addClass('anim-pop'); setTimeout(() => randomInput.removeClass('anim-pop'), 400); }
                     setTimeout(() => randomInput.removeClass('hint-highlight'), 1200);
                     
@@ -1246,6 +1322,7 @@
             $inputs.each(function(index) {
                 const r = Math.floor(index / gridSize); const c = index % gridSize; const $input = $(this);
                 if (!$input.hasClass('given') && ($input.val() == '' || parseInt($input.val()) !== finalSolution[r][c])) {
+                    if (!hardModeEnabled) $input.addClass('locked');
                     if (animationsEnabled) {
                         setTimeout(() => { 
                             $input.val(finalSolution[r][c]).removeClass('anim-shake error-cell hint-highlight selected-cell').addClass('anim-pop'); 
