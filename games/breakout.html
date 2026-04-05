@@ -264,6 +264,7 @@ let animationId;
 let difficulty = 'Medium';
 let timeTicks = 0; 
 let loopCount = 0; 
+let lastCursorX = null; // Used for calculating Relative Drag Delta
 
 // Timing variables for fixed timestep
 let lastTime = 0;
@@ -343,7 +344,10 @@ function togglePause() {
         document.getElementById('intermission-screen').classList.remove('hidden');
     } else if (gameState === 'PAUSED') {
         document.getElementById('intermission-screen').classList.add('hidden');
-        gameState = 'PLAYING'; lastTime = performance.now(); animationId = requestAnimationFrame(gameLoop);
+        gameState = 'PLAYING'; 
+        lastCursorX = null; // Clear cursor drag history after a pause
+        lastTime = performance.now(); 
+        animationId = requestAnimationFrame(gameLoop);
     }
 }
 
@@ -356,10 +360,40 @@ function exitToMenu() {
     ctx.fillStyle = '#0f0f1b'; ctx.fillRect(0, 0, canvas.width, canvas.height);
 }
 
-function trackCursor(clientX) {
+/** * TRUE RELATIVE DELTA TARGETING
+ * Tapping sets no target. You must slide to move the paddle target.
+ */
+function trackCursor(clientX, isStart = false) {
     if (gameState !== 'PLAYING') return;
-    let rect = canvas.getBoundingClientRect(), scaleX = canvas.width / rect.width;
-    paddle.targetX = ((clientX - rect.left) * scaleX) - paddle.renderWidth / 2;
+    
+    let rect = canvas.getBoundingClientRect();
+    let scaleX = canvas.width / rect.width;
+    let currentCursorX = (clientX - rect.left) * scaleX;
+    
+    // Lock onto the cursor's initial drop point without altering the paddle's target
+    if (isStart || lastCursorX === null) {
+        lastCursorX = currentCursorX;
+        paddle.targetX = paddle.x; 
+        return;
+    }
+    
+    // Calculate how far the finger/mouse dragged
+    let deltaX = currentCursorX - lastCursorX;
+    
+    // Inversion strictly flips the drag DELTA, not the absolute screen coordinates
+    if (paddle.effects.invert && paddle.effects.invert > 0) {
+        deltaX = -deltaX;
+    }
+    
+    if (paddle.targetX === null) paddle.targetX = paddle.x;
+    
+    paddle.targetX += deltaX;
+    
+    // Clamp to canvas borders
+    if (paddle.targetX < 0) paddle.targetX = 0;
+    if (paddle.targetX > canvas.width - paddle.renderWidth) paddle.targetX = canvas.width - paddle.renderWidth;
+    
+    lastCursorX = currentCursorX;
 }
 
 function launchBall() {
@@ -375,16 +409,24 @@ function launchBall() {
 
 const gameWrapper = document.getElementById('game-wrapper');
 
+// Listeners adapted to pass 'true' for start events to seamlessly reset the Delta origin
 gameWrapper.addEventListener("touchstart", (e) => { 
-    if(gameState === 'PLAYING') { e.preventDefault(); trackCursor(e.touches[0].clientX); } 
+    if(gameState === 'PLAYING') { e.preventDefault(); trackCursor(e.touches[0].clientX, true); } 
 }, { passive: false });
 
 gameWrapper.addEventListener("touchmove", (e) => { 
-    if(gameState === 'PLAYING') { e.preventDefault(); trackCursor(e.touches[0].clientX); } 
+    if(gameState === 'PLAYING') { e.preventDefault(); trackCursor(e.touches[0].clientX, false); } 
 }, { passive: false });
 
+gameWrapper.addEventListener("mouseenter", (e) => { 
+    if(gameState === 'PLAYING') trackCursor(e.clientX, true); 
+});
+
+gameWrapper.addEventListener("mousemove", (e) => { 
+    if(gameState === 'PLAYING') trackCursor(e.clientX, false); 
+});
+
 canvas.addEventListener('pointerdown', () => { if(gameState === 'PLAYING') launchBall(); });
-gameWrapper.addEventListener("mousemove", (e) => trackCursor(e.clientX));
 
 function spawnBall(isExtra = false, baseX = null, baseY = null) {
     let speed = diffSettings[difficulty].ballSpeed * Math.pow(1.05, loopCount);
@@ -494,28 +536,27 @@ function sweptAABB(bx, by, br, vx, vy, boxX, boxY, boxW, boxH) {
 function updateLogic() {
     timeTicks++;
     
-    // Paddle Movement & Control Layer
     let currentSpeed = paddle.baseSpeed * paddle.speedMultiplier;
     let currentWidth = paddle.effects.expand > 0 ? paddle.width * 1.5 : paddle.width;
     paddle.renderWidth = currentWidth;
     
     let moveR = rightPressed;
     let moveL = leftPressed;
-    let isInverted = (paddle.effects.invert && paddle.effects.invert > 0);
     
-    if (isInverted) { moveR = leftPressed; moveL = rightPressed; }
+    // Keyboard explicitly flips right/left logic
+    if (paddle.effects.invert && paddle.effects.invert > 0) {
+        moveR = leftPressed; 
+        moveL = rightPressed; 
+    }
     
     if (moveR || moveL) {
         paddle.targetX = null; 
         if (moveR) paddle.x += currentSpeed;
         if (moveL) paddle.x -= currentSpeed;
     } else if (paddle.targetX !== null) {
+        // Direct target tracing. Inversion is securely pre-handled by trackCursor delta logic.
         let actualTarget = paddle.targetX;
-        if (isInverted) actualTarget = canvas.width - paddle.targetX - paddle.renderWidth;
         
-        if(actualTarget < 0) actualTarget = 0;
-        if(actualTarget + paddle.renderWidth > canvas.width) actualTarget = canvas.width - paddle.renderWidth;
-
         if (Math.abs(actualTarget - paddle.x) <= currentSpeed) {
             paddle.x = actualTarget;
         } else if (paddle.x < actualTarget) {
@@ -530,7 +571,7 @@ function updateLogic() {
     
     paddle.renderX = paddle.x;
 
-    // Resolve Lasers & Drops (Lasers visually despawn at CEILING_Y)
+    // Resolve Lasers & Drops
     for(let i = lasers.length - 1; i >= 0; i--) {
         lasers[i].y += lasers[i].dy;
         if(lasers[i].y < CEILING_Y) lasers.splice(i, 1);
@@ -589,12 +630,11 @@ function updateLogic() {
             let firstHit = null, hitObj = null;
             let cvx = b.dx * timeRemaining, cvy = b.dy * timeRemaining;
 
-            // The Top Wall is mathematically extended downwards to CEILING_Y to protect the HUD.
             let walls = [
-                { x: -200, y: -200, w: 200, h: canvas.height + 400, id: 'wall' }, // Left
-                { x: canvas.width, y: -200, w: 200, h: canvas.height + 400, id: 'wall' }, // Right
-                { x: -200, y: -200, w: canvas.width + 400, h: 200 + CEILING_Y, id: 'wall' }, // Top Barrier
-                { x: -200, y: canvas.height, w: canvas.width + 400, h: 200, id: 'bottom' } // Bottom
+                { x: -200, y: -200, w: 200, h: canvas.height + 400, id: 'wall' }, 
+                { x: canvas.width, y: -200, w: 200, h: canvas.height + 400, id: 'wall' }, 
+                { x: -200, y: -200, w: canvas.width + 400, h: 200 + CEILING_Y, id: 'wall' }, 
+                { x: -200, y: canvas.height, w: canvas.width + 400, h: 200, id: 'bottom' } 
             ];
 
             let colliders = [
@@ -669,7 +709,6 @@ function updateLogic() {
 
     manageEffects(); fireLaser();
 
-    // Infinity Looping and Extra Life Logic
     if (activeBricksCount === 0 && balls.length > 0) {
         gameState = 'INTERMISSION'; cancelAnimationFrame(animationId);
         
@@ -679,7 +718,7 @@ function updateLogic() {
         
         if (currentLevelIdx + 1 >= gameLevels.length) {
             loopCount++;
-            lives++; // Grant Extra Life!
+            lives++; 
             updateHUD();
             
             currentLevelIdx = 0; 
@@ -734,7 +773,6 @@ function manageEffects() {
 function drawAll() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    // Draw the subtle HUD Barrier Line
     ctx.fillStyle = '#333';
     ctx.fillRect(0, CEILING_Y, canvas.width, 2);
     
@@ -819,7 +857,7 @@ function startGame() {
     document.getElementById('leaderboard-screen').classList.add('hidden');
     document.getElementById('hud').classList.remove('hidden');
     document.getElementById('legend').classList.remove('hidden'); 
-    score = 0; lives = 3; currentLevelIdx = 0; timeTicks = 0; loopCount = 0;
+    score = 0; lives = 3; currentLevelIdx = 0; timeTicks = 0; loopCount = 0; lastCursorX = null;
     updateHUD(); initLevel(currentLevelIdx); gameState = 'PLAYING'; 
     lastTime = performance.now(); accumulator = 0; animationId = requestAnimationFrame(gameLoop);
 }
@@ -860,6 +898,7 @@ document.getElementById('start-btn').addEventListener('click', startGame);
 document.getElementById('continue-btn').addEventListener('click', () => { 
     document.getElementById('intermission-screen').classList.add('hidden'); 
     if (gameState === 'INTERMISSION') { initLevel(currentLevelIdx); } 
+    lastCursorX = null;
     gameState = 'PLAYING'; lastTime = performance.now(); animationId = requestAnimationFrame(gameLoop); 
 });
 
