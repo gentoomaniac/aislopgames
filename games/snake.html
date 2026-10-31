@@ -243,47 +243,16 @@ let menuIdx = 0;
 let foodEatenCount = 0;
 let bonusTimer = 0;
 
-const baseDefaults = [
+const DEFAULT_SCORES = [
     {name: 'MASTER', score: 500},
     {name: 'PLAYER', score: 300},
     {name: 'NEWBIE', score: 100}
 ];
-
-const DEFAULTS = {
-    EASY: [...baseDefaults],
-    MEDIUM: [...baseDefaults],
-    HARD: [...baseDefaults],
-    PROGRESSIVE: [...baseDefaults]
-};
+const MAX_SCORES_PER_DIFFICULTY = 3;
 
 const CURRENT_VERSION_KEY = 'retro_snake_v8';
-
-function migrateData() {
-    if (localStorage.getItem(CURRENT_VERSION_KEY)) return; 
-
-    let oldData = null;
-    for (let v = 7; v >= 5; v--) {
-        const stored = localStorage.getItem('retro_snake_v' + v);
-        if (stored) {
-            try { oldData = JSON.parse(stored); break; } 
-            catch(e) {}
-        }
-    }
-
-    let newData = {};
-    if (oldData) {
-        DIFFICULTIES.forEach(diff => {
-            let diffScores = oldData[diff] || [...baseDefaults];
-            newData[diff] = diffScores.sort((a,b) => b.score - a.score).slice(0, 3);
-        });
-    } else {
-        newData = DEFAULTS;
-    }
-    
-    localStorage.setItem(CURRENT_VERSION_KEY, JSON.stringify(newData));
-}
-
-migrateData();
+const OLDEST_MIGRATED_VERSION = 5;
+const NEWEST_MIGRATED_VERSION = 7;
 
 const MAX_NAME_LENGTH = 8;
 const ANON_NAME = 'ANON';
@@ -292,19 +261,67 @@ function sanitizeName(name) {
     return String(name).trim().slice(0, MAX_NAME_LENGTH).trim() || ANON_NAME;
 }
 
-const getScores = () => {
-    const allScores = JSON.parse(localStorage.getItem(CURRENT_VERSION_KEY));
+// Storage can be missing or full (private mode, blocked site data), so the
+// game must keep working on its in-memory scores.
+function readStorage(key) {
+    try { return localStorage.getItem(key); }
+    catch (e) { return null; }
+}
+
+function writeStorage(key, value) {
+    try { localStorage.setItem(key, value); }
+    catch (e) { /* scores stay in memory for this session */ }
+}
+
+function parseJson(text) {
+    try { return JSON.parse(text); }
+    catch (e) { return null; }
+}
+
+function isValidScoreEntry(entry) {
+    return entry !== null && typeof entry === 'object'
+        && typeof entry.name === 'string'
+        && typeof entry.score === 'number' && isFinite(entry.score);
+}
+
+// Accepts whatever came out of storage and returns scores of the saved shape,
+// {EASY: [{name, score}], ...}, using the defaults wherever the data is unusable.
+function toValidScores(data) {
+    const validScores = {};
     DIFFICULTIES.forEach(diff => {
-        if (allScores[diff]) allScores[diff].forEach(entry => { entry.name = sanitizeName(entry.name); });
+        const entries = data && data[diff];
+        validScores[diff] = Array.isArray(entries)
+            ? entries.filter(isValidScoreEntry)
+                .map(entry => ({name: sanitizeName(entry.name), score: entry.score}))
+                .sort((a, b) => b.score - a.score)
+                .slice(0, MAX_SCORES_PER_DIFFICULTY)
+            : DEFAULT_SCORES.map(entry => ({...entry}));
     });
-    return allScores;
-};
+    return validScores;
+}
+
+function loadScores() {
+    const storedScores = readStorage(CURRENT_VERSION_KEY);
+    if (storedScores) return toValidScores(parseJson(storedScores));
+
+    let oldData = null;
+    for (let v = NEWEST_MIGRATED_VERSION; v >= OLDEST_MIGRATED_VERSION && !oldData; v--) {
+        const stored = readStorage('retro_snake_v' + v);
+        if (stored) oldData = parseJson(stored);
+    }
+
+    const scores = toValidScores(oldData);
+    writeStorage(CURRENT_VERSION_KEY, JSON.stringify(scores));
+    return scores;
+}
+
+let highScores = loadScores();
+
+const getScores = () => highScores;
 const saveScore = (n, s, difficulty) => {
-    let allScores = getScores();
-    if (!allScores[difficulty]) allScores[difficulty] = [];
-    allScores[difficulty].push({name: sanitizeName(n.toUpperCase()), score: s});
-    allScores[difficulty] = allScores[difficulty].sort((a,b) => b.score - a.score).slice(0, 3);
-    localStorage.setItem(CURRENT_VERSION_KEY, JSON.stringify(allScores));
+    highScores[difficulty].push({name: sanitizeName(n.toUpperCase()), score: s});
+    highScores[difficulty] = highScores[difficulty].sort((a,b) => b.score - a.score).slice(0, MAX_SCORES_PER_DIFFICULTY);
+    writeStorage(CURRENT_VERSION_KEY, JSON.stringify(highScores));
 };
 
 function init() {
