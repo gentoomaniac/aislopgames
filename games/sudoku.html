@@ -1333,7 +1333,18 @@
             return best;
         }
 
+        // Bumped by every new game; delayed callbacks from an earlier game check it and give up.
+        let gameGeneration = 0;
+
+        function runInCurrentGame(callback, delayMs) {
+            const generationWhenScheduled = gameGeneration;
+            setTimeout(() => {
+                if (generationWhenScheduled === gameGeneration) callback();
+            }, delayMs);
+        }
+
         function newGame() {
+            gameGeneration++;
             const selectedSize = parseInt($gridSizeSelect.val());
             if (selectedSize !== gridSize) {
                 setGridSize(selectedSize);
@@ -1439,7 +1450,7 @@
                 if (!$input.hasClass('given') && ($input.val() == '' || parseInt($input.val()) !== finalSolution[r][c])) {
                     if (!hardModeEnabled) $input.addClass('locked');
                     if (animationsEnabled) {
-                        setTimeout(() => { 
+                        runInCurrentGame(() => { 
                             $input.val(finalSolution[r][c]).removeClass('anim-shake error-cell hint-highlight selected-cell').addClass('anim-pop'); 
                             updateNumberPad(); 
                         }, staggerIndex * 15);
@@ -1449,7 +1460,7 @@
             });
             
             if(!animationsEnabled) updateNumberPad();
-            setTimeout(() => { 
+            runInCurrentGame(() => { 
                 updateErrors();
                 setStatus('Puzzle Solved Automatically.', 'neutral'); saveGameState(); 
             }, (staggerIndex * 15) + 100);
@@ -1464,7 +1475,7 @@
                 const c = parseInt($input.attr('data-col'));
                 const delay = (r + c) * 50; 
                 
-                setTimeout(() => {
+                runInCurrentGame(() => {
                     $input.addClass('anim-wave');
                     setTimeout(() => $input.removeClass('anim-wave'), 600);
                 }, delay);
@@ -1502,6 +1513,7 @@
         const ctx = $fireworkCanvas[0].getContext('2d');
         let particles = []; 
         let fireworkInterval; 
+        let fireworkStartTimeout;
         let animationFrameId;
         let isFiring = false;
 
@@ -1592,7 +1604,7 @@
             let fwCount = 0;
             
             // Delay fireworks slightly so the wave effect goes first
-            setTimeout(() => {
+            fireworkStartTimeout = setTimeout(() => {
                 canInterruptFireworks = true; // User can skip fireworks starting from now
                 fireworkInterval = setInterval(() => {
                     createExplosion();
@@ -1608,6 +1620,7 @@
         }
 
         function stopFireworks() {
+            clearTimeout(fireworkStartTimeout);
             clearInterval(fireworkInterval); 
             cancelAnimationFrame(animationFrameId); 
             animationFrameId = null; 
