@@ -182,6 +182,8 @@
     let blockContextMenu = false; // Prevents the double-triggering of contextmenu
     const HOLD_DELAY = 500;
     const DOUBLE_TAP_DELAY = 300;
+    const MAX_TIME_SECONDS = 999; // What the timer display can show; scores use the same cap
+    const MAX_SCORES_PER_LEVEL = 10;
     const FLAG_HTML = '<div class="flag-icon"><div class="flag-pole"></div><div class="flag-banner"></div><div class="flag-base"></div></div>';
 
     const levels = {
@@ -386,7 +388,7 @@
             const hint = safeCells[Math.floor(Math.random() * safeCells.length)];
             hint.$el.addClass('hint-flash');
             sec += 5;
-            $('#timer').text(String(Math.min(sec, 999)).padStart(3, '0'));
+            $('#timer').text(String(Math.min(sec, MAX_TIME_SECONDS)).padStart(3, '0'));
             setTimeout(() => hint.$el.removeClass('hint-flash'), 1500);
         }
     }
@@ -462,7 +464,7 @@
         if (!gameOver && safeCellsRevealed === (rows * cols) - mines) end(true);
     }
 
-    function startClock() { timer = setInterval(() => { sec++; $('#timer').text(String(Math.min(sec, 999)).padStart(3, '0')); }, 1000); }
+    function startClock() { timer = setInterval(() => { sec++; $('#timer').text(String(Math.min(sec, MAX_TIME_SECONDS)).padStart(3, '0')); }, 1000); }
 
     function end(win) {
         if (gameOver) return;
@@ -480,7 +482,11 @@
         } else {
             grid.flat().forEach(c => { if(c.isM && !c.flg) { c.flg = true; c.$el.empty().append(FLAG_HTML); } });
             $('#mine-count').text('000');
-            setTimeout(() => { const n = prompt("High Score! Enter name:"); if (n) saveScore(n, sec); }, 300);
+            const level = currentLvl;
+            const time = Math.min(sec, MAX_TIME_SECONDS);
+            if (isTopScore(level, time)) {
+                setTimeout(() => { const n = prompt("High Score! Enter name:"); if (n) saveScore(level, n, time); }, 300);
+            }
         }
     }
 
@@ -537,20 +543,26 @@
         return s;
     }
 
-    function saveScore(name, time) {
-        let s = getScores();
-        if (!s[currentLvl]) s[currentLvl] = [];
-        s[currentLvl].push({ name: name.substring(0, 12), time });
-        s[currentLvl].sort((a,b) => a.time - b.time);
-        s[currentLvl] = s[currentLvl].slice(0, 10);
-        writeStoredScores(s);
-        showLeaderboard();
+    // A tie with the last place doesn't qualify: saveScore sorts the newer entry behind older ones
+    function isTopScore(level, time) {
+        const best = getScores()[level] || [];
+        return best.length < MAX_SCORES_PER_LEVEL || time < best[best.length - 1].time;
     }
 
-    function showLeaderboard() {
-        const s = getScores()[currentLvl] || [];
+    function saveScore(level, name, time) {
+        let s = getScores();
+        if (!s[level]) s[level] = [];
+        s[level].push({ name: name.substring(0, 12), time });
+        s[level].sort((a,b) => a.time - b.time);
+        s[level] = s[level].slice(0, MAX_SCORES_PER_LEVEL);
+        writeStoredScores(s);
+        showLeaderboard(level);
+    }
+
+    function showLeaderboard(level = currentLvl) {
+        const s = getScores()[level] || [];
         const $l = $('#score-list').empty();
-        $('#score-title').text(currentLvl.toUpperCase() + " Ranking");
+        $('#score-title').text(level.toUpperCase() + " Ranking");
         s.forEach((x, i) => {
             // Names are user input, so they go in as text, never as HTML
             $l.append($('<tr>').append(
