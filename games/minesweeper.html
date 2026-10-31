@@ -166,8 +166,11 @@
 
     let rows, cols, mines, grid, timer, sec, gameOver, flags, safeCellsRevealed, first;
     let cellHoldTimer, faceHoldTimer;
+    let pressedCell = null; // {row, col} while a pointer is down on a cell and still counts as a tap
+    let lastTap = null; // {row, col, timeMs} of the last completed tap/click, for double-tap chording
     let blockContextMenu = false; // Prevents the double-triggering of contextmenu
     const HOLD_DELAY = 500;
+    const DOUBLE_TAP_DELAY = 300;
     const FLAG_HTML = '<div class="flag-icon"><div class="flag-pole"></div><div class="flag-banner"></div><div class="flag-base"></div></div>';
 
     const levels = {
@@ -228,62 +231,95 @@
 
         for (let r = 0; r < rows; r++) {
             for (let c = 0; c < cols; c++) {
-                const $c = $('<div class="cell"></div>').appendTo($f);
+                const $c = $('<div class="cell"></div>').data({ row: r, col: c }).appendTo($f);
                 
-                $c.on('contextmenu', (e) => {
-                    e.preventDefault();
-                    if (gameOver || blockContextMenu) return;
-                    
-                    if (cellHoldTimer) {
-                        clearTimeout(cellHoldTimer);
-                        cellHoldTimer = null;
-                    }
-                    
-                    if (grid[r][c].rev && grid[r][c].n > 0) handleChord(r, c);
-                    else handleCycleMark(r, c);
-                });
-
-                let lastTap = 0;
-                $c.on('mousedown touchstart', (e) => {
-                    if (gameOver || (e.type === 'mousedown' && e.which === 3)) return;
-                    
-                    const now = Date.now();
-                    if (now - lastTap < 300) {
-                        if (grid[r][c].rev) {
-                            if (cellHoldTimer) clearTimeout(cellHoldTimer);
-                            handleChord(r, c);
-                            return;
-                        }
-                    }
-                    lastTap = now;
-
-                    $('#reset-btn').text('😮');
-                    if (cellHoldTimer) clearTimeout(cellHoldTimer);
-                    
-                    cellHoldTimer = setTimeout(() => {
-                        blockContextMenu = true; // Lock context menu
-                        setTimeout(() => blockContextMenu = false, 500); // Unlock after a half second
-                        
-                        handleCycleMark(r, c); 
-                        cellHoldTimer = null;
-                        if (!gameOver) $('#reset-btn').text('🙂');
-                    }, HOLD_DELAY);
-                });
-
-                $c.on('mouseup touchend mouseleave', (e) => {
-                    if (gameOver) return;
-                    if (cellHoldTimer) {
-                        clearTimeout(cellHoldTimer);
-                        cellHoldTimer = null;
-                        if (e.type !== 'mouseleave') handleAction(r, c);
-                    }
-                    if(!gameOver) $('#reset-btn').text('🙂');
-                });
-
                 grid[r][c] = { isM: false, rev: false, flg: false, qst: false, n: 0, $el: $c };
             }
         }
     }
+
+    // ---- Cell input: Pointer Events, one code path for mouse, touch and pen ----
+
+    function cellFromElement(element) {
+        const $cell = $(element).closest('.cell');
+        return $cell.length ? { row: $cell.data('row'), col: $cell.data('col') } : null;
+    }
+
+    function isSameCell(a, b) {
+        return a !== null && b !== null && a.row === b.row && a.col === b.col;
+    }
+
+    function resetFace() {
+        if (!gameOver) $('#reset-btn').text('🙂');
+    }
+
+    function cancelPress() {
+        clearTimeout(cellHoldTimer);
+        cellHoldTimer = null;
+        pressedCell = null;
+        resetFace();
+    }
+
+    function startHoldToFlag(cell) {
+        cellHoldTimer = setTimeout(() => {
+            cellHoldTimer = null;
+            pressedCell = null;
+            blockContextMenu = true; // The browser may fire a contextmenu for the same long press
+            setTimeout(() => blockContextMenu = false, 500);
+            handleCycleMark(cell.row, cell.col);
+            resetFace();
+        }, HOLD_DELAY);
+    }
+
+    $('#minefield').on('pointerdown', (e) => {
+        const cell = cellFromElement(e.target);
+        if (!cell || gameOver) return;
+        const isMouse = e.originalEvent.pointerType === 'mouse';
+        if (isMouse && e.originalEvent.button !== 0) return; // Right click is handled by contextmenu
+
+        const isDoubleTap = isSameCell(cell, lastTap) && Date.now() - lastTap.timeMs < DOUBLE_TAP_DELAY;
+        if (isDoubleTap && grid[cell.row][cell.col].rev) {
+            lastTap = null;
+            cancelPress();
+            handleChord(cell.row, cell.col);
+            return;
+        }
+
+        pressedCell = cell;
+        $('#reset-btn').text('😮');
+        clearTimeout(cellHoldTimer);
+        // A slow mouse click is still a click; only touch and pen hold to flag
+        if (!isMouse) startHoldToFlag(cell);
+    });
+
+    $(document).on('pointermove', (e) => {
+        if (!pressedCell) return;
+        const cellUnderPointer = cellFromElement(document.elementFromPoint(e.clientX, e.clientY));
+        if (!isSameCell(cellUnderPointer, pressedCell)) cancelPress();
+    });
+
+    $(document).on('pointerup', (e) => {
+        if (!pressedCell) return;
+        const releasedOn = cellFromElement(document.elementFromPoint(e.clientX, e.clientY));
+        const tappedCell = pressedCell;
+        cancelPress();
+        if (!isSameCell(releasedOn, tappedCell)) return;
+        lastTap = { row: tappedCell.row, col: tappedCell.col, timeMs: Date.now() };
+        handleAction(tappedCell.row, tappedCell.col);
+    });
+
+    $(document).on('pointercancel', cancelPress);
+
+    $('#minefield').on('contextmenu', (e) => {
+        e.preventDefault();
+        const cell = cellFromElement(e.target);
+        if (!cell || gameOver || blockContextMenu) return;
+
+        cancelPress();
+        const { rev, n } = grid[cell.row][cell.col];
+        if (rev && n > 0) handleChord(cell.row, cell.col);
+        else handleCycleMark(cell.row, cell.col);
+    });
 
     function handleChord(r, c) {
         const cell = grid[r][c];
