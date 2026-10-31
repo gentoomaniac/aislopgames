@@ -1423,7 +1423,9 @@
                     const top = Math.floor(b / subGridSize) * subGridSize;
                     const left = (b % subGridSize) * subGridSize;
                     const box = [];
-                    for (let r = top; r < top + subGridSize; r++) for (let c = left; c < left + subGridSize; c++) box.push(r * n + c);
+                    for (let r = top; r < top + subGridSize; r++) {
+                        for (let c = left; c < left + subGridSize; c++) box.push(r * n + c);
+                    }
                     houses.push(box);
                 }
             }
@@ -1452,13 +1454,14 @@
         }
 
         function createLogicState(board) {
-            const n = gridSize;
+            const cellCount = gridSize * gridSize;
+            const allDigits = (1 << gridSize) - 1;
             const state = {
-                n, cellCount: n * n, geometry: getGeometry(), allDigits: (1 << n) - 1,
-                values: Array(n * n).fill(0), candidates: Array(n * n).fill((1 << n) - 1), emptyCount: n * n
+                gridSize, cellCount, allDigits, geometry: getGeometry(),
+                values: Array(cellCount).fill(0), candidates: Array(cellCount).fill(allDigits), emptyCount: cellCount
             };
-            for (let cell = 0; cell < n * n; cell++) {
-                const digit = board[Math.floor(cell / n)][cell % n];
+            for (let cell = 0; cell < cellCount; cell++) {
+                const digit = board[Math.floor(cell / gridSize)][cell % gridSize];
                 if (digit !== 0) placeDigit(state, cell, digit - 1);
             }
             return state;
@@ -1476,6 +1479,13 @@
             if (!(state.candidates[cell] & mask)) return false;
             state.candidates[cell] &= ~mask;
             return true;
+        }
+
+        // Removes the digits in `mask` from every listed cell; true if that changed any of them.
+        function eliminateFromCells(state, cells, mask) {
+            let changed = false;
+            for (const cell of cells) if (eliminate(state, cell, mask)) changed = true;
+            return changed;
         }
 
         function seesCell(state, a, b) {
@@ -1504,14 +1514,15 @@
         function applyNakedSingle(state) {
             for (let cell = 0; cell < state.cellCount; cell++) {
                 const mask = state.candidates[cell];
-                if (mask && !(mask & (mask - 1))) { placeDigit(state, cell, Math.log2(mask)); return true; }
+                const hasOneCandidate = mask !== 0 && (mask & (mask - 1)) === 0;
+                if (hasOneCandidate) { placeDigit(state, cell, Math.log2(mask)); return true; }
             }
             return false;
         }
 
         function applyHiddenSingle(state) {
             for (const house of state.geometry.houses) {
-                for (let d = 0; d < state.n; d++) {
+                for (let d = 0; d < state.gridSize; d++) {
                     const cells = cellsWithDigit(state, house, d);
                     if (cells.length === 1) { placeDigit(state, cells[0], d); return true; }
                 }
@@ -1524,15 +1535,14 @@
         function applyLockedCandidates(state) {
             const { houses, housesOfCell } = state.geometry;
             for (const house of houses) {
-                for (let d = 0; d < state.n; d++) {
+                for (let d = 0; d < state.gridSize; d++) {
                     const cells = cellsWithDigit(state, house, d);
                     if (cells.length < 2) continue;
                     for (const otherIndex of housesOfCell[cells[0]]) {
                         const other = houses[otherIndex];
                         if (other === house || !cells.every(cell => other.includes(cell))) continue;
-                        let progress = false;
-                        for (const cell of other) if (!cells.includes(cell)) progress = eliminate(state, cell, 1 << d) || progress;
-                        if (progress) return true;
+                        const rest = other.filter(cell => !cells.includes(cell));
+                        if (eliminateFromCells(state, rest, 1 << d)) return true;
                     }
                 }
             }
@@ -1542,13 +1552,14 @@
         // k cells of a house that together hold only k digits own those digits.
         function applyNakedSubset(state, k) {
             for (const house of state.geometry.houses) {
-                const cells = house.filter(cell => bitCount(state.candidates[cell]) >= 2 && bitCount(state.candidates[cell]) <= k);
+                const cells = house.filter(cell => {
+                    const size = bitCount(state.candidates[cell]);
+                    return size >= 2 && size <= k;
+                });
                 const found = someCombination(cells, k, combo => {
                     const digits = combo.reduce((mask, cell) => mask | state.candidates[cell], 0);
                     if (bitCount(digits) !== k) return false;
-                    let progress = false;
-                    for (const cell of house) if (!combo.includes(cell)) progress = eliminate(state, cell, digits) || progress;
-                    return progress;
+                    return eliminateFromCells(state, house.filter(cell => !combo.includes(cell)), digits);
                 });
                 if (found) return true;
             }
@@ -1560,7 +1571,7 @@
             for (const house of state.geometry.houses) {
                 const cellMaskOfDigit = [];
                 const digits = [];
-                for (let d = 0; d < state.n; d++) {
+                for (let d = 0; d < state.gridSize; d++) {
                     let mask = 0;
                     house.forEach((cell, i) => { if ((state.candidates[cell] >> d) & 1) mask |= 1 << i; });
                     cellMaskOfDigit[d] = mask;
@@ -1570,11 +1581,8 @@
                     const cellMask = combo.reduce((mask, d) => mask | cellMaskOfDigit[d], 0);
                     if (bitCount(cellMask) !== k) return false;
                     const ownDigits = combo.reduce((mask, d) => mask | (1 << d), 0);
-                    let progress = false;
-                    house.forEach((cell, i) => {
-                        if ((cellMask >> i) & 1) progress = eliminate(state, cell, state.allDigits & ~ownDigits) || progress;
-                    });
-                    return progress;
+                    const ownCells = house.filter((cell, i) => (cellMask >> i) & 1);
+                    return eliminateFromCells(state, ownCells, state.allDigits & ~ownDigits);
                 });
                 if (found) return true;
             }
@@ -1584,7 +1592,7 @@
         // X-Wing (size 2), Swordfish (3), Jellyfish (4): a digit confined to the same k columns in
         // k rows is removed from the rest of those columns, and the same with rows and columns swapped.
         function applyFish(state, size) {
-            const n = state.n;
+            const n = state.gridSize;
             for (const baseIsRow of [true, false]) {
                 const cellAt = (base, cover) => baseIsRow ? base * n + cover : cover * n + base;
                 for (let d = 0; d < n; d++) {
@@ -1592,21 +1600,23 @@
                     const bases = [];
                     for (let base = 0; base < n; base++) {
                         let mask = 0;
-                        for (let cover = 0; cover < n; cover++) if ((state.candidates[cellAt(base, cover)] >> d) & 1) mask |= 1 << cover;
+                        for (let cover = 0; cover < n; cover++) {
+                            if ((state.candidates[cellAt(base, cover)] >> d) & 1) mask |= 1 << cover;
+                        }
                         coverMaskOfBase[base] = mask;
                         if (bitCount(mask) >= 2 && bitCount(mask) <= size) bases.push(base);
                     }
                     const found = someCombination(bases, size, combo => {
                         const coverMask = combo.reduce((mask, base) => mask | coverMaskOfBase[base], 0);
                         if (bitCount(coverMask) !== size) return false;
-                        let progress = false;
+                        const victims = [];
                         for (let cover = 0; cover < n; cover++) {
                             if (!((coverMask >> cover) & 1)) continue;
                             for (let base = 0; base < n; base++) {
-                                if (!combo.includes(base)) progress = eliminate(state, cellAt(base, cover), 1 << d) || progress;
+                                if (!combo.includes(base)) victims.push(cellAt(base, cover));
                             }
                         }
-                        return progress;
+                        return eliminateFromCells(state, victims, 1 << d);
                     });
                     if (found) return true;
                 }
@@ -1614,30 +1624,37 @@
             return false;
         }
 
+        // XY-Wing: pivot {x, y} with pincers {x, z} and {y, z}.
+        function isXYWing(pivotMask, maskA, maskB, shared) {
+            return !(pivotMask & shared) && pivotMask === ((maskA | maskB) & ~shared);
+        }
+
+        // XYZ-Wing: pivot {x, y, z} with pincers {x, z} and {y, z}.
+        function isXYZWing(pivotMask, maskA, maskB) {
+            return pivotMask === (maskA | maskB);
+        }
+
         // XY-Wing (pivotSize 2) and XYZ-Wing (pivotSize 3): a pivot cell and two pincer cells it sees
-        // that share digit z; whichever way the pivot goes, one pincer is z, so cells seeing
-        // all of them cannot be z.
+        // that share digit z; whichever way the pivot goes, one pincer is z (in an XYZ-Wing the
+        // pivot may be z too), so cells seeing all the z cells cannot be z.
         function applyWing(state, pivotSize) {
+            const isXYZ = pivotSize === 3;
             for (let pivot = 0; pivot < state.cellCount; pivot++) {
                 const pivotMask = state.candidates[pivot];
                 if (bitCount(pivotMask) !== pivotSize) continue;
                 const pincerOptions = state.geometry.peers[pivot].filter(cell => bitCount(state.candidates[cell]) === 2);
                 const found = someCombination(pincerOptions, 2, ([pincerA, pincerB]) => {
-                    const maskA = state.candidates[pincerA]; const maskB = state.candidates[pincerB];
+                    const maskA = state.candidates[pincerA];
+                    const maskB = state.candidates[pincerB];
                     const shared = maskA & maskB;
                     if (maskA === maskB || bitCount(shared) !== 1) return false;
-                    const isWing = pivotSize === 2
-                        ? !(pivotMask & shared) && pivotMask === ((maskA | maskB) & ~shared)
-                        : pivotMask === (maskA | maskB);
+                    const isWing = isXYZ ? isXYZWing(pivotMask, maskA, maskB) : isXYWing(pivotMask, maskA, maskB, shared);
                     if (!isWing) return false;
-                    let progress = false;
-                    for (let cell = 0; cell < state.cellCount; cell++) {
-                        if (cell === pincerA || cell === pincerB || cell === pivot) continue;
-                        const seesAll = seesCell(state, cell, pincerA) && seesCell(state, cell, pincerB)
-                            && (pivotSize === 2 || seesCell(state, cell, pivot));
-                        if (seesAll) progress = eliminate(state, cell, shared) || progress;
-                    }
-                    return progress;
+                    const zCells = isXYZ ? [pivot, pincerA, pincerB] : [pincerA, pincerB];
+                    const victims = state.geometry.peers[pincerA].filter(cell => (
+                        !zCells.includes(cell) && zCells.every(zCell => seesCell(state, cell, zCell))
+                    ));
+                    return eliminateFromCells(state, victims, shared);
                 });
                 if (found) return true;
             }
@@ -1654,74 +1671,94 @@
             return links;
         }
 
+        // True if the strong link's two ends can be told apart as one seeing `first` and the other
+        // seeing `second`, without being either of them.
+        function linkBridges(state, [nearFirst, nearSecond], first, second) {
+            const isEndpoint = cell => cell === first || cell === second;
+            if (isEndpoint(nearFirst) || isEndpoint(nearSecond)) return false;
+            return seesCell(state, nearFirst, first) && seesCell(state, nearSecond, second);
+        }
+
         // W-Wing: two cells with the same candidate pair {a, b} joined by a strong link on a,
         // one end seeing each cell. One of the two cells must be b, so cells seeing both lose b.
         function applyWWing(state) {
             const pairCells = [];
-            for (let cell = 0; cell < state.cellCount; cell++) if (bitCount(state.candidates[cell]) === 2) pairCells.push(cell);
+            for (let cell = 0; cell < state.cellCount; cell++) {
+                if (bitCount(state.candidates[cell]) === 2) pairCells.push(cell);
+            }
 
             return someCombination(pairCells, 2, ([first, second]) => {
                 const pair = state.candidates[first];
                 if (pair !== state.candidates[second] || seesCell(state, first, second)) return false;
-                for (let a = 0; a < state.n; a++) {
+                const victims = state.geometry.peers[first].filter(cell => seesCell(state, cell, second));
+                for (let a = 0; a < state.gridSize; a++) {
                     if (!((pair >> a) & 1)) continue;
                     const otherDigit = pair & ~(1 << a);
                     for (const [endA, endB] of findStrongLinks(state, a)) {
-                        for (const [nearFirst, nearSecond] of [[endA, endB], [endB, endA]]) {
-                            if (nearFirst === first || nearFirst === second || nearSecond === first || nearSecond === second) continue;
-                            if (!seesCell(state, nearFirst, first) || !seesCell(state, nearSecond, second)) continue;
-                            let progress = false;
-                            for (let cell = 0; cell < state.cellCount; cell++) {
-                                if (seesCell(state, cell, first) && seesCell(state, cell, second)) progress = eliminate(state, cell, otherDigit) || progress;
-                            }
-                            if (progress) return true;
-                        }
+                        const bridges = linkBridges(state, [endA, endB], first, second)
+                            || linkBridges(state, [endB, endA], first, second);
+                        if (bridges && eliminateFromCells(state, victims, otherDigit)) return true;
                     }
                 }
                 return false;
             });
         }
 
+        // Cells joined by strong links on one digit, as a map from each cell to its linked cells.
+        function strongLinkNeighbours(state, digitIndex) {
+            const neighbours = new Map();
+            for (const [a, b] of findStrongLinks(state, digitIndex)) {
+                neighbours.set(a, [...(neighbours.get(a) || []), b]);
+                neighbours.set(b, [...(neighbours.get(b) || []), a]);
+            }
+            return neighbours;
+        }
+
+        // The chain of strong links through `start`, split into its two alternating colours.
+        function colourChain(neighbours, start, colourOf) {
+            const chain = [[start], []];
+            colourOf.set(start, 0);
+            const queue = [start];
+            while (queue.length) {
+                const cell = queue.shift();
+                for (const next of neighbours.get(cell)) {
+                    if (colourOf.has(next)) continue;
+                    const colour = 1 - colourOf.get(cell);
+                    colourOf.set(next, colour);
+                    chain[colour].push(next);
+                    queue.push(next);
+                }
+            }
+            return chain;
+        }
+
         // Simple colouring: strong links on one digit form chains whose cells alternate between two
         // colours, exactly one of which is true. Two same-coloured cells in a house make that colour
         // false (wrap); a cell seeing both colours cannot hold the digit (trap).
         function applySimpleColouring(state) {
-            for (let d = 0; d < state.n; d++) {
-                const neighbours = new Map();
-                for (const [a, b] of findStrongLinks(state, d)) {
-                    neighbours.set(a, [...(neighbours.get(a) || []), b]);
-                    neighbours.set(b, [...(neighbours.get(b) || []), a]);
-                }
+            for (let d = 0; d < state.gridSize; d++) {
+                const neighbours = strongLinkNeighbours(state, d);
                 const colourOf = new Map();
                 for (const start of neighbours.keys()) {
                     if (colourOf.has(start)) continue;
-                    const chain = [[start], []];
-                    colourOf.set(start, 0);
-                    const queue = [start];
-                    while (queue.length) {
-                        const cell = queue.shift();
-                        for (const next of neighbours.get(cell)) {
-                            if (colourOf.has(next)) continue;
-                            const colour = 1 - colourOf.get(cell);
-                            colourOf.set(next, colour); chain[colour].push(next);
-                            queue.push(next);
-                        }
-                    }
+                    const chain = colourChain(neighbours, start, colourOf);
 
-                    for (const colour of [0, 1]) {
-                        const hasClash = chain[colour].some((a, i) => chain[colour].some((b, j) => i < j && seesCell(state, a, b)));
-                        if (!hasClash) continue;
-                        for (const cell of chain[colour]) eliminate(state, cell, 1 << d);
+                    const clashing = [0, 1].find(colour => chain[colour].some((a, i) => (
+                        chain[colour].slice(i + 1).some(b => seesCell(state, a, b))
+                    )));
+                    if (clashing !== undefined) {
+                        eliminateFromCells(state, chain[clashing], 1 << d);
                         return true;
                     }
 
-                    let progress = false;
+                    const victims = [];
                     for (let cell = 0; cell < state.cellCount; cell++) {
-                        if (!((state.candidates[cell] >> d) & 1) || chain[0].includes(cell) || chain[1].includes(cell)) continue;
-                        const seesBothColours = chain[0].some(c => seesCell(state, cell, c)) && chain[1].some(c => seesCell(state, cell, c));
-                        if (seesBothColours) progress = eliminate(state, cell, 1 << d) || progress;
+                        const isChainCell = chain[0].includes(cell) || chain[1].includes(cell);
+                        if (!((state.candidates[cell] >> d) & 1) || isChainCell) continue;
+                        const seesColour = colour => chain[colour].some(chainCell => seesCell(state, cell, chainCell));
+                        if (seesColour(0) && seesColour(1)) victims.push(cell);
                     }
-                    if (progress) return true;
+                    if (eliminateFromCells(state, victims, 1 << d)) return true;
                 }
             }
             return false;
@@ -1795,7 +1832,10 @@
                 const digit = board[r][c];
                 board[r][c] = 0;
                 const isUnique = countSolutions(board, 2) === 1;
-                if (isUnique && (tier === TIER.EXPERT || rateByLogic(board, tier) <= tier)) givens--;
+                // Expert is the top tier, so only uniqueness limits the removals; the finished puzzle
+                // is rated afterwards (it can come out easier, which generatePuzzle retries).
+                const isStillRatable = tier === TIER.EXPERT || rateByLogic(board, tier) <= tier;
+                if (isUnique && isStillRatable) givens--;
                 else board[r][c] = digit;
             }
             return { board, givens };
