@@ -79,6 +79,8 @@
             font-family: 'Courier New', monospace; font-weight: bold; 
             font-size: 22px; padding: 0 5px; min-width: 55px; text-align: center; 
         }
+        .digit-display.paused { animation: paused-blink 1s steps(1) infinite; }
+        @keyframes paused-blink { 50% { color: #550000; } }
 
         /* Phones: shrink cells to fit the screen, down to --cell-min; wider boards scroll sideways */
         #minefield-scroll { overflow-x: auto; }
@@ -195,7 +197,7 @@
 <script>
     const STORAGE_KEY = 'win95_minesweeper_permanent_scores';
 
-    let rows, cols, mines, grid, timer, startTimeMs, hintPenaltySeconds, gameOver, flags, safeCellsRevealed, first;
+    let rows, cols, mines, grid, timer, startTimeMs, pausedAtMs, hintPenaltySeconds, gameOver, flags, safeCellsRevealed, first;
     let cellHoldTimer, faceHoldTimer;
     let facePressPointerType = null; // Set while a pointer is down on the smiley
     let faceWasLongPress = false;
@@ -336,12 +338,13 @@
         clearInterval(timer);
         const config = levels[currentLvl];
         rows = config.r; cols = config.c; mines = config.m;
-        startTimeMs = null; hintPenaltySeconds = 0; safeCellsRevealed = 0; flags = 0; gameOver = false; first = true;
+        startTimeMs = null; pausedAtMs = null; hintPenaltySeconds = 0; safeCellsRevealed = 0; flags = 0; gameOver = false; first = true;
         
         document.querySelectorAll('.diff-opt span').forEach((check) => { check.textContent = ''; });
         document.getElementById(`check-${currentLvl}`).textContent = '✓';
 
         timerDisplay.textContent = '000';
+        timerDisplay.classList.remove('paused');
         mineCountDisplay.textContent = String(mines).padStart(3, '0');
         faceButton.textContent = '🙂';
 
@@ -397,6 +400,7 @@
     }
 
     minefield.addEventListener('pointerdown', (e) => {
+        resumeClock();
         const cell = cellFromElement(e.target);
         if (!cell || gameOver) return;
         const isMouse = e.pointerType === 'mouse';
@@ -437,6 +441,7 @@
 
     minefield.addEventListener('contextmenu', (e) => {
         e.preventDefault();
+        resumeClock();
         const cell = cellFromElement(e.target);
         if (!cell || gameOver || blockContextMenu) return;
 
@@ -600,7 +605,8 @@
 
     // Derived from the wall clock because background tabs throttle timers, so counting ticks would under-count
     function getElapsedSeconds() {
-        return Math.floor((Date.now() - startTimeMs) / 1000) + hintPenaltySeconds;
+        const nowMs = pausedAtMs ?? Date.now();
+        return Math.floor((nowMs - startTimeMs) / 1000) + hintPenaltySeconds;
     }
 
     function showElapsedTime() {
@@ -612,6 +618,29 @@
         startTimeMs = Date.now();
         timer = setInterval(showElapsedTime, TIMER_REFRESH_MS);
     }
+
+    // Auto-pause: a hidden or unfocused game doesn't count time. It resumes when the player touches the board
+    // again, never on its own, and the blinking timer shows that the clock is stopped.
+    function pauseClock() {
+        if (first || gameOver || pausedAtMs !== null) return;
+        pausedAtMs = Date.now();
+        clearInterval(timer);
+        timerDisplay.classList.add('paused');
+        // The pointer may have been released while we were away without us hearing about it
+        cancelPress();
+        cancelFacePress();
+    }
+
+    function resumeClock() {
+        if (pausedAtMs === null) return;
+        startTimeMs += Date.now() - pausedAtMs;
+        pausedAtMs = null;
+        timer = setInterval(showElapsedTime, TIMER_REFRESH_MS);
+        timerDisplay.classList.remove('paused');
+    }
+
+    document.addEventListener('visibilitychange', () => { if (document.hidden) pauseClock(); });
+    window.addEventListener('blur', pauseClock);
 
     function end(win) {
         if (gameOver) return;
