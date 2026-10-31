@@ -85,6 +85,21 @@ or the user's explicit OK before it lands.
 6. **Report** to the user what landed, what was rejected, and what needs their input
    (e.g. a new screenshot, which needs a real browser).
 
+## `main` is production
+
+The owner deploys `main` to the server manually, at any time. So `main` must always be
+in a runnable, shippable state:
+
+- Only reviewed, complete work lands on `main`. No work-in-progress, no half-finished
+  features, no "fix in the next commit".
+- Check the merged result, not just the branch: after rebasing onto `main`, run
+  `.claude/tools/check-all.sh <worktree>` (syntax check + browser check of `index.html` and
+  every game) and only fast-forward if it passes.
+- Every commit on `main` should be runnable on its own (developers commit in working steps).
+- Nothing secret or private ever goes into the repo (e.g. `deploy_key` stays git-ignored).
+- If something broken does reach `main`, fix it forward right away (revert commit or fix),
+  never by rewriting history, and tell the owner so they don't deploy it.
+
 ## Integration criteria (all must hold)
 
 - Reviewer verdict is `APPROVED` against the current task brief.
