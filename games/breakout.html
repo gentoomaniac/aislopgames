@@ -978,7 +978,28 @@ function saveHighScore(name, score, level, diff) {
         inMemoryScores = allScores;
     }
 }
-function renderLeaderboard() { let currentDiff = DIFF_ORDER[lbDiffIndex]; document.getElementById('lb-diff-display').innerText = currentDiff === 'Medium' ? 'NORMAL' : currentDiff.toUpperCase(); const tbody = document.getElementById('score-table-body'); tbody.innerHTML = ''; const scores = getHighScores()[currentDiff] || []; for (let i = 0; i < 10; i++) { let tr = document.createElement('tr'); if (scores[i]) { tr.innerHTML = `<td>${i + 1}</td><td>${scores[i].name.toUpperCase()}</td><td>${scores[i].score}</td><td>${scores[i].level}</td>`; } else { tr.className = 'empty-row'; tr.innerHTML = `<td>${i + 1}</td><td>---</td><td>0</td><td>-</td>`; } tbody.appendChild(tr); } }
+function createScoreRow(rank, row) {
+    const tr = document.createElement('tr');
+    const cells = row
+        ? [rank, row.name.toUpperCase(), Number(row.score), Number(row.level)]
+        : [rank, '---', 0, '-'];
+    if (!row) tr.className = 'empty-row';
+    cells.forEach(text => {
+        const td = document.createElement('td');
+        td.textContent = text;
+        tr.appendChild(td);
+    });
+    return tr;
+}
+
+function renderLeaderboard() {
+    const currentDiff = DIFF_ORDER[lbDiffIndex];
+    document.getElementById('lb-diff-display').innerText = currentDiff === 'Medium' ? 'NORMAL' : currentDiff.toUpperCase();
+    const tbody = document.getElementById('score-table-body');
+    tbody.innerHTML = '';
+    const scores = getHighScores()[currentDiff] || [];
+    for (let i = 0; i < SCORES_PER_DIFFICULTY; i++) tbody.appendChild(createScoreRow(i + 1, scores[i]));
+}
 
 document.querySelectorAll('.diff-btn').forEach(btn => { btn.addEventListener('click', (e) => { document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active')); e.target.classList.add('active'); difficulty = e.target.dataset.diff; }); });
 document.getElementById('lb-prev').addEventListener('click', () => { lbDiffIndex = (lbDiffIndex - 1 + DIFF_ORDER.length) % DIFF_ORDER.length; renderLeaderboard(); });
