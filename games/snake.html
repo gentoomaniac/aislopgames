@@ -285,11 +285,24 @@ function migrateData() {
 
 migrateData();
 
-const getScores = () => JSON.parse(localStorage.getItem(CURRENT_VERSION_KEY));
+const MAX_NAME_LENGTH = 8;
+const ANON_NAME = 'ANON';
+
+function sanitizeName(name) {
+    return String(name).trim().slice(0, MAX_NAME_LENGTH).trim() || ANON_NAME;
+}
+
+const getScores = () => {
+    const allScores = JSON.parse(localStorage.getItem(CURRENT_VERSION_KEY));
+    DIFFICULTIES.forEach(diff => {
+        if (allScores[diff]) allScores[diff].forEach(entry => { entry.name = sanitizeName(entry.name); });
+    });
+    return allScores;
+};
 const saveScore = (n, s, difficulty) => {
     let allScores = getScores();
     if (!allScores[difficulty]) allScores[difficulty] = [];
-    allScores[difficulty].push({name: n.toUpperCase().substring(0, 10), score: s});
+    allScores[difficulty].push({name: sanitizeName(n.toUpperCase()), score: s});
     allScores[difficulty] = allScores[difficulty].sort((a,b) => b.score - a.score).slice(0, 3);
     localStorage.setItem(CURRENT_VERSION_KEY, JSON.stringify(allScores));
 };
@@ -474,9 +487,16 @@ function showHighScores() {
     const s = allScores[currDiff] || [];
     
     contentBox.innerHTML = `<h1>TOP 3</h1>
-        <div style="font-size:1.2rem; margin-bottom: 5px;">&lt; ${currDiff} &gt;</div>` + 
-        s.map(i => `<div style="font-size:1.2rem">${i.name}: ${i.score}</div>`).join('') +
-        `<div class="menu-item active" data-action="main" style="margin-top:10px">BACK</div>`;
+        <div style="font-size:1.2rem; margin-bottom: 5px;">&lt; ${currDiff} &gt;</div>`;
+    // Names come from storage, so they are rendered as text, never as HTML.
+    s.forEach(entry => {
+        const row = document.createElement('div');
+        row.style.fontSize = '1.2rem';
+        row.textContent = `${entry.name}: ${entry.score}`;
+        contentBox.appendChild(row);
+    });
+    contentBox.insertAdjacentHTML('beforeend',
+        `<div class="menu-item active" data-action="main" style="margin-top:10px">BACK</div>`);
     menuIdx = 0; 
 }
 
@@ -494,7 +514,7 @@ function doAction(act) {
     // Intentionally removed "diff" from OK activation so it only cycles on left/right
     if (act === 'submit') {
         let pNameInput = document.getElementById('pName');
-        saveScore(pNameInput ? (pNameInput.value || 'ANON') : 'ANON', score, DIFFICULTIES[diffIdx]);
+        saveScore(pNameInput ? pNameInput.value : ANON_NAME, score, DIFFICULTIES[diffIdx]);
         showMenu();
     }
 }
