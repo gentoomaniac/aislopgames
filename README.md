@@ -12,6 +12,8 @@ This project is strictly non-commercial and serves purely as a personal learning
 ## 🛠️ Development
 `make` lists the helper targets. `make screenshots` regenerates the game card images in `screenshots/` with headless Chrome (installs puppeteer-core into `.tools/` on first run; `OUT=<dir>` writes elsewhere, `CHROME_PATH=<bin>` picks the browser).
 
+`make dist` collects exactly the files to deploy into `dist/` (`DIST=<dir>` changes it) and checks that nothing referenced is missing; upload that folder.
+
 ## 📄 License
 All games and source code in this repository are provided "as is" and released under the **MIT License**.
 
