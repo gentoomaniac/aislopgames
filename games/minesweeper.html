@@ -177,11 +177,14 @@
 
     let rows, cols, mines, grid, timer, startTimeMs, hintPenaltySeconds, gameOver, flags, safeCellsRevealed, first;
     let cellHoldTimer, faceHoldTimer;
+    let facePressPointerType = null; // Set while a pointer is down on the smiley
+    let faceWasLongPress = false;
     let pressedCell = null; // {row, col} while a pointer is down on a cell and still counts as a tap
     let lastTap = null; // {row, col, timeMs} of the last completed tap/click, for double-tap chording
     let blockContextMenu = false; // Prevents the double-triggering of contextmenu
     const HOLD_DELAY = 500;
     const DOUBLE_TAP_DELAY = 300;
+    const FACE_HOLD_DELAY = 800;
     const MAX_TIME_SECONDS = 999; // What the timer display can show; scores use the same cap
     const MAX_SCORES_PER_LEVEL = 10;
     const HINT_PENALTY_SECONDS = 5;
@@ -360,29 +363,49 @@
         }
     }
 
-    let faceWasLongPress = false;
-    $('#reset-btn').on('contextmenu', (e) => e.preventDefault());
-    $('#reset-btn').on('mousedown touchstart', (e) => {
-        if (e.type === 'touchstart') e.preventDefault();
+    // ---- Smiley: click = new game, right-click or long press = hint ----
+
+    function cancelFacePress() {
+        clearTimeout(faceHoldTimer);
+        faceHoldTimer = null;
+        facePressPointerType = null;
+        resetFace();
+    }
+
+    $('#reset-btn').on('pointerdown', (e) => {
+        const pointerType = e.originalEvent.pointerType;
+        if (pointerType === 'mouse' && e.originalEvent.button !== 0) return; // Right click is handled by contextmenu
+
+        facePressPointerType = pointerType;
         faceWasLongPress = false;
         $('#reset-btn').text('😮');
-        if (e.type === 'touchstart' || e.which === 3) {
+        if (pointerType !== 'mouse') {
             faceHoldTimer = setTimeout(() => {
                 if (!first && !gameOver) { giveHint(); faceWasLongPress = true; }
-            }, 800);
+            }, FACE_HOLD_DELAY);
         }
     });
 
-    $(document).on('mouseup touchend', (e) => {
-        if (faceHoldTimer || $(e.target).closest('#reset-btn').length > 0) {
-            clearTimeout(faceHoldTimer);
-            faceHoldTimer = null;
-            if (!faceWasLongPress && ($(e.target).closest('#reset-btn').length > 0)) {
-                if (e.which === 1 || e.type === 'touchend') confirmNewGame();
-            }
-            if (!gameOver) $('#reset-btn').text('🙂');
-        }
+    $('#reset-btn').on('contextmenu', (e) => {
+        e.preventDefault();
+        // A touch long press fires contextmenu too, but the hold timer already gives that hint
+        if (facePressPointerType === null && !first && !gameOver) giveHint();
     });
+
+    $(document).on('pointermove', (e) => {
+        if (facePressPointerType === null) return;
+        if (!document.elementFromPoint(e.clientX, e.clientY)?.closest('#reset-btn')) cancelFacePress();
+    });
+
+    $(document).on('pointerup', (e) => {
+        if (facePressPointerType === null) return;
+        const releasedOnFace = document.elementFromPoint(e.clientX, e.clientY)?.closest('#reset-btn');
+        const wasLongPress = faceWasLongPress;
+        cancelFacePress();
+        if (releasedOnFace && !wasLongPress) confirmNewGame();
+    });
+
+    $(document).on('pointercancel', cancelFacePress);
 
     function giveHint() {
         let safeCells = grid.flat().filter(c => !c.isM && !c.rev && !c.flg);
