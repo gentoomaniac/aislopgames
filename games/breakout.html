@@ -402,6 +402,11 @@ function clearMovementKeys() { rightPressed = false; leftPressed = false; }
 // keyup never arrives when the window loses focus
 window.addEventListener("blur", clearMovementKeys);
 
+// Never resumes by itself: the player comes back to the pause screen and resumes on purpose
+function pauseIfPlaying() { if (gameState === 'PLAYING') togglePause(); }
+window.addEventListener("blur", pauseIfPlaying);
+document.addEventListener("visibilitychange", () => { if (document.hidden) pauseIfPlaying(); });
+
 // One dialog for everything that needs a yes/no. While it is open it owns the keyboard (see the keydown handler).
 let confirmHandlers = null;
 
