@@ -562,7 +562,11 @@ function showHighScores() {
 // onCancel is what the back key (C / Escape) does.
 let dialog = null;
 
-function showDialog(kind, title, options, selectedIdx, onCancel) {
+// Keys that steer, answer or close a dialog; any other key keeps its browser behaviour.
+const DIALOG_KEYS = ['c', 'backspace', 'escape', 'enter', 'p', '5',
+    'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'w', 'a', 's', 'd', '2', '4', '6', '8'];
+
+function showDialog(kind, title, options, onCancel, selectedIdx = 0) {
     dialog = {kind, title, options, selectedIdx, onCancel};
     dialogOverlay.style.display = 'flex';
     renderDialog();
@@ -603,12 +607,14 @@ dialogOverlay.addEventListener('click', (e) => {
     if (optionIdx !== undefined) dialog.options[optionIdx].run();
 });
 
+const NO_OPTION_IDX = 1;
+
 // Asks YES / NO, with NO preselected so a stray OK never destroys anything.
 function showConfirm(question, onYes, onNo) {
     showDialog('CONFIRM', question, [
         {label: 'YES', run: () => { closeDialog(); onYes(); }},
         {label: 'NO', run: () => { closeDialog(); onNo(); }}
-    ], 1, () => { closeDialog(); onNo(); });
+    ], () => { closeDialog(); onNo(); }, NO_OPTION_IDX);
 }
 
 function changeDifficulty(step) {
@@ -672,7 +678,7 @@ function showPause() {
     clearTimeout(gameTimeout);
     showDialog('PAUSE', 'PAUSED', [
         {label: 'RESUME', run: () => { closeDialog(); resumeGame(); }}
-    ], 0, () => confirmQuitGame(showPause));
+    ], () => confirmQuitGame(showPause));
 }
 
 function togglePause() {
@@ -783,7 +789,7 @@ window.onkeydown = e => {
 
     // A key that closes a dialog must not also act on whatever it refocuses
     // (C would be typed into the name field, Backspace would delete from it).
-    if (dialog) e.preventDefault();
+    if (dialog && DIALOG_KEYS.includes(key)) e.preventDefault();
 
     // A held pause key would flip between paused and running.
     if (e.repeat && (key === 'p' || key === '5' || key === 'enter')) return;
@@ -814,12 +820,12 @@ window.onkeydown = e => {
     }
 };
 
-// Where the current touch began, or null if it didn't begin on the game area
-// (e.g. on the keypad), so such a touch never counts as a swipe or tap.
+// Where the current touch began, or null if it didn't begin as a single finger
+// outside the keypad, so keypad presses and pinch-zooms never count as a swipe or tap.
 let swipeStart = null;
 window.addEventListener('touchstart', e => {
-    const isOnGameArea = e.target.closest('.phone-body') && !e.target.closest('#keypad-area');
-    swipeStart = isOnGameArea
+    const isSingleFingerOffKeypad = e.touches.length === 1 && !e.target.closest('#keypad-area');
+    swipeStart = isSingleFingerOffKeypad
         ? {x: e.touches[0].clientX, y: e.touches[0].clientY}
         : null;
 }, {passive: false});
