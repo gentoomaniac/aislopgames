@@ -931,7 +931,8 @@
                     animations: $animToggle.is(':checked'), hardMode: $hardModeToggle.is(':checked'), fastFill: fastFillMode,
                     gridSize: gridSize, constraints: constraintsEnabled, autoNotes: $('#toggle-auto-notes').is(':checked')
                 },
-                customColors: customThemeState
+                customColors: customThemeState,
+                isAutoSolved: statusKind === 'autoSolved'
             };
             writeSavedState(state);
         }
@@ -979,7 +980,8 @@
             return {
                 gridSize: size, settings: settings, customColors: customColors,
                 solutionBoard: state.solutionBoard, currentBoard: state.currentBoard, userBoard: state.userBoard,
-                notesBoard: isNotesBoard(state.notesBoard, size) ? state.notesBoard : null
+                notesBoard: isNotesBoard(state.notesBoard, size) ? state.notesBoard : null,
+                isAutoSolved: state.isAutoSolved === true
             };
         }
 
@@ -1051,6 +1053,7 @@
                 if ($('#toggle-auto-notes').is(':checked')) autoFillNotes();
                 else renderNotes();
 
+                if (state.isAutoSolved) setStatus('Puzzle Solved Automatically.', 'neutral', 'autoSolved');
                 updateNumberPad(); checkWinCondition(false); return true;
             } catch (e) { return false; }
         }
@@ -1086,7 +1089,14 @@
             if (!skipSave) saveGameState();
         }
 
-        function setStatus(text, type) { $message.text(text).removeClass('msg-success msg-error msg-neutral').addClass('msg-' + type); }
+        // 'autoSolved' outlives board checks (and is saved); every other message is
+        // re-evaluated or cleared on the next board action.
+        let statusKind = 'none';
+
+        function setStatus(text, type, kind = 'none') {
+            statusKind = kind;
+            $message.text(text).removeClass('msg-success msg-error msg-neutral').addClass('msg-' + type);
+        }
 
         function updateNumberPad() {
             const counts = {}; for(let i=1; i<=gridSize; i++) counts[i] = 0;
@@ -1405,6 +1415,7 @@
         }
 
         function giveHint() {
+            if (statusKind === 'autoSolved') return;
             stopFireworks(); clearHighlights(); setStatus('', 'neutral');
             if(fastFillMode) { $fastFillToggle.prop('checked', false); toggleFastFill(); } 
 
@@ -1419,19 +1430,21 @@
 
             // Mistakes come first, so the hint never builds on a wrong value
             const hintCells = wrongCells.length > 0 ? wrongCells : emptyCells;
+            let hintMessage = 'No hints needed! The board is currently correct.';
             if (hintCells.length > 0) {
                 const $hintCell = hintCells[Math.floor(Math.random() * hintCells.length)];
                 const r = parseInt($hintCell.attr('data-row')); const c = parseInt($hintCell.attr('data-col'));
                 revealHintCell($hintCell, solutionBoard[r][c]);
-                if (wrongCells.length > 0) setStatus('Corrected a mistake to help you progress!', 'neutral');
-            } else {
-                setStatus('No hints needed! The board is currently correct.', 'neutral');
+                hintMessage = wrongCells.length > 0 ? 'Corrected a mistake to help you progress!' : '';
             }
             
             if ($('#toggle-auto-notes').is(':checked')) autoFillNotes();
             else renderNotes();
 
-            updateErrors(); updateNumberPad(); checkWinCondition(); saveGameState();
+            updateErrors(); updateNumberPad(); checkWinCondition();
+            // A win or hard-mode verdict from the check above takes precedence over the hint text
+            if (hintMessage && $message.text() === '') setStatus(hintMessage, 'neutral', 'hint');
+            saveGameState();
         }
 
         function solveGame() {
@@ -1472,7 +1485,7 @@
             if(!animationsEnabled) updateNumberPad();
             runInCurrentGame(() => { 
                 updateErrors();
-                setStatus('Puzzle Solved Automatically.', 'neutral'); saveGameState(); 
+                setStatus('Puzzle Solved Automatically.', 'neutral', 'autoSolved'); saveGameState(); 
             }, (staggerIndex * 15) + 100);
         }
         
@@ -1493,6 +1506,8 @@
         }
 
         function checkWinCondition(triggerEffects = true) {
+            if (statusKind === 'autoSolved') return;
+
             let board = getBoardState();
             let isComplete = true; let hasErrors = false;
 
@@ -1503,9 +1518,7 @@
                 }
             }
 
-            if (!$message.text().includes('Automatically') && !$message.text().includes('hints needed') && !$message.text().includes('Corrected')) {
-                setStatus('', 'neutral');
-            }
+            setStatus('', 'neutral');
 
             if (isComplete) {
                 if (!hasErrors) {
