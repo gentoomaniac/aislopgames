@@ -9,6 +9,8 @@ for how code here is written and reviewed.
 - A collection of small browser games, each one a **single, self-contained HTML file** in `games/`.
 - Plain JavaScript, inline CSS and JS. No build step, no bundler, no package.json.
 - Public CDN libraries are allowed (cdnjs, jsDelivr, unpkg, code.jquery.com, Google Fonts).
+  Fewer dependencies is better: prefer plain JS/CSS and browser built-ins (e.g.
+  `<input type="color">`, `<dialog>`) over a library. **No unmaintained dependencies.**
   Every CDN script/stylesheet is pinned to an exact version **and** carries a Subresource
   Integrity hash (`integrity="sha384-…" crossorigin="anonymous"`). Exception: Google Fonts CSS
   is generated per browser and can't be hashed.
@@ -34,6 +36,8 @@ for how code here is written and reviewed.
   - Render stored strings with `textContent`, never `innerHTML`.
 - **Pinch zoom stays possible:** no `user-scalable=no`/`maximum-scale=1`; lock touch gestures
   only on the play area.
+- **Polish without complexity:** small visual fixes are welcome when they're simple; if a fix
+  needs extra machinery, leave it.
 
 ## We don't break userspace
 
