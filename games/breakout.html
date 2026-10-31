@@ -156,6 +156,9 @@
             z-index: 5; text-shadow: 1px 1px 0 #000; align-items: center;
         }
         
+        /* The HUD ignores pointers so the canvas gets them, except for this button (touch has no P key) */
+        #pause-btn { pointer-events: auto; padding: 4px 6px; margin: 0 10px 0 0; font-size: 9px; }
+
         .hud-section { flex: 1; }
         .hud-left { text-align: left; }
         .hud-center { text-align: center; }
@@ -189,7 +192,7 @@
             <div class="hud-section hud-left"><span class="emoji-icon">🪙</span> <span id="score-display">0</span></div>
             <div class="hud-section hud-center">LVL: <span id="level-display">1</span></div>
             <div id="active-powerups"></div>
-            <div class="hud-section hud-right"><span class="emoji-icon">❤️</span> <span id="lives-display">3</span></div>
+            <div class="hud-section hud-right"><button id="pause-btn" tabindex="-1" aria-label="Pause">[||]</button><span class="emoji-icon">❤️</span> <span id="lives-display">3</span></div>
         </div>
 
         <canvas id="gameCanvas" width="800" height="600"></canvas>
@@ -218,6 +221,7 @@
             </div>
 
             <button id="continue-btn">[>>] Next Level</button>
+            <button id="exit-btn">[X] Exit</button>
         </div>
 
         <div id="game-over-screen" class="overlay hidden">
@@ -433,12 +437,15 @@ function launchBall() {
 
 const gameWrapper = document.getElementById('game-wrapper');
 
+// preventDefault on a touch that starts on a button would swallow its click
+function isTouchOnButton(e) { return e.target.closest('button') !== null; }
+
 gameWrapper.addEventListener("touchstart", (e) => { 
-    if(gameState === 'PLAYING') { e.preventDefault(); trackCursor(e.touches[0].clientX, true); } 
+    if(gameState === 'PLAYING' && !isTouchOnButton(e)) { e.preventDefault(); trackCursor(e.touches[0].clientX, true); } 
 }, { passive: false });
 
 gameWrapper.addEventListener("touchmove", (e) => { 
-    if(gameState === 'PLAYING') { e.preventDefault(); trackCursor(e.touches[0].clientX, false); } 
+    if(gameState === 'PLAYING' && !isTouchOnButton(e)) { e.preventDefault(); trackCursor(e.touches[0].clientX, false); } 
 }, { passive: false });
 
 gameWrapper.addEventListener("mouseenter", (e) => { 
@@ -1026,6 +1033,13 @@ document.querySelectorAll('.diff-btn').forEach(btn => { btn.addEventListener('cl
 document.getElementById('lb-prev').addEventListener('click', () => { lbDiffIndex = (lbDiffIndex - 1 + DIFF_ORDER.length) % DIFF_ORDER.length; renderLeaderboard(); });
 document.getElementById('lb-next').addEventListener('click', () => { lbDiffIndex = (lbDiffIndex + 1) % DIFF_ORDER.length; renderLeaderboard(); });
 document.getElementById('start-btn').addEventListener('click', startGame);
+
+document.getElementById('pause-btn').addEventListener('click', (e) => {
+    // A focused button would also react to the Space key, which launches the ball
+    e.currentTarget.blur();
+    togglePause();
+});
+document.getElementById('exit-btn').addEventListener('click', exitToMenu);
 
 document.getElementById('continue-btn').addEventListener('click', () => { 
     document.getElementById('intermission-screen').classList.add('hidden'); 
