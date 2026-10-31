@@ -345,14 +345,19 @@ document.addEventListener("keydown", (e) => {
     }
 });
 
+// Released in every state, otherwise a key let go during pause stays "held" after resuming
 document.addEventListener("keyup", (e) => {
-    if (gameState === 'PLAYING') {
-        if (e.key === "Right" || e.key === "ArrowRight") rightPressed = false;
-        else if (e.key === "Left" || e.key === "ArrowLeft") leftPressed = false;
-    }
+    if (e.key === "Right" || e.key === "ArrowRight") rightPressed = false;
+    else if (e.key === "Left" || e.key === "ArrowLeft") leftPressed = false;
 });
 
+function clearMovementKeys() { rightPressed = false; leftPressed = false; }
+
+// keyup never arrives when the window loses focus
+window.addEventListener("blur", clearMovementKeys);
+
 function togglePause() {
+    clearMovementKeys();
     if (gameState === 'PLAYING') {
         gameState = 'PAUSED'; cancelAnimationFrame(animationId);
         document.getElementById('intermission-title').innerText = "PAUSED";
@@ -371,6 +376,7 @@ function togglePause() {
 }
 
 function exitToMenu() {
+    clearMovementKeys();
     gameState = 'MENU'; cancelAnimationFrame(animationId);
     ['hud', 'intermission-screen', 'game-over-screen', 'leaderboard-screen', 'legend'].forEach(id => {
         document.getElementById(id).classList.add('hidden');
@@ -452,6 +458,7 @@ function spawnBall(isExtra = false, baseX = null, baseY = null) {
 }
 
 function initLevel(levelIdx) {
+    clearMovementKeys();
     const levelData = gameLevels[levelIdx];
     
     let levelText = (levelIdx + 1);
@@ -872,6 +879,7 @@ function gameLoop(ts) {
 }
 
 function startGame() {
+    clearMovementKeys();
     document.getElementById('menu-screen').classList.add('hidden');
     document.getElementById('leaderboard-screen').classList.add('hidden');
     document.getElementById('hud').classList.remove('hidden');
