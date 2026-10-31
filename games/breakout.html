@@ -94,6 +94,10 @@
         .legend-good { color: #00ffcc; }
         .legend-bad { color: #ff0055; }
 
+        .legend-heading { text-align: center; margin-bottom: 5px; border-bottom: 2px solid #333; padding-bottom: 5px; }
+        .legend-heading span { font-size: 10px; }
+        .legend-heading-debuffs { margin-top: 15px; }
+
         /* Responsive Breakpoints */
         @media (max-width: 900px) {
             body { padding: 10px; }
@@ -141,6 +145,21 @@
         #confirm-message { font-size: clamp(8px, 1.5cqw, 12px); line-height: 1.6; margin-bottom: clamp(4px, 1.25cqw, 10px); }
 
         h1 { color: var(--accent); font-size: clamp(14px, 3cqw, 24px); margin-bottom: clamp(6px, 2.5cqw, 20px); text-shadow: 2px 2px 0px #000; }
+        #intermission-title { color: #00ffcc; }
+        .score-line { font-size: 12px; margin-bottom: 10px; }
+
+        #loop-modifiers {
+            display: inline-block; margin-top: 15px; margin-bottom: 25px;
+            font-size: 10px; color: #ffd700; line-height: 1.8; text-align: left;
+        }
+        #loop-modifiers .extra-life { color: #00ffcc; margin-top: 5px; }
+
+        #game-over-screen h2 { color: #ffd700; }
+        #player-name {
+            padding: 10px; font-family: inherit; font-size: 14px; text-transform: uppercase; text-align: center;
+            width: 200px; margin-bottom: 20px; background: #222; color: #fff; border: 2px solid #555;
+        }
+
         h2 { color: #00ffcc; font-size: clamp(11px, 2cqw, 16px); margin-bottom: clamp(4px, 1.25cqw, 10px); }
 
         button {
@@ -153,6 +172,7 @@
         button:hover, button.active { background: var(--accent); border-color: var(--accent); color: #fff; transform: scale(1.05); }
 
         .diff-container { margin: clamp(8px, 2.5cqw, 20px) 0; }
+        .diff-container p { font-size: 10px; margin-bottom: 10px; }
         .diff-btn { font-size: clamp(10px, 1.25cqw, 10px); padding: clamp(5px, 1.25cqw, 10px); }
 
         /* Flashing Buff/Debuff Animations solely for HUD active items */
@@ -184,6 +204,7 @@
         .hud-right { text-align: right; white-space: nowrap; }
         
         #active-powerups { flex: 2; text-align: center; display: flex; justify-content: center; gap: 15px; font-size: 10px; }
+        .powerup-badge { margin: 0 5px; display: inline-block; }
 
         /* High Score Table */
         .lb-controls { display: flex; align-items: center; justify-content: center; gap: clamp(8px, 2.5cqw, 20px); margin-bottom: clamp(5px, 1.9cqw, 15px); font-size: clamp(10px, 1.5cqw, 12px); color: var(--accent); }
@@ -224,7 +245,7 @@
         <div id="menu-screen" class="overlay">
             <h1>CHROMA BREAKOUT</h1>
             <div class="diff-container">
-                <p style="font-size: 10px; margin-bottom: 10px;">Select Difficulty</p>
+                <p>Select Difficulty</p>
                 <button class="diff-btn" data-diff="Easy">Easy</button>
                 <button class="diff-btn active" data-diff="Medium">Normal</button>
                 <button class="diff-btn" data-diff="Hard">Hard</button>
@@ -235,13 +256,13 @@
         </div>
 
         <div id="intermission-screen" class="overlay hidden">
-            <h1 id="intermission-title" style="color: #00ffcc;">LEVEL CLEARED!</h1>
-            <p style="font-size: 12px; margin-bottom: 10px;">Current Score: <span id="intermission-score">0</span></p>
+            <h1 id="intermission-title">LEVEL CLEARED!</h1>
+            <p class="score-line">Current Score: <span id="intermission-score">0</span></p>
             
-            <div id="loop-modifiers" class="hidden" style="margin-top: 15px; margin-bottom: 25px; font-size: 10px; color: #ffd700; line-height: 1.8; text-align: left; display: inline-block;">
+            <div id="loop-modifiers" class="hidden">
                 <p>[*] Score Multiplier: +10%</p>
                 <p>[>>] Base Speed: +5%</p>
-                <p style="color: #00ffcc; margin-top: 5px;">[+] EXTRA LIFE AWARDED!</p>
+                <p class="extra-life">[+] EXTRA LIFE AWARDED!</p>
             </div>
 
             <button id="continue-btn">[>>] Next Level</button>
@@ -250,9 +271,9 @@
 
         <div id="game-over-screen" class="overlay hidden">
             <h1 id="end-title">GAME OVER</h1>
-            <h2 style="color: #ffd700;">NEW HIGH SCORE!</h2>
-            <p style="font-size: 12px; margin-bottom: 10px;">Score: <span id="final-score"></span></p>
-            <input type="text" id="player-name" placeholder="ENTER NAME" maxlength="10" style="padding: 10px; font-family: inherit; font-size: 14px; text-transform: uppercase; text-align: center; width: 200px; margin-bottom: 20px; background: #222; color: #fff; border: 2px solid #555;">
+            <h2>NEW HIGH SCORE!</h2>
+            <p class="score-line">Score: <span id="final-score"></span></p>
+            <input type="text" id="player-name" placeholder="ENTER NAME" maxlength="10">
             <br>
             <button id="save-score-btn">Save Score</button>
         </div>
@@ -286,8 +307,8 @@
     </div>
     
     <div id="legend" class="hidden">
-        <div style="text-align: center; margin-bottom: 5px; border-bottom: 2px solid #333; padding-bottom: 5px;">
-            <span style="color: #00ffcc; font-size: 10px;">[+] BUFFS</span>
+        <div class="legend-heading">
+            <span class="legend-good">[+] BUFFS</span>
         </div>
         <div class="legend-item"><span class="legend-emoji">💰</span><span class="legend-good">+50 Pts</span></div>
         <div class="legend-item"><span class="legend-emoji">🫧</span><span class="legend-good">Multi-Ball</span></div>
@@ -296,8 +317,8 @@
         <div class="legend-item"><span class="legend-emoji">🔨</span><span class="legend-good">Weaker blocks</span></div>
         <div class="legend-item"><span class="legend-emoji">⏩</span><span class="legend-good">Paddle Speed</span></div>
         
-        <div style="text-align: center; margin: 15px 0 5px 0; border-bottom: 2px solid #333; padding-bottom: 5px;">
-            <span style="color: #ff0055; font-size: 10px;">[-] DEBUFFS</span>
+        <div class="legend-heading legend-heading-debuffs">
+            <span class="legend-bad">[-] DEBUFFS</span>
         </div>
         <div class="legend-item"><span class="legend-emoji">🍄</span><span class="legend-bad">Invert controls</span></div>
         <div class="legend-item"><span class="legend-emoji">🐢</span><span class="legend-bad">-50% Speed</span></div>
@@ -309,38 +330,131 @@
  * CHROMA BREAKOUT - Game Engine
  * Featuring Strict 60Hz Timestep, Swept AABB Physics & Endless Scaling
  */
+
+// ---------------------------------------------------------------------------
+// Elements
+// ---------------------------------------------------------------------------
+
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
+const gameWrapper = document.getElementById('game-wrapper');
 
-let gameState = 'MENU';
-let animationId;
-let difficulty = 'Medium';
-let timeTicks = 0; 
-let loopCount = 0; 
-let lastCursorX = null; 
+const ui = {
+    hud: document.getElementById('hud'),
+    scoreDisplay: document.getElementById('score-display'),
+    livesDisplay: document.getElementById('lives-display'),
+    levelDisplay: document.getElementById('level-display'),
+    activePowerups: document.getElementById('active-powerups'),
+    pauseBtn: document.getElementById('pause-btn'),
+    legend: document.getElementById('legend'),
 
-// Timing variables for fixed timestep
-let lastTime = 0;
-let accumulator = 0;
-const FPS = 60;
-const TICK_MS = 1000 / FPS;
+    menuScreen: document.getElementById('menu-screen'),
+    startBtn: document.getElementById('start-btn'),
+    leaderboardBtn: document.getElementById('leaderboard-btn'),
 
-const diffSettings = {
-    // Buff durations: Easy (12s), Medium (8s), Hard (4s)
-    // Debuff durations (Inverse): Easy (4s), Medium (8s), Hard (12s)
-    'Easy':   { ballSpeed: 4.5, paddleWidth: 120, damage: 1, paddleBase: 8.0, buffFrames: 720, debuffFrames: 240 }, 
-    'Medium': { ballSpeed: 6.0, paddleWidth: 100, damage: 1, paddleBase: 8.4, buffFrames: 480, debuffFrames: 480 },
-    'Hard':   { ballSpeed: 7.5, paddleWidth: 80,  damage: 1, paddleBase: 8.8, buffFrames: 240, debuffFrames: 720 }  
+    intermissionScreen: document.getElementById('intermission-screen'),
+    intermissionTitle: document.getElementById('intermission-title'),
+    intermissionScore: document.getElementById('intermission-score'),
+    loopModifiers: document.getElementById('loop-modifiers'),
+    continueBtn: document.getElementById('continue-btn'),
+    exitBtn: document.getElementById('exit-btn'),
+
+    gameOverScreen: document.getElementById('game-over-screen'),
+    endTitle: document.getElementById('end-title'),
+    finalScore: document.getElementById('final-score'),
+    playerName: document.getElementById('player-name'),
+    saveScoreBtn: document.getElementById('save-score-btn'),
+
+    confirmDialog: document.getElementById('confirm-dialog'),
+    confirmTitle: document.getElementById('confirm-title'),
+    confirmMessage: document.getElementById('confirm-message'),
+    confirmYes: document.getElementById('confirm-yes'),
+    confirmNo: document.getElementById('confirm-no'),
+
+    leaderboardScreen: document.getElementById('leaderboard-screen'),
+    lbPrev: document.getElementById('lb-prev'),
+    lbNext: document.getElementById('lb-next'),
+    lbDiffDisplay: document.getElementById('lb-diff-display'),
+    scoreTableBody: document.getElementById('score-table-body'),
+    newGameHint: document.getElementById('new-game-hint'),
+    closeLeaderboardBtn: document.getElementById('close-leaderboard-btn'),
 };
 
-let score = 0, lives = 3, currentLevelIdx = 0;
-let paddle = { x: 350, y: 550, width: 100, height: 15, baseSpeed: 8, speedMultiplier: 1.0, targetX: null, dx: 0, effects: {} };
-let balls = [], bricks = [], drops = [], lasers = [];
+function show(element) { element.classList.remove('hidden'); }
+function hide(element) { element.classList.add('hidden'); }
 
-// CEILING_Y sets the impenetrable ceiling height to perfectly protect the HUD overlay
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const COLOR_BACKGROUND = '#0f0f1b';
+const COLOR_ACCENT = '#ff0055';
+const COLOR_GOOD = '#00ffcc';
+const COLOR_GOLD = '#ffd700';
+
+const GameState = {
+    MENU: 'MENU',
+    PLAYING: 'PLAYING',
+    PAUSED: 'PAUSED',
+    CONFIRMING: 'CONFIRMING', // the quit dialog is open; the state to return to is kept by confirmQuit
+    INTERMISSION: 'INTERMISSION',
+    GAMEOVER: 'GAMEOVER', // name entry
+    LEADERBOARD: 'LEADERBOARD',
+};
+
+// Fixed timestep: the simulation always advances in 1/60 s ticks, whatever the screen refresh rate
+const FPS = 60;
+const TICK_MS = 1000 / FPS;
+const MAX_FRAME_DELTA_MS = 250; // after a stall (hidden tab, debugger) don't fast-forward through it
+
+// Keys are saved with the high scores, so 'Medium' stays even though the player sees "Normal"
+const DIFFICULTIES = ['Easy', 'Medium', 'Hard'];
+const DIFFICULTY_LABELS = { Easy: 'Easy', Medium: 'Normal', Hard: 'Hard' };
+
+const DIFFICULTY_SETTINGS = {
+    // Buff durations: Easy (12s), Medium (8s), Hard (4s)
+    // Debuff durations (Inverse): Easy (4s), Medium (8s), Hard (12s)
+    Easy:   { ballSpeed: 4.5, paddleWidth: 120, paddleBase: 8.0, buffFrames: 720, debuffFrames: 240 },
+    Medium: { ballSpeed: 6.0, paddleWidth: 100, paddleBase: 8.4, buffFrames: 480, debuffFrames: 480 },
+    Hard:   { ballSpeed: 7.5, paddleWidth: 80,  paddleBase: 8.8, buffFrames: 240, debuffFrames: 720 },
+};
+
+// Each completed lap through all levels makes everything a bit faster and worth a bit more
+const LOOP_SPEED_FACTOR = 1.05;
+const LOOP_SCORE_FACTOR = 1.10;
+
+const BALL_RADIUS = 6;
 const TRAIL_LENGTH = 6;
-const BALL_RADIUS = 6, BRICK_PADDING = 2, BRICK_OFFSET_TOP = 60, BRICK_OFFSET_LEFT = 10, CEILING_Y = 35;
-let BASE_DROP_RATE = 0.15; 
+const MAX_COLLISIONS_PER_TICK = 4; // stops a ball wedged between two surfaces from looping forever
+const PUSH_OUT_PX = 0.1; // after a hit, so the ball isn't still touching what it just hit on the next tick
+const PADDLE_LIFT_PX = 0.5; // same, upwards off the paddle
+const MAX_PADDLE_BOUNCE_ANGLE = Math.PI / 5; // for a hit on the very edge of the paddle
+const LAUNCH_ANGLE_RANGE = Math.PI / 4; // the launch direction is random within this range around straight up
+const EXTRA_BALL_SPLIT_ANGLE = Math.PI / 6;
+
+const PADDLE_EXPAND_FACTOR = 1.5;
+const PADDLE_SLOW_FACTOR = 0.5;
+const PADDLE_SPEED_POWERUP_FACTOR = 1.05;
+
+const LASER_WIDTH = 3;
+const LASER_HEIGHT = 10;
+const LASER_SPEED_PX = 10;
+const LASER_INSET_PX = 5; // distance of each laser from its paddle edge
+const LASER_FIRE_INTERVAL_TICKS = 30;
+
+const BRICK_HEIGHT = 20;
+const BRICK_PADDING = 2;
+const BRICK_OFFSET_TOP = 60;
+const BRICK_OFFSET_LEFT = 10;
+const POINTS_PER_BALL_HIT = 10; // times the brick's starting strength
+const POINTS_PER_LASER_HIT = 5;
+
+const BASE_DROP_RATE = 0.15;
+const DROP_FALL_SPEED = 3; // times the level's dropSpeed
+const DROP_HALF_SIZE = 12; // the emoji is 24px wide
+
+// The ceiling is the top edge of the play field; the HUD sits above it, so balls and lasers never touch the HUD
+const CEILING_Y = 35;
 
 // Walls are thick so a fast ball can never tunnel through them
 const WALL_THICKNESS = 200;
@@ -348,72 +462,131 @@ const WALLS = [
     { x: -WALL_THICKNESS, y: -WALL_THICKNESS, w: WALL_THICKNESS, h: canvas.height + 2 * WALL_THICKNESS, id: 'wall' },
     { x: canvas.width, y: -WALL_THICKNESS, w: WALL_THICKNESS, h: canvas.height + 2 * WALL_THICKNESS, id: 'wall' },
     { x: -WALL_THICKNESS, y: -WALL_THICKNESS, w: canvas.width + 2 * WALL_THICKNESS, h: WALL_THICKNESS + CEILING_Y, id: 'wall' },
-    { x: -WALL_THICKNESS, y: canvas.height, w: canvas.width + 2 * WALL_THICKNESS, h: WALL_THICKNESS, id: 'bottom' }
+    { x: -WALL_THICKNESS, y: canvas.height, w: canvas.width + 2 * WALL_THICKNESS, h: WALL_THICKNESS, id: 'bottom' },
 ];
 
 const POWERUPS = {
-    POINTS: { icon: '💰', type: 'good', effect: () => addScore(50) },
-    MULTI:  { icon: '🫧', type: 'good', effect: () => spawnExtraBalls() },
-    LASER:  { icon: '⚡', type: 'good', effect: () => activateLaser() },
-    EXPAND: { icon: '↔️', type: 'good', effect: () => activateExpand() },
-    BREAK:  { icon: '🔨', type: 'good', effect: () => activateEasyBreak() },
-    SPEED:  { icon: '⏩', type: 'good', effect: () => activateSpeedUp() },
-    INVERT: { icon: '🍄', type: 'bad', effect: () => activateInvert() },
-    SLOW:   { icon: '🐢', type: 'bad', effect: () => activateSlowDown() }
+    POINTS: { icon: '💰', isDebuff: false, effect: () => addScore(50) },
+    MULTI:  { icon: '🫧', isDebuff: false, effect: () => spawnExtraBalls() },
+    LASER:  { icon: '⚡', isDebuff: false, effect: () => activateLaser() },
+    EXPAND: { icon: '↔️', isDebuff: false, effect: () => activateExpand() },
+    BREAK:  { icon: '🔨', isDebuff: false, effect: () => activateEasyBreak() },
+    SPEED:  { icon: '⏩', isDebuff: false, effect: () => activateSpeedUp() },
+    INVERT: { icon: '🍄', isDebuff: true, effect: () => activateInvert() },
+    SLOW:   { icon: '🐢', isDebuff: true, effect: () => activateSlowDown() },
 };
-const dropTypes = Object.keys(POWERUPS);
+const POWERUP_KEYS = Object.keys(POWERUPS);
 
+// Keys of paddle.effects and the power-up that causes them, for the HUD badges
+const EFFECT_ICONS = {
+    laser: POWERUPS.LASER.icon, expand: POWERUPS.EXPAND.icon, break: POWERUPS.BREAK.icon,
+    invert: POWERUPS.INVERT.icon, slow: POWERUPS.SLOW.icon,
+};
+const DEBUFF_EFFECTS = ['invert', 'slow'];
+
+// dropRateFactor and dropSpeedFactor scale the base drop rate and fall speed for that level
 const gameLevels = [
-    { name: "Welcome", extras: 1.0, dropSpeed: 0.8, blocks: [
+    { name: 'Welcome', dropRateFactor: 1.0, dropSpeedFactor: 0.8, blocks: [
         [1,1,1,1,1,1,1,1,1,1], [2,2,2,2,2,2,2,2,2,2], [3,3,3,3,3,3,3,3,3,3], [2,2,2,2,2,2,2,2,2,2], [1,1,1,1,1,1,1,1,1,1]
     ]},
-    { name: "The Wall", extras: 0.8, dropSpeed: 1.0, blocks: [
+    { name: 'The Wall', dropRateFactor: 0.8, dropSpeedFactor: 1.0, blocks: [
         [3,3,3,3,3,3,3,3,3,3], [3,0,0,0,0,0,0,0,0,3], [3,0,2,2,2,2,2,2,0,3], [3,0,2,1,1,1,1,2,0,3], [3,0,2,2,2,2,2,2,0,3]
     ]},
-    { name: "Checkerboard", extras: 1.5, dropSpeed: 1.2, blocks: [
+    { name: 'Checkerboard', dropRateFactor: 1.5, dropSpeedFactor: 1.2, blocks: [
         [3,1,3,1,3,1,3,1,3,1], [1,3,1,3,1,3,1,3,1,3], [2,1,2,1,2,1,2,1,2,1], [1,2,1,2,1,2,1,2,1,2], [1,1,1,1,1,1,1,1,1,1]
-    ]}
+    ]},
 ];
 
-let rightPressed = false, leftPressed = false;
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
 
-document.addEventListener("keydown", (e) => {
+let gameState = GameState.MENU;
+let animationId;
+let difficulty = 'Medium';
+let tickCount = 0;
+let loopCount = 0;
+let score = 0;
+let lives = 3;
+let currentLevelIdx = 0;
+
+let lastTime = 0;
+let accumulator = 0;
+
+const paddle = {
+    x: 350, y: 550, width: 100, baseWidth: 100, height: 15,
+    baseSpeed: 8, speedMultiplier: 1.0,
+    targetX: null, // where the cursor or finger wants the paddle; null while the keyboard steers
+    effects: {}, // effect name -> ticks left
+};
+let balls = [];
+let bricks = [];
+let drops = [];
+let lasers = [];
+
+let rightPressed = false;
+let leftPressed = false;
+let lastCursorX = null;
+
+function hasEffect(name) { return paddle.effects[name] > 0; }
+
+function loopSpeedScale() { return Math.pow(LOOP_SPEED_FACTOR, loopCount); }
+
+// ---------------------------------------------------------------------------
+// Keyboard
+// ---------------------------------------------------------------------------
+
+// "Left"/"Right" are what old browsers send for the arrow keys
+function isRightKey(key) { return key === 'Right' || key === 'ArrowRight'; }
+function isLeftKey(key) { return key === 'Left' || key === 'ArrowLeft'; }
+
+document.addEventListener('keydown', (e) => {
     // Leave browser shortcuts (Ctrl+P, Alt+E, Cmd+N, ...) alone
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (confirmHandlers) { handleConfirmKey(e); return; }
 
-    let key = e.key.toLowerCase();
+    const key = e.key.toLowerCase();
     // Holding a toggle key would flip the state on every auto-repeat
     if (e.repeat && ['n', 'e', 'p'].includes(key)) return;
-    if (key === 'n' && gameState === 'LEADERBOARD' && !document.getElementById('new-game-hint').classList.contains('hidden')) { startGame(); return; }
-    if (key === 'e' && ['PLAYING', 'PAUSED', 'INTERMISSION'].includes(gameState)) { confirmQuit(); return; }
-    if (key === 'p' && ['PLAYING', 'PAUSED'].includes(gameState)) { togglePause(); return; }
-    if ((e.key === " " || e.key === "ArrowUp") && gameState === 'PLAYING') launchBall();
-    if (gameState === 'PLAYING') {
-        if ([" ", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Left", "Right"].includes(e.key)) e.preventDefault();
-        if (e.key === "Right" || e.key === "ArrowRight") rightPressed = true;
-        else if (e.key === "Left" || e.key === "ArrowLeft") leftPressed = true;
-    } else if (gameState === 'LEADERBOARD') {
-        if (e.key === "Right" || e.key === "ArrowRight") document.getElementById('lb-next').click();
-        else if (e.key === "Left" || e.key === "ArrowLeft") document.getElementById('lb-prev').click();
+
+    const isNewGameOffered = !ui.newGameHint.classList.contains('hidden');
+    if (key === 'n' && gameState === GameState.LEADERBOARD && isNewGameOffered) { startGame(); return; }
+    if (key === 'e' && [GameState.PLAYING, GameState.PAUSED, GameState.INTERMISSION].includes(gameState)) { confirmQuit(); return; }
+    if (key === 'p' && [GameState.PLAYING, GameState.PAUSED].includes(gameState)) { togglePause(); return; }
+
+    if (gameState === GameState.PLAYING) {
+        if (e.key === ' ' || e.key === 'ArrowUp') launchBall();
+        if ([' ', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Left', 'Right'].includes(e.key)) e.preventDefault();
+        if (isRightKey(e.key)) rightPressed = true;
+        else if (isLeftKey(e.key)) leftPressed = true;
+    } else if (gameState === GameState.LEADERBOARD) {
+        if (isRightKey(e.key)) ui.lbNext.click();
+        else if (isLeftKey(e.key)) ui.lbPrev.click();
     }
 });
 
 // Released in every state, otherwise a key let go during pause stays "held" after resuming
-document.addEventListener("keyup", (e) => {
-    if (e.key === "Right" || e.key === "ArrowRight") rightPressed = false;
-    else if (e.key === "Left" || e.key === "ArrowLeft") leftPressed = false;
+document.addEventListener('keyup', (e) => {
+    if (isRightKey(e.key)) rightPressed = false;
+    else if (isLeftKey(e.key)) leftPressed = false;
 });
 
-function clearMovementKeys() { rightPressed = false; leftPressed = false; }
+function clearMovementKeys() {
+    rightPressed = false;
+    leftPressed = false;
+}
 
 // keyup never arrives when the window loses focus
-window.addEventListener("blur", clearMovementKeys);
+window.addEventListener('blur', clearMovementKeys);
 
 // Never resumes by itself: the player comes back to the pause screen and resumes on purpose
-function pauseIfPlaying() { if (gameState === 'PLAYING') togglePause(); }
-window.addEventListener("blur", pauseIfPlaying);
-document.addEventListener("visibilitychange", () => { if (document.hidden) pauseIfPlaying(); });
+function pauseIfPlaying() { if (gameState === GameState.PLAYING) togglePause(); }
+window.addEventListener('blur', pauseIfPlaying);
+document.addEventListener('visibilitychange', () => { if (document.hidden) pauseIfPlaying(); });
+
+// ---------------------------------------------------------------------------
+// Confirm dialog, pause and quit
+// ---------------------------------------------------------------------------
 
 // One dialog for everything that needs a yes/no. While it is open it owns the keyboard (see the keydown handler).
 let confirmHandlers = null;
@@ -423,15 +596,15 @@ function showConfirm(title, message, onYes, onNo) {
     // A focused element (e.g. the name input) must not swallow the answer keys
     if (document.activeElement) document.activeElement.blur();
     confirmHandlers = { onYes: onYes, onNo: onNo };
-    document.getElementById('confirm-title').innerText = title;
-    document.getElementById('confirm-message').innerText = message;
-    document.getElementById('confirm-dialog').classList.remove('hidden');
+    ui.confirmTitle.textContent = title;
+    ui.confirmMessage.textContent = message;
+    show(ui.confirmDialog);
 }
 
 function answerConfirm(isYes) {
     const handlers = confirmHandlers;
     confirmHandlers = null;
-    document.getElementById('confirm-dialog').classList.add('hidden');
+    hide(ui.confirmDialog);
     if (handlers) (isYes ? handlers.onYes : handlers.onNo)();
 }
 
@@ -444,24 +617,30 @@ function handleConfirmKey(e) {
     else if (key === 'escape' || key === 'n') answerConfirm(false);
 }
 
+// Pause and level-cleared share one screen
+function showIntermissionScreen({ title, titleColor, continueLabel, showLoopBonus }) {
+    ui.intermissionTitle.textContent = title;
+    ui.intermissionTitle.style.color = titleColor;
+    ui.intermissionScore.textContent = score;
+    if (showLoopBonus) show(ui.loopModifiers); else hide(ui.loopModifiers);
+    ui.continueBtn.textContent = continueLabel;
+    show(ui.intermissionScreen);
+}
+
 function togglePause() {
     clearMovementKeys();
-    if (gameState === 'PLAYING') {
-        gameState = 'PAUSED'; cancelAnimationFrame(animationId);
-        document.getElementById('intermission-title').innerText = "PAUSED";
-        document.getElementById('intermission-title').style.color = "#ff0055";
-        document.getElementById('intermission-score').innerText = score;
-        document.getElementById('loop-modifiers').classList.add('hidden');
-        document.getElementById('continue-btn').innerHTML = '[>] Resume';
-        document.getElementById('intermission-screen').classList.remove('hidden');
-    } else if (gameState === 'PAUSED') {
-        document.getElementById('intermission-screen').classList.add('hidden');
+    if (gameState === GameState.PLAYING) {
+        gameState = GameState.PAUSED;
+        cancelAnimationFrame(animationId);
+        showIntermissionScreen({ title: 'PAUSED', titleColor: COLOR_ACCENT, continueLabel: '[>] Resume', showLoopBonus: false });
+    } else if (gameState === GameState.PAUSED) {
+        hide(ui.intermissionScreen);
         resumePlaying();
     }
 }
 
 function resumePlaying() {
-    gameState = 'PLAYING';
+    gameState = GameState.PLAYING;
     lastCursorX = null;
     lastTime = performance.now();
     animationId = requestAnimationFrame(gameLoop);
@@ -471,22 +650,30 @@ function resumePlaying() {
 function confirmQuit() {
     const stateBeforeAsking = gameState;
     cancelAnimationFrame(animationId);
-    gameState = 'CONFIRMING';
+    gameState = GameState.CONFIRMING;
     showConfirm('QUIT GAME?', 'Your run ends and its score is lost.', exitToMenu, () => {
-        if (stateBeforeAsking === 'PLAYING') resumePlaying();
+        if (stateBeforeAsking === GameState.PLAYING) resumePlaying();
         else gameState = stateBeforeAsking;
     });
 }
 
+function paintCanvasBackground() {
+    ctx.fillStyle = COLOR_BACKGROUND;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
 function exitToMenu() {
     clearMovementKeys();
-    gameState = 'MENU'; cancelAnimationFrame(animationId);
-    ['hud', 'intermission-screen', 'game-over-screen', 'leaderboard-screen', 'legend'].forEach(id => {
-        document.getElementById(id).classList.add('hidden');
-    });
-    document.getElementById('menu-screen').classList.remove('hidden');
-    ctx.fillStyle = '#0f0f1b'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    gameState = GameState.MENU;
+    cancelAnimationFrame(animationId);
+    [ui.hud, ui.intermissionScreen, ui.gameOverScreen, ui.leaderboardScreen, ui.legend].forEach(hide);
+    show(ui.menuScreen);
+    paintCanvasBackground();
 }
+
+// ---------------------------------------------------------------------------
+// Mouse and touch
+// ---------------------------------------------------------------------------
 
 // Cached because reading it forces a layout and trackCursor runs on every mouse move
 let canvasRect = canvas.getBoundingClientRect();
@@ -495,38 +682,34 @@ function updateCanvasRect() { canvasRect = canvas.getBoundingClientRect(); }
 window.addEventListener('resize', updateCanvasRect);
 new ResizeObserver(updateCanvasRect).observe(canvas);
 
+// The paddle follows how far the cursor moved, not where it is, so it doesn't jump when the cursor enters
 function trackCursor(clientX, isStart = false) {
-    if (gameState !== 'PLAYING') return;
-    
+    if (gameState !== GameState.PLAYING) return;
+
     // Moves without a resize (e.g. the legend appearing shifts the centred layout) are caught when tracking restarts
-    if (isStart || lastCursorX === null) updateCanvasRect();
-    let scaleX = canvas.width / canvasRect.width;
-    let currentCursorX = (clientX - canvasRect.left) * scaleX;
-    
-    if (isStart || lastCursorX === null) {
-        lastCursorX = currentCursorX;
-        paddle.targetX = paddle.x; 
+    const isRestart = isStart || lastCursorX === null;
+    if (isRestart) updateCanvasRect();
+    const scaleX = canvas.width / canvasRect.width;
+    const cursorX = (clientX - canvasRect.left) * scaleX;
+
+    if (isRestart) {
+        lastCursorX = cursorX;
+        paddle.targetX = paddle.x;
         return;
     }
-    
-    let deltaX = currentCursorX - lastCursorX;
-    
-    if (paddle.effects.invert && paddle.effects.invert > 0) {
-        deltaX = -deltaX;
-    }
-    
+
+    let deltaX = cursorX - lastCursorX;
+    if (hasEffect('invert')) deltaX = -deltaX;
+
     if (paddle.targetX === null) paddle.targetX = paddle.x;
-    
     paddle.targetX += deltaX;
-    
-    if (paddle.targetX < 0) paddle.targetX = 0;
-    if (paddle.targetX > canvas.width - paddle.renderWidth) paddle.targetX = canvas.width - paddle.renderWidth;
-    
-    lastCursorX = currentCursorX;
+    paddle.targetX = Math.max(0, Math.min(canvas.width - paddle.width, paddle.targetX));
+
+    lastCursorX = cursorX;
 }
 
 function launchBall() {
-    if (gameState !== 'PLAYING') return;
+    if (gameState !== GameState.PLAYING) return;
     balls.forEach(ball => {
         if (!ball.active) {
             ball.active = true;
@@ -536,37 +719,39 @@ function launchBall() {
     });
 }
 
-const gameWrapper = document.getElementById('game-wrapper');
-
 // preventDefault on a touch that starts on a button would swallow its click
 function isTouchOnButton(e) { return e.target.closest('button') !== null; }
 
-// A second finger means a pinch (the page may zoom around the play area), not steering
-gameWrapper.addEventListener("touchstart", (e) => { 
-    if(gameState === 'PLAYING' && !isTouchOnButton(e) && e.touches.length === 1) { e.preventDefault(); trackCursor(e.touches[0].clientX, true); } 
+function isSteeringTouch(e) {
+    // A second finger means a pinch (the page may zoom around the play area), not steering
+    return gameState === GameState.PLAYING && !isTouchOnButton(e) && e.touches.length === 1;
+}
+
+gameWrapper.addEventListener('touchstart', (e) => {
+    if (!isSteeringTouch(e)) return;
+    e.preventDefault();
+    trackCursor(e.touches[0].clientX, true);
 }, { passive: false });
 
-gameWrapper.addEventListener("touchmove", (e) => { 
-    if(gameState === 'PLAYING' && !isTouchOnButton(e) && e.touches.length === 1) { e.preventDefault(); trackCursor(e.touches[0].clientX, false); } 
+gameWrapper.addEventListener('touchmove', (e) => {
+    if (!isSteeringTouch(e)) return;
+    e.preventDefault();
+    trackCursor(e.touches[0].clientX, false);
 }, { passive: false });
 
 // The finger left over after a pinch must not make the paddle jump by the distance it moved during it
-gameWrapper.addEventListener("touchend", (e) => { if (e.touches.length <= 1) lastCursorX = null; });
+gameWrapper.addEventListener('touchend', (e) => { if (e.touches.length <= 1) lastCursorX = null; });
 
-gameWrapper.addEventListener("mouseenter", (e) => { 
-    if(gameState === 'PLAYING') trackCursor(e.clientX, true); 
-});
-
-gameWrapper.addEventListener("mousemove", (e) => { 
-    if(gameState === 'PLAYING') trackCursor(e.clientX, false); 
-});
+gameWrapper.addEventListener('mouseenter', (e) => { trackCursor(e.clientX, true); });
+gameWrapper.addEventListener('mousemove', (e) => { trackCursor(e.clientX, false); });
 
 // A touch can be the start of a swipe to position the paddle, so touch launches on a short tap instead of on touch-down
-const TAP_MAX_DURATION_MS = 300, TAP_MAX_MOVE_PX = 10;
+const TAP_MAX_DURATION_MS = 300;
+const TAP_MAX_MOVE_PX = 10;
 let touchTapStart = null;
 
 canvas.addEventListener('pointerdown', (e) => {
-    if (gameState !== 'PLAYING') return;
+    if (gameState !== GameState.PLAYING) return;
     if (e.pointerType === 'touch') {
         if (!e.isPrimary) { touchTapStart = null; return; }
         touchTapStart = { x: e.clientX, y: e.clientY, timeMs: performance.now() };
@@ -580,124 +765,165 @@ canvas.addEventListener('pointerup', (e) => {
     const isShort = performance.now() - touchTapStart.timeMs <= TAP_MAX_DURATION_MS;
     const movedPx = Math.hypot(e.clientX - touchTapStart.x, e.clientY - touchTapStart.y);
     touchTapStart = null;
-    if (gameState === 'PLAYING' && isShort && movedPx <= TAP_MAX_MOVE_PX) launchBall();
+    if (gameState === GameState.PLAYING && isShort && movedPx <= TAP_MAX_MOVE_PX) launchBall();
 });
 
 canvas.addEventListener('pointercancel', () => { touchTapStart = null; });
 
+// ---------------------------------------------------------------------------
+// Level setup, power-ups, scoring
+// ---------------------------------------------------------------------------
+
 function spawnBall(isExtra = false, baseX = null, baseY = null) {
-    let speed = diffSettings[difficulty].ballSpeed * Math.pow(1.05, loopCount);
-    let startAngle = (Math.random() * (Math.PI / 4)) - (Math.PI / 8); 
-    
+    const speed = DIFFICULTY_SETTINGS[difficulty].ballSpeed * loopSpeedScale();
+    const startAngle = (Math.random() * LAUNCH_ANGLE_RANGE) - (LAUNCH_ANGLE_RANGE / 2);
+
+    // Extra balls are already in flight, splitting off to both sides of the ball that picked up the power-up
     if (isExtra && baseX && baseY) {
-        balls.push({ x: baseX, y: baseY, dx: speed * Math.sin(startAngle + Math.PI/6), dy: -speed * Math.cos(startAngle + Math.PI/6), active: true, speed: speed, history: [] });
-        balls.push({ x: baseX, y: baseY, dx: speed * Math.sin(startAngle - Math.PI/6), dy: -speed * Math.cos(startAngle - Math.PI/6), active: true, speed: speed, history: [] });
+        [EXTRA_BALL_SPLIT_ANGLE, -EXTRA_BALL_SPLIT_ANGLE].forEach(splitAngle => {
+            const angle = startAngle + splitAngle;
+            balls.push({ x: baseX, y: baseY, dx: speed * Math.sin(angle), dy: -speed * Math.cos(angle), active: true, speed: speed, history: [] });
+        });
     } else {
-        balls.push({ x: paddle.renderX + paddle.renderWidth / 2, y: paddle.y - BALL_RADIUS - 1, dx: 0, dy: 0, speed: speed, startAngle: startAngle, active: false, history: [] });
+        balls.push({ x: paddle.x + paddle.width / 2, y: paddle.y - BALL_RADIUS - 1, dx: 0, dy: 0, speed: speed, startAngle: startAngle, active: false, history: [] });
     }
 }
 
 function initLevel(levelIdx) {
     clearMovementKeys();
     const levelData = gameLevels[levelIdx];
-    
-    let levelText = (levelIdx + 1);
-    if (loopCount > 0) levelText += " L" + loopCount;
-    document.getElementById('level-display').innerText = levelText;
-    
+
+    ui.levelDisplay.textContent = (levelIdx + 1) + (loopCount > 0 ? ' L' + loopCount : '');
+
     bricks = [];
-    const rows = levelData.blocks.length, cols = levelData.blocks[0].length;
+    const rows = levelData.blocks.length;
+    const cols = levelData.blocks[0].length;
     const brickWidth = (canvas.width - (BRICK_OFFSET_LEFT * 2) - (BRICK_PADDING * (cols - 1))) / cols;
-    const brickHeight = 20;
 
     for (let r = 0; r < rows; r++) {
         bricks[r] = [];
         for (let c = 0; c < cols; c++) {
-            let h = levelData.blocks[r][c];
-            bricks[r][c] = { 
-                x: BRICK_OFFSET_LEFT + (c * (brickWidth + BRICK_PADDING)), 
-                y: BRICK_OFFSET_TOP + (r * (brickHeight + BRICK_PADDING)), 
-                width: brickWidth, height: brickHeight, status: h, maxStatus: h, baseHue: Math.floor((c / cols) * 360)
+            const strength = levelData.blocks[r][c];
+            bricks[r][c] = {
+                x: BRICK_OFFSET_LEFT + (c * (brickWidth + BRICK_PADDING)),
+                y: BRICK_OFFSET_TOP + (r * (BRICK_HEIGHT + BRICK_PADDING)),
+                width: brickWidth, height: BRICK_HEIGHT,
+                status: strength, // hits left; 0 is gone
+                maxStatus: strength,
+                baseHue: Math.floor((c / cols) * 360),
             };
         }
     }
-    
-    paddle.width = diffSettings[difficulty].paddleWidth; 
-    paddle.renderWidth = paddle.width; 
+
+    const settings = DIFFICULTY_SETTINGS[difficulty];
+    paddle.baseWidth = settings.paddleWidth;
+    paddle.width = paddle.baseWidth;
     paddle.x = (canvas.width - paddle.width) / 2;
-    paddle.renderX = paddle.x;
     paddle.prevX = paddle.x;
     paddle.targetX = null;
-    
-    paddle.baseSpeed = diffSettings[difficulty].paddleBase * Math.pow(1.05, loopCount);
+    paddle.baseSpeed = settings.paddleBase * loopSpeedScale();
     paddle.speedMultiplier = 1.0;
     paddle.effects = {};
     syncPowerupHud();
-    
-    balls = []; spawnBall(); drops = []; lasers = [];
+
+    balls = [];
+    spawnBall();
+    drops = [];
+    lasers = [];
 }
 
-function spawnExtraBalls() { if(balls.length > 0) spawnBall(true, balls[0].x, balls[0].y); }
+function spawnExtraBalls() { if (balls.length > 0) spawnBall(true, balls[0].x, balls[0].y); }
 
 // Time-based buffs refresh to their difficulty-dependent maximum
-function activateLaser() { paddle.effects.laser = diffSettings[difficulty].buffFrames; } 
-function activateExpand() { paddle.effects.expand = diffSettings[difficulty].buffFrames; } 
-function activateEasyBreak() { paddle.effects.break = diffSettings[difficulty].buffFrames; } 
-function activateInvert() { paddle.effects.invert = diffSettings[difficulty].debuffFrames; }
-function activateSlowDown() { paddle.effects.slow = diffSettings[difficulty].debuffFrames; } 
+function activateLaser() { paddle.effects.laser = DIFFICULTY_SETTINGS[difficulty].buffFrames; }
+function activateExpand() { paddle.effects.expand = DIFFICULTY_SETTINGS[difficulty].buffFrames; }
+function activateEasyBreak() { paddle.effects.break = DIFFICULTY_SETTINGS[difficulty].buffFrames; }
+function activateInvert() { paddle.effects.invert = DIFFICULTY_SETTINGS[difficulty].debuffFrames; }
+function activateSlowDown() { paddle.effects.slow = DIFFICULTY_SETTINGS[difficulty].debuffFrames; }
 
-function activateSpeedUp() { paddle.speedMultiplier *= 1.05; } 
+function activateSpeedUp() { paddle.speedMultiplier *= PADDLE_SPEED_POWERUP_FACTOR; }
 
-function addScore(pts) { 
-    score += Math.floor(pts * Math.pow(1.10, loopCount)); 
-    document.getElementById('score-display').innerText = score; 
+function addScore(points) {
+    score += Math.floor(points * Math.pow(LOOP_SCORE_FACTOR, loopCount));
+    ui.scoreDisplay.textContent = score;
 }
-function updateHUD() { document.getElementById('score-display').innerText = score; document.getElementById('lives-display').innerText = lives; }
+
+function updateHUD() {
+    ui.scoreDisplay.textContent = score;
+    ui.livesDisplay.textContent = lives;
+}
+
+// The "weaker blocks" power-up (break) turns a brick that is down to its last hit into gone,
+// so the same hit takes out both layers. Returns true if the brick is gone.
+function damageBrick(brick, pointsPerStrength) {
+    brick.status -= 1;
+    if (hasEffect('break') && brick.status === 1) brick.status = 0;
+    addScore(pointsPerStrength * brick.maxStatus);
+    if (brick.status > 0) return false;
+
+    const level = gameLevels[currentLevelIdx];
+    if (Math.random() < BASE_DROP_RATE * level.dropRateFactor) {
+        drops.push({
+            x: brick.x + brick.width / 2,
+            y: brick.y,
+            type: POWERUP_KEYS[Math.floor(Math.random() * POWERUP_KEYS.length)],
+            dy: DROP_FALL_SPEED * level.dropSpeedFactor,
+        });
+    }
+    return true;
+}
 
 function fireLaser() {
-    if(paddle.effects.laser && paddle.effects.laser % 30 === 0) {
-        lasers.push({x: paddle.x + 5, y: paddle.y, width: 3, height: 10, dy: -10});
-        lasers.push({x: paddle.x + paddle.renderWidth - 8, y: paddle.y, width: 3, height: 10, dy: -10});
+    if (hasEffect('laser') && paddle.effects.laser % LASER_FIRE_INTERVAL_TICKS === 0) {
+        const y = paddle.y;
+        lasers.push({ x: paddle.x + LASER_INSET_PX, y: y, width: LASER_WIDTH, height: LASER_HEIGHT, dy: -LASER_SPEED_PX });
+        lasers.push({ x: paddle.x + paddle.width - (LASER_INSET_PX + LASER_WIDTH), y: y, width: LASER_WIDTH, height: LASER_HEIGHT, dy: -LASER_SPEED_PX });
     }
 }
 
+// ---------------------------------------------------------------------------
+// Physics
+// ---------------------------------------------------------------------------
+
 /**
- * CORE SWEPT AABB PHYSICS ENGINE
+ * Swept AABB: a circle of radius `radius` at (ballX, ballY) moving by (moveX, moveY) this tick,
+ * against a box. The circle is treated as a point against the box grown by the radius, so corners
+ * are square, which is what the game's collisions are tuned for.
+ * Returns when it hits (t in 0..1 of the move) and the surface normal, or null for no hit.
  */
-function sweptAABB(bx, by, br, vx, vy, boxX, boxY, boxW, boxH) {
-    if (boxW === undefined || boxH === undefined) return null;
+function sweptAABB(ballX, ballY, radius, moveX, moveY, boxX, boxY, boxW, boxH) {
+    const minX = boxX - radius, maxX = boxX + boxW + radius;
+    const minY = boxY - radius, maxY = boxY + boxH + radius;
 
-    let minX = boxX - br, maxX = boxX + boxW + br;
-    let minY = boxY - br, maxY = boxY + boxH + br;
+    let tNearX = (minX - ballX) / moveX, tFarX = (maxX - ballX) / moveX;
+    let tNearY = (minY - ballY) / moveY, tFarY = (maxY - ballY) / moveY;
 
-    let tNearX = (minX - bx) / vx, tFarX = (maxX - bx) / vx;
-    let tNearY = (minY - by) / vy, tFarY = (maxY - by) / vy;
-
+    // Not moving along an axis gives 0/0 when exactly on the box edge: treat that axis as always overlapping
     if (Number.isNaN(tNearX)) { tNearX = -Infinity; tFarX = Infinity; }
     if (Number.isNaN(tNearY)) { tNearY = -Infinity; tFarY = Infinity; }
 
-    if (tNearX > tFarX) { let tmp = tNearX; tNearX = tFarX; tFarX = tmp; }
-    if (tNearY > tFarY) { let tmp = tNearY; tNearY = tFarY; tFarY = tmp; }
+    if (tNearX > tFarX) [tNearX, tFarX] = [tFarX, tNearX];
+    if (tNearY > tFarY) [tNearY, tFarY] = [tFarY, tNearY];
 
     if (tNearX > tFarY || tNearY > tFarX) return null;
 
-    let tHitNear = Math.max(tNearX, tNearY);
-    let tHitFar = Math.min(tFarX, tFarY);
+    const tHitNear = Math.max(tNearX, tNearY);
+    const tHitFar = Math.min(tFarX, tFarY);
 
     if (tHitNear > 1.0 || tHitFar < 0) return null;
 
-    let t = Math.max(0, tHitNear);
-
+    // The surface normal points against the movement on the axis that was entered last; a tie is a corner hit
     let nx = 0, ny = 0;
-    if (tNearX > tNearY) { nx = vx < 0 ? 1 : -1; } 
-    else if (tNearX < tNearY) { ny = vy < 0 ? 1 : -1; } 
-    else { nx = vx < 0 ? 1 : -1; ny = vy < 0 ? 1 : -1; }
+    if (tNearX > tNearY) { nx = moveX < 0 ? 1 : -1; }
+    else if (tNearX < tNearY) { ny = moveY < 0 ? 1 : -1; }
+    else { nx = moveX < 0 ? 1 : -1; ny = moveY < 0 ? 1 : -1; }
 
-    return { t: t, nx: nx, ny: ny };
+    return { t: Math.max(0, tHitNear), nx: nx, ny: ny };
 }
 
 // Earliest thing the ball hits while moving by (moveX, moveY): walls, then paddle, then bricks in row order.
 // Ties go to the first one tested, so keep that order.
+// Returns { hit: swept result, id: 'wall' | 'bottom' | 'paddle' | 'brick', brick } or null.
 function findFirstCollision(ball, moveX, moveY) {
     let first = null;
     const consider = (x, y, w, h, id, brick) => {
@@ -706,7 +932,7 @@ function findFirstCollision(ball, moveX, moveY) {
     };
 
     for (const wall of WALLS) consider(wall.x, wall.y, wall.w, wall.h, wall.id, null);
-    consider(paddle.renderX, paddle.y, paddle.renderWidth, paddle.height, 'paddle', null);
+    consider(paddle.x, paddle.y, paddle.width, paddle.height, 'paddle', null);
     for (const row of bricks) {
         for (const brick of row) {
             if (brick.status > 0) consider(brick.x, brick.y, brick.width, brick.height, 'brick', brick);
@@ -715,10 +941,14 @@ function findFirstCollision(ball, moveX, moveY) {
     return first;
 }
 
+// ---------------------------------------------------------------------------
+// Simulation tick
+// ---------------------------------------------------------------------------
+
 // Remembers where everything was before this tick, so drawAll can show positions between two ticks
 // (the simulation is 60Hz, the screen may refresh faster). Things born during a tick have no previous position yet.
 function snapshotPreviousPositions() {
-    paddle.prevX = paddle.renderX;
+    paddle.prevX = paddle.x;
     balls.forEach(ball => { ball.prevX = ball.x; ball.prevY = ball.y; });
     drops.forEach(drop => { drop.prevY = drop.y; });
     lasers.forEach(laser => { laser.prevY = laser.y; });
@@ -728,371 +958,483 @@ function lerp(previous, current, blend) {
     return previous === undefined ? current : previous + (current - previous) * blend;
 }
 
-function updateLogic() {
-    timeTicks++;
-    snapshotPreviousPositions();
-    
-    let currentSpeed = paddle.baseSpeed * paddle.speedMultiplier;
-    let currentWidth = paddle.effects.expand > 0 ? paddle.width * 1.5 : paddle.width;
-    
-    // Apply temporary 50% slow modifier if debuff is active
-    if (paddle.effects.slow && paddle.effects.slow > 0) {
-        currentSpeed *= 0.5;
-    }
-    
+function updatePaddle() {
+    let speed = paddle.baseSpeed * paddle.speedMultiplier;
+    if (hasEffect('slow')) speed *= PADDLE_SLOW_FACTOR;
+
     // Grow and shrink around the centre; keeping the left edge fixed would push the paddle off the right wall
-    const widthChange = currentWidth - paddle.renderWidth;
+    const width = hasEffect('expand') ? paddle.baseWidth * PADDLE_EXPAND_FACTOR : paddle.baseWidth;
+    const widthChange = width - paddle.width;
     paddle.x -= widthChange / 2;
     if (paddle.targetX !== null) paddle.targetX -= widthChange / 2;
-    paddle.renderWidth = currentWidth;
-    
-    let moveR = rightPressed;
-    let moveL = leftPressed;
-    
-    if (paddle.effects.invert && paddle.effects.invert > 0) {
-        moveR = leftPressed; 
-        moveL = rightPressed; 
-    }
-    
-    if (moveR || moveL) {
-        paddle.targetX = null; 
-        if (moveR) paddle.x += currentSpeed;
-        if (moveL) paddle.x -= currentSpeed;
+    paddle.width = width;
+
+    const isInverted = hasEffect('invert');
+    const moveRight = isInverted ? leftPressed : rightPressed;
+    const moveLeft = isInverted ? rightPressed : leftPressed;
+
+    if (moveRight || moveLeft) {
+        paddle.targetX = null;
+        if (moveRight) paddle.x += speed;
+        if (moveLeft) paddle.x -= speed;
     } else if (paddle.targetX !== null) {
-        let actualTarget = paddle.targetX;
-        
-        if (Math.abs(actualTarget - paddle.x) <= currentSpeed) {
-            paddle.x = actualTarget;
-        } else if (paddle.x < actualTarget) {
-            paddle.x += currentSpeed;
-        } else if (paddle.x > actualTarget) {
-            paddle.x -= currentSpeed;
-        }
+        // Chase the cursor at paddle speed, never overshooting it
+        if (Math.abs(paddle.targetX - paddle.x) <= speed) paddle.x = paddle.targetX;
+        else if (paddle.x < paddle.targetX) paddle.x += speed;
+        else paddle.x -= speed;
     }
-    
+
     if (paddle.x < 0) paddle.x = 0;
-    if (paddle.x + paddle.renderWidth > canvas.width) paddle.x = canvas.width - paddle.renderWidth;
-    
-    paddle.renderX = paddle.x;
+    if (paddle.x + paddle.width > canvas.width) paddle.x = canvas.width - paddle.width;
+}
 
-    for(let i = lasers.length - 1; i >= 0; i--) {
+function moveLasers() {
+    for (let i = lasers.length - 1; i >= 0; i--) {
         lasers[i].y += lasers[i].dy;
-        if(lasers[i].y < CEILING_Y) lasers.splice(i, 1);
-    }
-
-    for (let i = drops.length - 1; i >= 0; i--) {
-        let d = drops[i];
-        d.y += d.dy;
-        if (d.y + 12 > paddle.y && d.y - 12 < paddle.y + paddle.height && d.x + 12 > paddle.renderX && d.x - 12 < paddle.renderX + paddle.renderWidth) {
-            POWERUPS[d.type].effect(); drops.splice(i, 1);
-        } else if (d.y > canvas.height) { drops.splice(i, 1); }
-    }
-
-    let activeBricksCount = 0;
-
-    for (let r = 0; r < bricks.length; r++) {
-        for (let c = 0; c < bricks[r].length; c++) {
-            let b = bricks[r][c];
-            if (b.status > 0) {
-                activeBricksCount++;
-                for(let l = lasers.length - 1; l >= 0; l--) {
-                    let laser = lasers[l];
-                    if (laser.x > b.x && laser.x < b.x + b.width && laser.y > b.y && laser.y < b.y + b.height) {
-                        b.status -= 1;
-                        if (paddle.effects.break > 0 && b.status === 1) b.status = 0; 
-                        addScore(5 * b.maxStatus); 
-                        lasers.splice(l, 1);
-                        if (b.status <= 0) {
-                            activeBricksCount--;
-                            if (Math.random() < BASE_DROP_RATE * gameLevels[currentLevelIdx].extras) {
-                                let dropSpeedMod = gameLevels[currentLevelIdx].dropSpeed || 1.0;
-                                drops.push({ x: b.x + b.width/2, y: b.y, type: dropTypes[Math.floor(Math.random() * dropTypes.length)], dy: 3 * dropSpeedMod });
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    for (let i = balls.length - 1; i >= 0; i--) {
-        let b = balls[i];
-        if (!b.active) { b.x = paddle.renderX + paddle.renderWidth / 2; b.y = paddle.y - BALL_RADIUS - 1; continue; }
-
-        if (!b.history) b.history = [];
-        b.history.unshift({x: b.x, y: b.y});
-        if (b.history.length > TRAIL_LENGTH + 1) b.history.pop();
-
-        let timeRemaining = 1.0;
-        let maxBounces = 4;
-        let ballDead = false;
-
-        while (timeRemaining > 0 && maxBounces > 0) {
-            let cvx = b.dx * timeRemaining, cvy = b.dy * timeRemaining;
-            const collision = findFirstCollision(b, cvx, cvy);
-
-            if (collision) {
-                const firstHit = collision.hit;
-                b.x += cvx * firstHit.t; b.y += cvy * firstHit.t;
-                let piercing = false;
-
-                if (collision.id === 'brick') {
-                    let br = collision.brick;
-                    piercing = (paddle.effects.break > 0 && br.status === 1);
-                    br.status -= 1;
-                    if (paddle.effects.break > 0 && br.status === 1) br.status = 0;
-                    addScore(10 * br.maxStatus);
-                    if (br.status <= 0) {
-                        activeBricksCount--;
-                        if(Math.random() < BASE_DROP_RATE * gameLevels[currentLevelIdx].extras) {
-                            let dropSpeedMod = gameLevels[currentLevelIdx].dropSpeed || 1.0;
-                            drops.push({ x: br.x + br.width/2, y: br.y, type: dropTypes[Math.floor(Math.random() * dropTypes.length)], dy: 3 * dropSpeedMod });
-                        }
-                    }
-                }
-
-                if (collision.id === 'bottom') {
-                    ballDead = true; break;
-                } else if (collision.id === 'paddle' && firstHit.ny === -1) {
-                    let hitPoint = b.x - (paddle.renderX + paddle.renderWidth / 2);
-                    let normalizedHit = hitPoint / (paddle.renderWidth / 2);
-                    normalizedHit = Math.max(-1, Math.min(1, normalizedHit));
-                    
-                    let bounceAngle = normalizedHit * (Math.PI / 5); 
-                    let currentSpeed = diffSettings[difficulty].ballSpeed * Math.pow(1.05, loopCount);
-                    b.dx = currentSpeed * Math.sin(bounceAngle); 
-                    b.dy = -currentSpeed * Math.cos(bounceAngle);
-                    b.y -= 0.5; 
-                } else if (!piercing) {
-                    if (firstHit.nx !== 0) b.dx *= -1;
-                    if (firstHit.ny !== 0) b.dy *= -1;
-                    b.x += firstHit.nx * 0.1; b.y += firstHit.ny * 0.1;
-                } else {
-                    b.x += Math.sign(cvx) * 0.1; b.y += Math.sign(cvy) * 0.1;
-                }
-
-                timeRemaining -= timeRemaining * firstHit.t;
-                maxBounces--;
-            } else {
-                b.x += cvx; b.y += cvy; timeRemaining = 0;
-            }
-        }
-
-        if (ballDead) balls.splice(i, 1);
-    }
-
-    manageEffects(); fireLaser();
-
-    // Clearing the board wins over losing the last ball in the same tick
-    if (activeBricksCount === 0) {
-        gameState = 'INTERMISSION'; cancelAnimationFrame(animationId);
-        
-        let nextTitle = "LEVEL CLEARED!";
-        let titleColor = "#00ffcc";
-        let isLooping = false;
-        
-        if (currentLevelIdx + 1 >= gameLevels.length) {
-            loopCount++;
-            lives++; 
-            updateHUD();
-            
-            currentLevelIdx = 0; 
-            nextTitle = "LOOP " + loopCount + " REACHED!";
-            titleColor = "#ffd700";
-            isLooping = true;
-        } else {
-            currentLevelIdx++;
-        }
-        
-        document.getElementById('intermission-title').innerText = nextTitle;
-        document.getElementById('intermission-title').style.color = titleColor;
-        document.getElementById('intermission-score').innerText = score;
-        
-        if (isLooping) {
-            document.getElementById('loop-modifiers').classList.remove('hidden');
-        } else {
-            document.getElementById('loop-modifiers').classList.add('hidden');
-        }
-
-        document.getElementById('continue-btn').innerHTML = '[>>] Next Level';
-        document.getElementById('intermission-screen').classList.remove('hidden');
-    }
-
-    if (balls.length === 0 && gameState === 'PLAYING') {
-        lives--; updateHUD();
-        if (lives === 0) { endGame(false); } else { paddle.effects = {}; spawnBall(); }
+        if (lasers[i].y < CEILING_Y) lasers.splice(i, 1);
     }
 }
 
-const EFFECT_ICONS = {
-    laser: POWERUPS.LASER.icon, expand: POWERUPS.EXPAND.icon, break: POWERUPS.BREAK.icon,
-    invert: POWERUPS.INVERT.icon, slow: POWERUPS.SLOW.icon
-};
-const DEBUFF_EFFECTS = ['invert', 'slow'];
-const powerupBadges = {}; // effect key -> { element, secondsText }
+function moveDrops() {
+    for (let i = drops.length - 1; i >= 0; i--) {
+        const drop = drops[i];
+        drop.y += drop.dy;
+        const touchesPaddle = drop.y + DROP_HALF_SIZE > paddle.y && drop.y - DROP_HALF_SIZE < paddle.y + paddle.height
+            && drop.x + DROP_HALF_SIZE > paddle.x && drop.x - DROP_HALF_SIZE < paddle.x + paddle.width;
+        if (touchesPaddle) {
+            POWERUPS[drop.type].effect();
+            drops.splice(i, 1);
+        } else if (drop.y > canvas.height) {
+            drops.splice(i, 1);
+        }
+    }
+}
 
-function manageEffects() { 
-    for (let key in paddle.effects) { 
-        if (paddle.effects[key] > 0) paddle.effects[key]--; 
+// Lasers pass through the gaps between bricks, so only a laser inside a brick hits it. Returns how many bricks it destroyed.
+function applyLaserHits() {
+    let destroyedCount = 0;
+    for (const row of bricks) {
+        for (const brick of row) {
+            if (brick.status <= 0) continue;
+            for (let l = lasers.length - 1; l >= 0; l--) {
+                const laser = lasers[l];
+                const isInsideBrick = laser.x > brick.x && laser.x < brick.x + brick.width
+                    && laser.y > brick.y && laser.y < brick.y + brick.height;
+                if (!isInsideBrick) continue;
+                lasers.splice(l, 1);
+                if (damageBrick(brick, POINTS_PER_LASER_HIT)) destroyedCount++;
+            }
+        }
+    }
+    return destroyedCount;
+}
+
+function bounceOffPaddle(ball) {
+    const hitOffset = (ball.x - (paddle.x + paddle.width / 2)) / (paddle.width / 2);
+    const bounceAngle = Math.max(-1, Math.min(1, hitOffset)) * MAX_PADDLE_BOUNCE_ANGLE;
+    ball.dx = ball.speed * Math.sin(bounceAngle);
+    ball.dy = -ball.speed * Math.cos(bounceAngle);
+    ball.y -= PADDLE_LIFT_PX;
+}
+
+// Moves every ball by one tick, handling up to MAX_COLLISIONS_PER_TICK hits on the way. Returns how many bricks it destroyed.
+function updateBalls() {
+    let destroyedCount = 0;
+
+    for (let i = balls.length - 1; i >= 0; i--) {
+        const ball = balls[i];
+        if (!ball.active) {
+            ball.x = paddle.x + paddle.width / 2;
+            ball.y = paddle.y - BALL_RADIUS - 1;
+            continue;
+        }
+
+        ball.history.unshift({ x: ball.x, y: ball.y });
+        if (ball.history.length > TRAIL_LENGTH + 1) ball.history.pop();
+
+        let timeRemaining = 1.0;
+        let collisionsLeft = MAX_COLLISIONS_PER_TICK;
+        let isBallDead = false;
+
+        while (timeRemaining > 0 && collisionsLeft > 0) {
+            const moveX = ball.dx * timeRemaining;
+            const moveY = ball.dy * timeRemaining;
+            const collision = findFirstCollision(ball, moveX, moveY);
+
+            if (!collision) {
+                ball.x += moveX;
+                ball.y += moveY;
+                break;
+            }
+
+            const hit = collision.hit;
+            ball.x += moveX * hit.t;
+            ball.y += moveY * hit.t;
+            let isPiercing = false;
+
+            if (collision.id === 'brick') {
+                // A ball that takes out the last layer of a brick keeps going
+                isPiercing = hasEffect('break') && collision.brick.status === 1;
+                if (damageBrick(collision.brick, POINTS_PER_BALL_HIT)) destroyedCount++;
+            }
+
+            if (collision.id === 'bottom') {
+                isBallDead = true;
+                break;
+            } else if (collision.id === 'paddle' && hit.ny === -1) {
+                bounceOffPaddle(ball);
+            } else if (!isPiercing) {
+                if (hit.nx !== 0) ball.dx *= -1;
+                if (hit.ny !== 0) ball.dy *= -1;
+                ball.x += hit.nx * PUSH_OUT_PX;
+                ball.y += hit.ny * PUSH_OUT_PX;
+            } else {
+                ball.x += Math.sign(moveX) * PUSH_OUT_PX;
+                ball.y += Math.sign(moveY) * PUSH_OUT_PX;
+            }
+
+            timeRemaining -= timeRemaining * hit.t;
+            collisionsLeft--;
+        }
+
+        if (isBallDead) balls.splice(i, 1);
+    }
+
+    return destroyedCount;
+}
+
+function manageEffects() {
+    for (const key in paddle.effects) {
+        if (paddle.effects[key] > 0) paddle.effects[key]--;
         else delete paddle.effects[key];
     }
     syncPowerupHud();
 }
 
+function countBricksLeft() {
+    let count = 0;
+    for (const row of bricks) {
+        for (const brick of row) if (brick.status > 0) count++;
+    }
+    return count;
+}
+
+// After the last level the game starts over from the first, faster, worth more, with an extra life
+function finishLevel() {
+    gameState = GameState.INTERMISSION;
+    cancelAnimationFrame(animationId);
+
+    const isLoopComplete = currentLevelIdx + 1 >= gameLevels.length;
+    if (isLoopComplete) {
+        loopCount++;
+        lives++;
+        updateHUD();
+        currentLevelIdx = 0;
+    } else {
+        currentLevelIdx++;
+    }
+
+    showIntermissionScreen({
+        title: isLoopComplete ? 'LOOP ' + loopCount + ' REACHED!' : 'LEVEL CLEARED!',
+        titleColor: isLoopComplete ? COLOR_GOLD : COLOR_GOOD,
+        continueLabel: '[>>] Next Level',
+        showLoopBonus: isLoopComplete,
+    });
+}
+
+function updateLogic() {
+    tickCount++;
+    snapshotPreviousPositions();
+
+    updatePaddle();
+    moveLasers();
+    moveDrops();
+
+    let bricksLeft = countBricksLeft();
+    bricksLeft -= applyLaserHits();
+    bricksLeft -= updateBalls();
+
+    manageEffects();
+    fireLaser();
+
+    // Clearing the board wins over losing the last ball in the same tick
+    if (bricksLeft === 0) finishLevel();
+
+    if (balls.length === 0 && gameState === GameState.PLAYING) {
+        lives--;
+        updateHUD();
+        if (lives === 0) {
+            endGame();
+        } else {
+            paddle.effects = {};
+            spawnBall();
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// HUD
+// ---------------------------------------------------------------------------
+
+const powerupBadges = {}; // effect key -> { element, secondsText }
+
 // Badges are created once and only their seconds text changes, otherwise the flash animation restarts every tick
 function syncPowerupHud() {
-    const hud = document.getElementById('active-powerups');
-
-    for (let key in powerupBadges) {
+    for (const key in powerupBadges) {
         if (paddle.effects[key] === undefined) {
             powerupBadges[key].element.remove();
             delete powerupBadges[key];
         }
     }
 
-    for (let key in paddle.effects) {
+    for (const key in paddle.effects) {
         if (!powerupBadges[key]) {
             const element = document.createElement('span');
-            element.style.cssText = 'margin: 0 5px; display: inline-block;';
-            element.className = DEBUFF_EFFECTS.includes(key) ? 'debuff-text' : 'buff-text';
+            element.className = 'powerup-badge ' + (DEBUFF_EFFECTS.includes(key) ? 'debuff-text' : 'buff-text');
             const icon = document.createElement('span');
             icon.className = 'emoji-icon';
             icon.textContent = EFFECT_ICONS[key];
             const secondsText = document.createTextNode('');
             element.append(icon, secondsText);
-            hud.appendChild(element);
+            ui.activePowerups.appendChild(element);
             powerupBadges[key] = { element: element, secondsText: secondsText };
         }
-        const text = ' ' + Math.ceil(paddle.effects[key] / 60) + 's';
+        const text = ' ' + Math.ceil(paddle.effects[key] / FPS) + 's';
         if (powerupBadges[key].secondsText.data !== text) powerupBadges[key].secondsText.data = text;
     }
+}
+
+// ---------------------------------------------------------------------------
+// Drawing
+// ---------------------------------------------------------------------------
+
+const DROP_FONT = '24px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
+const PADDLE_ICON_FONT = '12px "Apple Color Emoji", "Segoe UI Emoji", sans-serif';
+const LAUNCH_HINT_FONT = '10px "Press Start 2P"';
+const ICON_BLINK_TICKS = 15;
+const LAUNCH_HINT_BLINK_TICKS = 30;
+const TRAIL_START_ALPHA = 0.8;
+const TRAIL_ALPHA_STEP = 0.125;
+const TRAIL_SHRINK_PER_DOT = 0.8;
+
+function drawBricks() {
+    for (const row of bricks) {
+        for (const brick of row) {
+            if (brick.status <= 0) continue;
+            ctx.beginPath();
+            ctx.rect(brick.x, brick.y, brick.width, brick.height);
+            ctx.fillStyle = `hsl(${brick.baseHue}, 80%, 50%)`;
+            ctx.fill();
+
+            // The dark border gets thicker with every remaining hit; with "weaker blocks" the last one doesn't count
+            const hitsShown = hasEffect('break') ? brick.status - 1 : brick.status;
+            const borderWidth = Math.max(0, hitsShown * 2);
+            if (borderWidth > 0) {
+                ctx.lineWidth = borderWidth;
+                ctx.strokeStyle = `hsl(${brick.baseHue}, 80%, 20%)`;
+                ctx.strokeRect(brick.x + borderWidth / 2, brick.y + borderWidth / 2, brick.width - borderWidth, brick.height - borderWidth);
+            }
+        }
+    }
+}
+
+function drawDrops(tickBlend) {
+    for (let i = drops.length - 1; i >= 0; i--) {
+        const drop = drops[i];
+        const powerup = POWERUPS[drop.type];
+
+        ctx.font = DROP_FONT;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        ctx.shadowBlur = 10 + Math.abs(Math.sin(tickCount * 0.1)) * 10;
+        ctx.shadowColor = powerup.isDebuff ? '#ff0000' : '#00ff00';
+
+        ctx.fillText(powerup.icon, drop.x, lerp(drop.prevY, drop.y, tickBlend));
+        ctx.shadowBlur = 0;
+    }
+}
+
+function drawLasers(tickBlend) {
+    ctx.fillStyle = COLOR_ACCENT;
+    for (let i = lasers.length - 1; i >= 0; i--) {
+        const laser = lasers[i];
+        ctx.fillRect(laser.x, lerp(laser.prevY, laser.y, tickBlend), laser.width, laser.height);
+    }
+}
+
+function drawPaddle(tickBlend) {
+    const drawX = lerp(paddle.prevX, paddle.x, tickBlend);
+    ctx.beginPath();
+    ctx.rect(drawX, paddle.y, paddle.width, paddle.height);
+    ctx.fillStyle = hasEffect('laser') ? COLOR_GOLD : '#f0f0f0';
+    ctx.fill();
+    ctx.strokeStyle = '#555';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // The bolt blinks on a laser paddle
+    if (hasEffect('laser') && Math.floor(tickCount / ICON_BLINK_TICKS) % 2 === 0) {
+        ctx.fillStyle = '#000';
+        ctx.font = PADDLE_ICON_FONT;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('\u26A1\uFE0E', drawX + paddle.width / 2, paddle.y + paddle.height / 2 + 1);
+    }
+}
+
+// Returns true if any ball is still waiting on the paddle to be launched
+function drawBalls(tickBlend) {
+    let isAnyWaitingForLaunch = false;
+    balls.forEach(ball => {
+        if (!ball.active) isAnyWaitingForLaunch = true;
+
+        // A trail dot is where the ball was i+1 ticks ago, so it moves from history[i + 1] to history[i]
+        // (the newest entry equals ball.prevX/prevY)
+        if (ball.active) {
+            for (let i = 0; i < TRAIL_LENGTH; i++) {
+                const older = ball.history[i + 1], newer = ball.history[i];
+                if (!older) break;
+                ctx.beginPath();
+                ctx.arc(lerp(older.x, newer.x, tickBlend), lerp(older.y, newer.y, tickBlend), Math.max(1, BALL_RADIUS - (i * TRAIL_SHRINK_PER_DOT)), 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(255, 255, 255, ${TRAIL_START_ALPHA - (i * TRAIL_ALPHA_STEP)})`;
+                ctx.fill();
+            }
+        }
+
+        ctx.beginPath();
+        ctx.arc(lerp(ball.prevX, ball.x, tickBlend), lerp(ball.prevY, ball.y, tickBlend), BALL_RADIUS, 0, Math.PI * 2);
+        ctx.fillStyle = '#fff';
+        ctx.fill();
+    });
+    return isAnyWaitingForLaunch;
 }
 
 // tickBlend is how far we are from the last tick towards the next one, 0 to 1
 function drawAll(tickBlend) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
+
     ctx.fillStyle = '#333';
     ctx.fillRect(0, CEILING_Y, canvas.width, 2);
-    
-    for (let r = 0; r < bricks.length; r++) {
-        for (let c = 0; c < bricks[r].length; c++) {
-            let b = bricks[r][c];
-            if (b.status > 0) {
-                ctx.beginPath(); ctx.rect(b.x, b.y, b.width, b.height); ctx.fillStyle = `hsl(${b.baseHue}, 80%, 50%)`; ctx.fill();
-                let effStatus = paddle.effects.break > 0 ? b.status - 1 : b.status;
-                let stroke = Math.max(0, effStatus * 2); 
-                if (stroke > 0) { ctx.lineWidth = stroke; ctx.strokeStyle = `hsl(${b.baseHue}, 80%, 20%)`; ctx.strokeRect(b.x + stroke/2, b.y + stroke/2, b.width - stroke, b.height - stroke); }
-                ctx.closePath();
-            }
-        }
-    }
 
-    for (let i = drops.length - 1; i >= 0; i--) {
-        let d = drops[i], pData = POWERUPS[d.type];
-        
-        ctx.font = '24px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; 
-        
-        ctx.shadowBlur = 10 + Math.abs(Math.sin(timeTicks * 0.1)) * 10;
-        
-        if (pData.type === 'bad') {
-            ctx.shadowColor = '#ff0000';
-        } else {
-            ctx.shadowColor = '#00ff00';
-        }
-        
-        ctx.fillText(pData.icon, d.x, lerp(d.prevY, d.y, tickBlend)); ctx.shadowBlur = 0; 
-    }
+    drawBricks();
+    drawDrops(tickBlend);
+    drawLasers(tickBlend);
+    drawPaddle(tickBlend);
+    const isAnyWaitingForLaunch = drawBalls(tickBlend);
 
-    ctx.fillStyle = '#ff0055';
-    for(let i = lasers.length - 1; i >= 0; i--) { ctx.fillRect(lasers[i].x, lerp(lasers[i].prevY, lasers[i].y, tickBlend), lasers[i].width, lasers[i].height); }
-
-    const paddleDrawX = lerp(paddle.prevX, paddle.renderX, tickBlend);
-    ctx.beginPath(); ctx.rect(paddleDrawX, paddle.y, paddle.renderWidth, paddle.height);
-    ctx.fillStyle = paddle.effects.laser > 0 ? '#ffd700' : '#f0f0f0'; ctx.fill();
-    ctx.strokeStyle = '#555'; ctx.lineWidth = 2; ctx.stroke(); ctx.closePath();
-    if (paddle.effects.laser > 0 && Math.floor(timeTicks / 15) % 2 === 0) {
-        ctx.fillStyle = '#000'; ctx.font = '12px "Apple Color Emoji", "Segoe UI Emoji", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText('⚡\uFE0E', paddleDrawX + paddle.renderWidth / 2, paddle.y + paddle.height / 2 + 1);
-    }
-
-    let hasInactive = false;
-    balls.forEach(ball => {
-        if (!ball.active) hasInactive = true;
-
-        // A trail dot is where the ball was i+1 ticks ago, so it moves from history[i + 1] to history[i]
-        // (the newest entry equals ball.prevX/prevY)
-        if (ball.active && ball.history) {
-            for (let i = 0; i < TRAIL_LENGTH; i++) {
-                const older = ball.history[i + 1], newer = ball.history[i];
-                if (!older) break;
-                ctx.beginPath(); 
-                ctx.arc(lerp(older.x, newer.x, tickBlend), lerp(older.y, newer.y, tickBlend), Math.max(1, BALL_RADIUS - (i * 0.8)), 0, Math.PI * 2);
-                ctx.fillStyle = `rgba(255, 255, 255, ${0.8 - (i / 8)})`; 
-                ctx.fill(); 
-                ctx.closePath();
-            }
-        }
-
-        ctx.beginPath(); ctx.arc(lerp(ball.prevX, ball.x, tickBlend), lerp(ball.prevY, ball.y, tickBlend), BALL_RADIUS, 0, Math.PI * 2); 
-        ctx.fillStyle = '#fff'; ctx.fill(); 
-        ctx.shadowBlur = 10; ctx.shadowColor = '#fff'; 
-        ctx.closePath(); ctx.shadowBlur = 0;
-    });
-
-    if (hasInactive && Math.floor(timeTicks / 30) % 2 === 0) {
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)'; ctx.font = '10px "Press Start 2P"'; ctx.textAlign = 'center'; ctx.fillText("CLICK TO LAUNCH", canvas.width / 2, paddle.y - 40);
+    if (isAnyWaitingForLaunch && Math.floor(tickCount / LAUNCH_HINT_BLINK_TICKS) % 2 === 0) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.font = LAUNCH_HINT_FONT;
+        ctx.textAlign = 'center';
+        ctx.fillText('CLICK TO LAUNCH', canvas.width / 2, paddle.y - 40);
     }
 }
 
-function gameLoop(ts) {
-    if (gameState !== 'PLAYING') return;
-    let dt = ts - lastTime; lastTime = ts;
-    if (dt > 250) dt = 250;
-    accumulator += dt;
+// ---------------------------------------------------------------------------
+// Game flow
+// ---------------------------------------------------------------------------
+
+function gameLoop(timestamp) {
+    if (gameState !== GameState.PLAYING) return;
+    const deltaMs = Math.min(timestamp - lastTime, MAX_FRAME_DELTA_MS);
+    lastTime = timestamp;
+    accumulator += deltaMs;
     while (accumulator >= TICK_MS) {
-        updateLogic(); accumulator -= TICK_MS; if (gameState !== 'PLAYING') break; 
+        updateLogic();
+        accumulator -= TICK_MS;
+        if (gameState !== GameState.PLAYING) break;
     }
-    if (gameState === 'PLAYING') { drawAll(accumulator / TICK_MS); animationId = requestAnimationFrame(gameLoop); }
+    if (gameState === GameState.PLAYING) {
+        drawAll(accumulator / TICK_MS);
+        animationId = requestAnimationFrame(gameLoop);
+    }
 }
 
 function startGame() {
     clearMovementKeys();
-    document.getElementById('menu-screen').classList.add('hidden');
-    document.getElementById('leaderboard-screen').classList.add('hidden');
-    document.getElementById('hud').classList.remove('hidden');
-    document.getElementById('legend').classList.remove('hidden'); 
-    score = 0; lives = 3; currentLevelIdx = 0; timeTicks = 0; loopCount = 0; lastCursorX = null;
-    updateHUD(); initLevel(currentLevelIdx); gameState = 'PLAYING'; 
-    lastTime = performance.now(); accumulator = 0; animationId = requestAnimationFrame(gameLoop);
+    hide(ui.menuScreen);
+    hide(ui.leaderboardScreen);
+    show(ui.hud);
+    show(ui.legend);
+    score = 0;
+    lives = 3;
+    currentLevelIdx = 0;
+    tickCount = 0;
+    loopCount = 0;
+    lastCursorX = null;
+    updateHUD();
+    initLevel(currentLevelIdx);
+    gameState = GameState.PLAYING;
+    lastTime = performance.now();
+    accumulator = 0;
+    animationId = requestAnimationFrame(gameLoop);
 }
 
-function endGame(victory) {
-    gameState = 'GAMEOVER'; cancelAnimationFrame(animationId);
-    document.getElementById('hud').classList.add('hidden');
-    document.getElementById('end-title').innerText = "GAME OVER";
-    document.getElementById('end-title').style.color = "#ff0055";
-    document.getElementById('final-score').innerText = score;
-    if (checkIsHighScore(score, difficulty)) { document.getElementById('game-over-screen').classList.remove('hidden'); const nameInput = document.getElementById('player-name'); nameInput.value = ''; nameInput.focus(); } else { showPostGameLeaderboard(); }
+function endGame() {
+    gameState = GameState.GAMEOVER;
+    cancelAnimationFrame(animationId);
+    hide(ui.hud);
+    ui.endTitle.textContent = 'GAME OVER';
+    ui.endTitle.style.color = COLOR_ACCENT;
+    ui.finalScore.textContent = score;
+    if (checkIsHighScore(score, difficulty)) {
+        show(ui.gameOverScreen);
+        ui.playerName.value = '';
+        ui.playerName.focus();
+    } else {
+        showLeaderboard({ offerNewGame: true });
+    }
 }
 
-function showPostGameLeaderboard() {
-    gameState = 'LEADERBOARD'; lbDiffIndex = DIFF_ORDER.indexOf(difficulty);
-    document.getElementById('game-over-screen').classList.add('hidden'); document.getElementById('menu-screen').classList.add('hidden'); document.getElementById('legend').classList.add('hidden'); 
-    document.getElementById('leaderboard-screen').classList.remove('hidden'); document.getElementById('new-game-hint').classList.remove('hidden'); renderLeaderboard();
-}
+// ---------------------------------------------------------------------------
+// High scores
+// ---------------------------------------------------------------------------
 
-const DB_KEY = 'aislop_breakout_scores_v4'; const DIFF_ORDER = ['Easy', 'Medium', 'Hard']; let lbDiffIndex = 1; 
-
-const DEFAULT_SCORES = {
-    'Easy': [{ name: "SUZIE", score: 10000, level: 3 }, { name: "JONATHAN", score: 9000, level: 3 }, { name: "ALEXIS", score: 8000, level: 3 }, { name: "NEO", score: 7000, level: 2 }, { name: "MIA", score: 6000, level: 2 }, { name: "PLAYER_ONE", score: 5000, level: 2 }, { name: "SAM", score: 4000, level: 2 }, { name: "NOBODY", score: 3000, level: 1 }, { name: "TIMOTHY", score: 2000, level: 1 }, { name: "CUB", score: 1000, level: 1 }],
-    'Medium': [{ name: "BOB_BOSS", score: 20000, level: 3 }, { name: "MAXWELL", score: 18000, level: 3 }, { name: "RAYMOND", score: 16000, level: 3 }, { name: "LEONARDO", score: 14000, level: 3 }, { name: "EVANGELINE", score: 12000, level: 2 }, { name: "ANON", score: 10000, level: 2 }, { name: "DANIEL", score: 8000, level: 2 }, { name: "GAMERGIRL", score: 6000, level: 1 }, { name: "JIMBO", score: 4000, level: 1 }, { name: "NEWKID", score: 2000, level: 1 }],
-    'Hard': [{ name: "SUPER_CPU", score: 30000, level: 3 }, { name: "ARCADE_ACE", score: 27000, level: 3 }, { name: "THE_PRO", score: 24000, level: 3 }, { name: "GOD_MODE", score: 21000, level: 3 }, { name: "T_REX", score: 18000, level: 3 }, { name: "STARFOX", score: 15000, level: 2 }, { name: "RED_LEADER", score: 12000, level: 2 }, { name: "BLUE_ROGUE", score: 9000, level: 2 }, { name: "ASH_KETCH", score: 6000, level: 1 }, { name: "NOOB", score: 3000, level: 1 }]
-};
-
+const SCORES_STORAGE_KEY = 'aislop_breakout_scores_v4';
 const ANONYMOUS_NAME = 'ANONYMOUS';
 const SCORES_PER_DIFFICULTY = 10;
+
+let leaderboardDiffIndex = DIFFICULTIES.indexOf('Medium');
+
+const DEFAULT_SCORES = {
+    Easy: [
+        { name: 'SUZIE', score: 10000, level: 3 },
+        { name: 'JONATHAN', score: 9000, level: 3 },
+        { name: 'ALEXIS', score: 8000, level: 3 },
+        { name: 'NEO', score: 7000, level: 2 },
+        { name: 'MIA', score: 6000, level: 2 },
+        { name: 'PLAYER_ONE', score: 5000, level: 2 },
+        { name: 'SAM', score: 4000, level: 2 },
+        { name: 'NOBODY', score: 3000, level: 1 },
+        { name: 'TIMOTHY', score: 2000, level: 1 },
+        { name: 'CUB', score: 1000, level: 1 },
+    ],
+    Medium: [
+        { name: 'BOB_BOSS', score: 20000, level: 3 },
+        { name: 'MAXWELL', score: 18000, level: 3 },
+        { name: 'RAYMOND', score: 16000, level: 3 },
+        { name: 'LEONARDO', score: 14000, level: 3 },
+        { name: 'EVANGELINE', score: 12000, level: 2 },
+        { name: 'ANON', score: 10000, level: 2 },
+        { name: 'DANIEL', score: 8000, level: 2 },
+        { name: 'GAMERGIRL', score: 6000, level: 1 },
+        { name: 'JIMBO', score: 4000, level: 1 },
+        { name: 'NEWKID', score: 2000, level: 1 },
+    ],
+    Hard: [
+        { name: 'SUPER_CPU', score: 30000, level: 3 },
+        { name: 'ARCADE_ACE', score: 27000, level: 3 },
+        { name: 'THE_PRO', score: 24000, level: 3 },
+        { name: 'GOD_MODE', score: 21000, level: 3 },
+        { name: 'T_REX', score: 18000, level: 3 },
+        { name: 'STARFOX', score: 15000, level: 2 },
+        { name: 'RED_LEADER', score: 12000, level: 2 },
+        { name: 'BLUE_ROGUE', score: 9000, level: 2 },
+        { name: 'ASH_KETCH', score: 6000, level: 1 },
+        { name: 'NOOB', score: 3000, level: 1 },
+    ],
+};
 
 // Used when localStorage is unusable (blocked, full, ...) so the game still shows and keeps scores for the session
 let inMemoryScores = null;
@@ -1100,7 +1442,8 @@ let inMemoryScores = null;
 function copyDefaultScores() { return JSON.parse(JSON.stringify(DEFAULT_SCORES)); }
 
 function isValidScoreRow(row) {
-    return row !== null && typeof row === 'object' && typeof row.name === 'string' && Number.isFinite(row.score) && Number.isFinite(row.level);
+    return row !== null && typeof row === 'object'
+        && typeof row.name === 'string' && Number.isFinite(row.score) && Number.isFinite(row.level);
 }
 
 function compareScoreRows(a, b) { return b.score - a.score || b.level - a.level; }
@@ -1109,7 +1452,7 @@ function compareScoreRows(a, b) { return b.score - a.score || b.level - a.level;
 function sanitizeScoreTable(table) {
     if (table === null || typeof table !== 'object' || Array.isArray(table)) return null;
     const clean = {};
-    DIFF_ORDER.forEach(diff => {
+    DIFFICULTIES.forEach(diff => {
         clean[diff] = Array.isArray(table[diff]) ? table[diff].filter(isValidScoreRow).sort(compareScoreRows) : [];
     });
     return clean;
@@ -1117,9 +1460,9 @@ function sanitizeScoreTable(table) {
 
 function readStoredScores() {
     try {
-        const stored = localStorage.getItem(DB_KEY);
+        const stored = localStorage.getItem(SCORES_STORAGE_KEY);
         if (stored === null) {
-            localStorage.setItem(DB_KEY, JSON.stringify(DEFAULT_SCORES));
+            localStorage.setItem(SCORES_STORAGE_KEY, JSON.stringify(DEFAULT_SCORES));
             return copyDefaultScores();
         }
         return sanitizeScoreTable(JSON.parse(stored));
@@ -1133,24 +1476,25 @@ function getHighScores() {
     return readStoredScores() || copyDefaultScores();
 }
 
-function checkIsHighScore(score, diff) {
+function checkIsHighScore(candidateScore, diff) {
     const scores = getHighScores()[diff] || [];
     if (scores.length < SCORES_PER_DIFFICULTY) return true;
-    return score > scores[scores.length - 1].score;
+    return candidateScore > scores[scores.length - 1].score;
 }
 
-function saveHighScore(name, score, level, diff) {
+function saveHighScore(playerName, finalScore, levelsReached, diff) {
     const allScores = getHighScores();
     if (!allScores[diff]) allScores[diff] = [];
-    allScores[diff].push({ name: name || ANONYMOUS_NAME, score: score, level: level });
+    allScores[diff].push({ name: playerName || ANONYMOUS_NAME, score: finalScore, level: levelsReached });
     allScores[diff].sort(compareScoreRows);
     allScores[diff] = allScores[diff].slice(0, SCORES_PER_DIFFICULTY);
     try {
-        localStorage.setItem(DB_KEY, JSON.stringify(allScores));
+        localStorage.setItem(SCORES_STORAGE_KEY, JSON.stringify(allScores));
     } catch (e) {
         inMemoryScores = allScores;
     }
 }
+
 function createScoreRow(rank, row) {
     const tr = document.createElement('tr');
     const cells = row
@@ -1166,45 +1510,81 @@ function createScoreRow(rank, row) {
 }
 
 function renderLeaderboard() {
-    const currentDiff = DIFF_ORDER[lbDiffIndex];
-    document.getElementById('lb-diff-display').innerText = currentDiff === 'Medium' ? 'NORMAL' : currentDiff.toUpperCase();
-    const tbody = document.getElementById('score-table-body');
-    tbody.innerHTML = '';
-    const scores = getHighScores()[currentDiff] || [];
-    for (let i = 0; i < SCORES_PER_DIFFICULTY; i++) tbody.appendChild(createScoreRow(i + 1, scores[i]));
+    const diff = DIFFICULTIES[leaderboardDiffIndex];
+    ui.lbDiffDisplay.textContent = DIFFICULTY_LABELS[diff].toUpperCase();
+    ui.scoreTableBody.innerHTML = '';
+    const scores = getHighScores()[diff] || [];
+    for (let i = 0; i < SCORES_PER_DIFFICULTY; i++) ui.scoreTableBody.appendChild(createScoreRow(i + 1, scores[i]));
 }
 
-document.querySelectorAll('.diff-btn').forEach(btn => { btn.addEventListener('click', (e) => { document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active')); e.target.classList.add('active'); difficulty = e.target.dataset.diff; }); });
-document.getElementById('lb-prev').addEventListener('click', () => { lbDiffIndex = (lbDiffIndex - 1 + DIFF_ORDER.length) % DIFF_ORDER.length; renderLeaderboard(); });
-document.getElementById('lb-next').addEventListener('click', () => { lbDiffIndex = (lbDiffIndex + 1) % DIFF_ORDER.length; renderLeaderboard(); });
-document.getElementById('start-btn').addEventListener('click', startGame);
-
-document.getElementById('pause-btn').addEventListener('click', (e) => {
-    // A focused button would also react to the Space key, which launches the ball
-    e.currentTarget.blur();
-    togglePause();
-});
-document.getElementById('confirm-yes').addEventListener('click', () => answerConfirm(true));
-document.getElementById('confirm-no').addEventListener('click', () => answerConfirm(false));
-document.getElementById('exit-btn').addEventListener('click', confirmQuit);
-
-document.getElementById('continue-btn').addEventListener('click', () => { 
-    document.getElementById('intermission-screen').classList.add('hidden'); 
-    if (gameState === 'INTERMISSION') { initLevel(currentLevelIdx); } 
-    resumePlaying();
-});
-
-document.getElementById('leaderboard-btn').addEventListener('click', () => { gameState = 'LEADERBOARD'; lbDiffIndex = DIFF_ORDER.indexOf(difficulty); document.getElementById('new-game-hint').classList.add('hidden'); document.getElementById('menu-screen').classList.add('hidden'); document.getElementById('leaderboard-screen').classList.remove('hidden'); renderLeaderboard(); });
-document.getElementById('close-leaderboard-btn').addEventListener('click', () => { gameState = 'MENU'; document.getElementById('leaderboard-screen').classList.add('hidden'); document.getElementById('menu-screen').classList.remove('hidden'); });
+// From the menu (just looking) or after a game, where "press N" offers a new game
+function showLeaderboard({ offerNewGame }) {
+    gameState = GameState.LEADERBOARD;
+    leaderboardDiffIndex = DIFFICULTIES.indexOf(difficulty);
+    hide(ui.gameOverScreen);
+    hide(ui.menuScreen);
+    hide(ui.legend);
+    show(ui.leaderboardScreen);
+    if (offerNewGame) show(ui.newGameHint); else hide(ui.newGameHint);
+    renderLeaderboard();
+}
 
 // Total levels played across loops; currentLevelIdx already points at the level being played when the game ends
 function getLevelsReached() { return loopCount * gameLevels.length + currentLevelIdx + 1; }
 
-function commitScore() { saveHighScore(document.getElementById('player-name').value.trim() || ANONYMOUS_NAME, score, getLevelsReached(), difficulty); showPostGameLeaderboard(); }
-document.getElementById('save-score-btn').addEventListener('click', commitScore);
-document.getElementById('player-name').addEventListener('keydown', (e) => { if (e.key === 'Enter') commitScore(); });
+function commitScore() {
+    const playerName = ui.playerName.value.trim() || ANONYMOUS_NAME;
+    saveHighScore(playerName, score, getLevelsReached(), difficulty);
+    showLeaderboard({ offerNewGame: true });
+}
 
-ctx.fillStyle = '#0f0f1b'; ctx.fillRect(0,0, canvas.width, canvas.height);
+// ---------------------------------------------------------------------------
+// Buttons
+// ---------------------------------------------------------------------------
+
+document.querySelectorAll('.diff-btn').forEach(button => {
+    button.addEventListener('click', () => {
+        document.querySelectorAll('.diff-btn').forEach(other => other.classList.remove('active'));
+        button.classList.add('active');
+        difficulty = button.dataset.diff;
+    });
+});
+
+ui.startBtn.addEventListener('click', startGame);
+ui.leaderboardBtn.addEventListener('click', () => showLeaderboard({ offerNewGame: false }));
+ui.closeLeaderboardBtn.addEventListener('click', () => {
+    gameState = GameState.MENU;
+    hide(ui.leaderboardScreen);
+    show(ui.menuScreen);
+});
+ui.lbPrev.addEventListener('click', () => {
+    leaderboardDiffIndex = (leaderboardDiffIndex - 1 + DIFFICULTIES.length) % DIFFICULTIES.length;
+    renderLeaderboard();
+});
+ui.lbNext.addEventListener('click', () => {
+    leaderboardDiffIndex = (leaderboardDiffIndex + 1) % DIFFICULTIES.length;
+    renderLeaderboard();
+});
+
+ui.pauseBtn.addEventListener('click', (e) => {
+    // A focused button would also react to the Space key, which launches the ball
+    e.currentTarget.blur();
+    togglePause();
+});
+ui.confirmYes.addEventListener('click', () => answerConfirm(true));
+ui.confirmNo.addEventListener('click', () => answerConfirm(false));
+ui.exitBtn.addEventListener('click', confirmQuit);
+
+ui.continueBtn.addEventListener('click', () => {
+    hide(ui.intermissionScreen);
+    if (gameState === GameState.INTERMISSION) initLevel(currentLevelIdx);
+    resumePlaying();
+});
+
+ui.saveScoreBtn.addEventListener('click', commitScore);
+ui.playerName.addEventListener('keydown', (e) => { if (e.key === 'Enter') commitScore(); });
+
+paintCanvasBackground();
 </script>
 </body>
 </html>
