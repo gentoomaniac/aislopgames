@@ -777,7 +777,8 @@ function updateLogic() {
 
     manageEffects(); fireLaser();
 
-    if (activeBricksCount === 0 && balls.length > 0) {
+    // Clearing the board wins over losing the last ball in the same tick
+    if (activeBricksCount === 0) {
         gameState = 'INTERMISSION'; cancelAnimationFrame(animationId);
         
         let nextTitle = "LEVEL CLEARED!";
