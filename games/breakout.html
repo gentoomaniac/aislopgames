@@ -1063,7 +1063,10 @@ document.getElementById('continue-btn').addEventListener('click', () => {
 document.getElementById('leaderboard-btn').addEventListener('click', () => { gameState = 'LEADERBOARD'; lbDiffIndex = DIFF_ORDER.indexOf(difficulty); document.getElementById('new-game-hint').classList.add('hidden'); document.getElementById('menu-screen').classList.add('hidden'); document.getElementById('leaderboard-screen').classList.remove('hidden'); renderLeaderboard(); });
 document.getElementById('close-leaderboard-btn').addEventListener('click', () => { gameState = 'MENU'; document.getElementById('leaderboard-screen').classList.add('hidden'); document.getElementById('menu-screen').classList.remove('hidden'); });
 
-function commitScore() { saveHighScore(document.getElementById('player-name').value.trim() || ANONYMOUS_NAME, score, currentLevelIdx + 1, difficulty); showPostGameLeaderboard(); }
+// Total levels played across loops; currentLevelIdx already points at the level being played when the game ends
+function getLevelsReached() { return loopCount * gameLevels.length + currentLevelIdx + 1; }
+
+function commitScore() { saveHighScore(document.getElementById('player-name').value.trim() || ANONYMOUS_NAME, score, getLevelsReached(), difficulty); showPostGameLeaderboard(); }
 document.getElementById('save-score-btn').addEventListener('click', commitScore);
 document.getElementById('player-name').addEventListener('keydown', (e) => { if (e.key === 'Enter') commitScore(); });
 
