@@ -15,6 +15,19 @@ for how code here is written and reviewed.
   Everything else (code, images, sounds) must be inline (data: URIs, canvas drawing, WebAudio),
   so a game file can be copied anywhere and still work.
 
+## Game conventions (owner decisions, apply to every game)
+
+- **Auto-pause:** every game that runs in real time, including games with a running time
+  counter (e.g. the Minesweeper clock), pauses when the tab is hidden or the window loses
+  focus, and only resumes on an explicit player action. Elapsed time while paused doesn't count.
+- **Confirm before losing something:** any action that drops data (e.g. an unsaved high score)
+  or ends a running game asks for confirmation first, with an in-page dialog styled like the
+  game. No blocking `alert`/`confirm`/`prompt`.
+- **Physics are the rules:** e.g. Breakout lasers pass through the gaps between bricks. That's
+  how the game works; don't "fix" it.
+- **Pinch zoom stays possible:** no `user-scalable=no`/`maximum-scale=1`; lock touch gestures
+  only on the play area.
+
 ## We don't break userspace
 
 No regressions. Players are the userspace: anything that works for them today must keep
