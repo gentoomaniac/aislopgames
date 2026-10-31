@@ -18,6 +18,7 @@
             justify-content: center;
             align-items: center;
             height: 100vh;
+            height: 100dvh;
             margin: 0;
             font-family: 'VT323', monospace;
             overflow: hidden;
@@ -28,7 +29,10 @@
             background: var(--nokia-shell);
             width: 340px;
             height: 680px; 
-            max-height: 98vh; 
+            /* Never shorter than its content (614px); too-small viewports scale the phone instead */
+            max-height: max(98vh, 614px);
+            max-height: max(98dvh, 614px);
+            transform: scale(var(--phone-scale, 1));
             border-radius: 45px;
             position: relative;
             box-shadow: 0 20px 50px rgba(0,0,0,0.6);
@@ -682,6 +686,24 @@ window.addEventListener('touchend', e => {
     }
     else Math.abs(diffX) > Math.abs(diffY) ? handleInput(diffX > 0 ? 'R' : 'L') : handleInput(diffY > 0 ? 'D' : 'U');
 });
+
+// Shrinks the whole phone to fit small screens (320x568, landscape phones);
+// on screens big enough for it the scale stays 1 and the look is unchanged.
+const PHONE_SCALE_MARGIN = 0.97;
+const phoneBody = document.querySelector('.phone-body');
+
+function fitPhoneToViewport() {
+    const fitScale = Math.min(
+        1,
+        window.innerWidth / phoneBody.offsetWidth,
+        window.innerHeight / phoneBody.offsetHeight
+    );
+    const scale = fitScale < 1 ? fitScale * PHONE_SCALE_MARGIN : 1;
+    phoneBody.style.setProperty('--phone-scale', scale);
+}
+
+window.addEventListener('resize', fitPhoneToViewport);
+fitPhoneToViewport();
 
 showMenu();
 </script>
