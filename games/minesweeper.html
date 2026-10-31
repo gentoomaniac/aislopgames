@@ -392,6 +392,8 @@
         if (facePressPointerType === null && !first && !gameOver) giveHint();
     });
 
+    // Document-level move/up/cancel handlers (the cells register theirs above): a press can end anywhere,
+    // and touch pointers stay captured by the element they started on. Cells and smiley track separate state.
     $(document).on('pointermove', (e) => {
         if (facePressPointerType === null) return;
         if (!document.elementFromPoint(e.clientX, e.clientY)?.closest('#reset-btn')) cancelFacePress();
@@ -532,17 +534,27 @@
     const LEGACY_STORAGE_KEYS = ['ms_final_sri', 'ms_final_v11', 'ms_final_v10', 'ms_final_chord'];
     let scoresInMemory = null; // Only used when localStorage can't be written, so scores last for the session
 
-    function isValidScores(data) {
-        if (typeof data !== 'object' || data === null || Array.isArray(data)) return false;
-        return Object.values(data).every(entries => Array.isArray(entries) && entries.every(entry =>
-            typeof entry === 'object' && entry !== null && typeof entry.name === 'string' && Number.isFinite(entry.time)
-        ));
+    function isValidScoreEntry(entry) {
+        return typeof entry === 'object' && entry !== null && typeof entry.name === 'string' && Number.isFinite(entry.time);
+    }
+
+    // Keeps whatever is usable per level, so one bad entry or level never costs the player's other scores
+    function sanitizeScores(data) {
+        const seededScores = createSeededScores();
+        const scores = {};
+        Object.keys(levels).forEach(lvl => {
+            scores[lvl] = Array.isArray(data[lvl])
+                ? data[lvl].filter(isValidScoreEntry).sort((a, b) => a.time - b.time)
+                : seededScores[lvl];
+        });
+        return scores;
     }
 
     function readStoredScores(key) {
         try {
-            const scores = JSON.parse(localStorage.getItem(key));
-            return isValidScores(scores) ? scores : null;
+            const data = JSON.parse(localStorage.getItem(key));
+            const isScoreObject = typeof data === 'object' && data !== null && !Array.isArray(data);
+            return isScoreObject ? sanitizeScores(data) : null;
         } catch (e) {
             return null;
         }
@@ -566,20 +578,16 @@
         return scores;
     }
 
+    // Reading never writes, except migrating legacy data; only saveScore persists changes
     function getScores() {
         if (scoresInMemory) return scoresInMemory;
-        let s = readStoredScores(STORAGE_KEY);
-        if (!s) {
-            for (const key of LEGACY_STORAGE_KEYS) {
-                s = readStoredScores(key);
-                if (s) { writeStoredScores(s); break; }
-            }
+        const storedScores = readStoredScores(STORAGE_KEY);
+        if (storedScores) return storedScores;
+        for (const key of LEGACY_STORAGE_KEYS) {
+            const legacyScores = readStoredScores(key);
+            if (legacyScores) { writeStoredScores(legacyScores); return legacyScores; }
         }
-        if (!s) {
-            s = createSeededScores();
-            writeStoredScores(s);
-        }
-        return s;
+        return createSeededScores();
     }
 
     // A tie with the last place doesn't qualify: saveScore sorts the newer entry behind older ones
