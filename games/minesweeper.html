@@ -5,13 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Win95 Minesweeper - Final Stable</title>
     
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" 
-          integrity="sha384-9ndCyUaIbzAi2FUVXJi0CjmCapSmO7SnpJef0486qhLnuZ2cdeRhO02iuK6FUUVM" crossorigin="anonymous">
-    
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js" 
-            integrity="sha384-vtXRMe3mGCbOeY7l30aIg8H9p3GdeSe4IFlP6G8JMa7o7lXvnz3GFKzPxzJdPfGK" crossorigin="anonymous"></script>
-
     <style>
+        *, ::before, ::after { box-sizing: border-box; }
+        [hidden] { display: none !important; }
+        hr { border: 0; opacity: 0.25; }
+
         :root {
             --win-gray: #c0c0c0;
             --win-white: #ffffff;
@@ -29,7 +27,9 @@
             font-family: 'Tahoma', sans-serif;
             display: flex; justify-content: safe center; align-items: safe center;
             min-height: 100vh; min-height: 100dvh; margin: 0; padding: 0 var(--page-gutter);
-            box-sizing: border-box; overscroll-behavior: none;
+            font-size: 1rem; line-height: 1.5; color: #212529;
+            -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent;
+            overscroll-behavior: none;
             /* Panning is allowed so big boards can scroll on phones; pinch and double-tap zoom stay off */
             touch-action: pan-x pan-y;
             
@@ -67,6 +67,7 @@
             min-width: 150px; z-index: 1000; box-shadow: 2px 2px 5px rgba(0,0,0,0.5); 
             border: 2px solid; border-color: var(--win-white) var(--win-shadow) var(--win-shadow) var(--win-white);
         }
+        .menu-content.open { display: block; }
         .menu-content div { padding: 4px 10px; cursor: pointer; display: flex; justify-content: space-between; color: black; }
         .menu-content div:hover { background: var(--win-blue); color: white; }
 
@@ -114,9 +115,22 @@
         .n-1 { color: blue; } .n-2 { color: green; } .n-3 { color: red; } .n-4 { color: darkblue; }
         .n-5 { color: darkred; } .n-6 { color: teal; } .n-7 { color: black; } .n-8 { color: gray; }
 
+        .dialog-backdrop {
+            position: fixed; inset: 0; z-index: 1055; padding: 0.5rem;
+            display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.5);
+        }
+        .dialog { display: block; width: 100%; }
+        @media (min-width: 576px) { .dialog { max-width: 300px; } }
+        .dialog-button {
+            display: inline-block; vertical-align: middle; width: 100%; margin-top: 0.5rem; padding: 0.25rem 0.5rem;
+            font-family: inherit; font-size: 0.875rem; line-height: 1.5; color: #212529; text-align: center;
+            background: var(--win-gray); border-radius: 0; cursor: pointer;
+        }
+        .dialog-button:focus-visible { outline: 1px dotted black; outline-offset: -6px; }
         .score-box { background: var(--win-gray); padding: 10px; }
         .score-list-container { background: var(--win-gray); border: 2px solid; border-color: var(--win-shadow) var(--win-white) var(--win-white) var(--win-shadow); height: 220px; }
         .score-table { width: 100%; border-collapse: collapse; font-size: 13px; color: black; }
+        .score-table td:last-child { text-align: right; }
 
         @media (max-width: 600px) { :root { --cell-max: 28px; } }
     </style>
@@ -157,20 +171,15 @@
     </div>
 </div>
 
-<div class="modal fade" id="scoreModal" tabindex="-1">
-    <div class="modal-dialog modal-sm modal-dialog-centered">
-        <div class="modal-content window outset">
-            <div class="title-bar"><span id="score-title">Scores</span></div>
-            <div class="score-box">
-                <div class="score-list-container"><table class="score-table"><tbody id="score-list"></tbody></table></div>
-                <button class="btn btn-sm outset w-100 mt-2" data-bs-dismiss="modal" style="background:var(--win-gray); border-radius:0;">OK</button>
-            </div>
+<div class="dialog-backdrop" id="score-dialog" hidden>
+    <div class="dialog window outset" role="dialog" aria-modal="true" aria-labelledby="score-title">
+        <div class="title-bar"><span id="score-title">Scores</span></div>
+        <div class="score-box">
+            <div class="score-list-container"><table class="score-table"><tbody id="score-list"></tbody></table></div>
+            <button class="dialog-button outset" id="score-ok">OK</button>
         </div>
     </div>
 </div>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" 
-        integrity="sha384-geWF76RCwLtnZ8qwWowPQNguL3RmwHVBC9FhGdlKrxdiJJigb/j/68SIy3Te4Bkz" crossorigin="anonymous"></script>
 
 <script>
     const STORAGE_KEY = 'win95_minesweeper_permanent_scores';
@@ -198,23 +207,31 @@
     };
     let currentLvl = 'beginner';
 
+    const gameMenuTrigger = document.getElementById('game-menu-trigger');
+    const gameMenuContent = document.getElementById('game-menu-content');
+    const mineCountDisplay = document.getElementById('mine-count');
+    const timerDisplay = document.getElementById('timer');
+    const faceButton = document.getElementById('reset-btn');
+    const minefield = document.getElementById('minefield');
+    const scoreDialog = document.getElementById('score-dialog');
+
     function closeMenus() {
-        $(".menu-content").hide();
-        $(".menu-trigger").removeClass("active");
+        gameMenuContent.classList.remove('open');
+        gameMenuTrigger.classList.remove('active');
     }
 
-    $("#game-menu-trigger").on('click', function(e) {
+    gameMenuTrigger.addEventListener('click', (e) => {
         e.stopPropagation();
-        $(this).toggleClass("active");
-        $("#game-menu-content").toggle();
+        const isOpen = gameMenuContent.classList.toggle('open');
+        gameMenuTrigger.classList.toggle('active', isOpen);
     });
 
-    $("#help-trigger").on('click', function() {
+    document.getElementById('help-trigger').addEventListener('click', () => {
         closeMenus();
         alert('Controls:\n- Click Smiley: New Game\n- Right Click Smiley: Hint (+5s)\n- Right Click Number: Chord Sweep\n- Double Tap Number: Chord Sweep\n- Right Click/Long Press Cell: Toggle Flag / Question Mark');
     });
 
-    $("#btn-new-game").on('click', function() {
+    document.getElementById('btn-new-game').addEventListener('click', () => {
         closeMenus();
         confirmNewGame();
     });
@@ -223,15 +240,16 @@
         if (first || gameOver || confirm("Reset current game?")) initGame();
     }
 
-    $(".diff-opt").on('click', function() {
-        const lvl = $(this).data('lvl');
-        closeMenus();
-        currentLvl = lvl;
-        initGame();
+    document.querySelectorAll('.diff-opt').forEach((option) => {
+        option.addEventListener('click', () => {
+            closeMenus();
+            currentLvl = option.dataset.lvl;
+            initGame();
+        });
     });
 
-    $("#btn-scores").on('click', function() { closeMenus(); showLeaderboard(); });
-    $(document).on('click', closeMenus);
+    document.getElementById('btn-scores').addEventListener('click', () => { closeMenus(); showLeaderboard(); });
+    document.addEventListener('click', closeMenus);
 
     function initGame() {
         clearInterval(timer);
@@ -239,20 +257,27 @@
         rows = config.r; cols = config.c; mines = config.m;
         startTimeMs = null; hintPenaltySeconds = 0; safeCellsRevealed = 0; flags = 0; gameOver = false; first = true;
         
-        $('.diff-opt span').text('');
-        $(`#check-${currentLvl}`).text('✓');
+        document.querySelectorAll('.diff-opt span').forEach((check) => { check.textContent = ''; });
+        document.getElementById(`check-${currentLvl}`).textContent = '✓';
 
-        $('#timer').text('000'); $('#mine-count').text(String(mines).padStart(3, '0')); $('#reset-btn').text('🙂');
-        
-        const $f = $('#minefield').empty().css('grid-template-columns', `repeat(${cols}, auto)`);
-        $f[0].style.setProperty('--cols', cols);
+        timerDisplay.textContent = '000';
+        mineCountDisplay.textContent = String(mines).padStart(3, '0');
+        faceButton.textContent = '🙂';
+
+        minefield.replaceChildren();
+        minefield.style.gridTemplateColumns = `repeat(${cols}, auto)`;
+        minefield.style.setProperty('--cols', cols);
         grid = Array.from({ length: rows }, () => []);
 
         for (let r = 0; r < rows; r++) {
             for (let c = 0; c < cols; c++) {
-                const $c = $('<div class="cell"></div>').data({ row: r, col: c }).appendTo($f);
-                
-                grid[r][c] = { isM: false, rev: false, flg: false, qst: false, n: 0, $el: $c };
+                const el = document.createElement('div');
+                el.className = 'cell';
+                el.dataset.row = r;
+                el.dataset.col = c;
+                minefield.append(el);
+
+                grid[r][c] = { isM: false, rev: false, flg: false, qst: false, n: 0, el };
             }
         }
     }
@@ -260,8 +285,8 @@
     // ---- Cell input: Pointer Events, one code path for mouse, touch and pen ----
 
     function cellFromElement(element) {
-        const $cell = $(element).closest('.cell');
-        return $cell.length ? { row: $cell.data('row'), col: $cell.data('col') } : null;
+        const cellElement = element?.closest('.cell');
+        return cellElement ? { row: Number(cellElement.dataset.row), col: Number(cellElement.dataset.col) } : null;
     }
 
     function isSameCell(a, b) {
@@ -269,7 +294,7 @@
     }
 
     function resetFace() {
-        if (!gameOver) $('#reset-btn').text('🙂');
+        if (!gameOver) faceButton.textContent = '🙂';
     }
 
     function cancelPress() {
@@ -290,11 +315,11 @@
         }, HOLD_DELAY);
     }
 
-    $('#minefield').on('pointerdown', (e) => {
+    minefield.addEventListener('pointerdown', (e) => {
         const cell = cellFromElement(e.target);
         if (!cell || gameOver) return;
-        const isMouse = e.originalEvent.pointerType === 'mouse';
-        if (isMouse && e.originalEvent.button !== 0) return; // Right click is handled by contextmenu
+        const isMouse = e.pointerType === 'mouse';
+        if (isMouse && e.button !== 0) return; // Right click is handled by contextmenu
 
         const isDoubleTap = isSameCell(cell, lastTap) && Date.now() - lastTap.timeMs < DOUBLE_TAP_DELAY;
         if (isDoubleTap && grid[cell.row][cell.col].rev) {
@@ -305,19 +330,19 @@
         }
 
         pressedCell = cell;
-        $('#reset-btn').text('😮');
+        faceButton.textContent = '😮';
         clearTimeout(cellHoldTimer);
         // A slow mouse click is still a click; only touch and pen hold to flag
         if (!isMouse) startHoldToFlag(cell);
     });
 
-    $(document).on('pointermove', (e) => {
+    document.addEventListener('pointermove', (e) => {
         if (!pressedCell) return;
         const cellUnderPointer = cellFromElement(document.elementFromPoint(e.clientX, e.clientY));
         if (!isSameCell(cellUnderPointer, pressedCell)) cancelPress();
     });
 
-    $(document).on('pointerup', (e) => {
+    document.addEventListener('pointerup', (e) => {
         if (!pressedCell) return;
         const releasedOn = cellFromElement(document.elementFromPoint(e.clientX, e.clientY));
         const tappedCell = pressedCell;
@@ -327,9 +352,9 @@
         handleAction(tappedCell.row, tappedCell.col);
     });
 
-    $(document).on('pointercancel', cancelPress);
+    document.addEventListener('pointercancel', cancelPress);
 
-    $('#minefield').on('contextmenu', (e) => {
+    minefield.addEventListener('contextmenu', (e) => {
         e.preventDefault();
         const cell = cellFromElement(e.target);
         if (!cell || gameOver || blockContextMenu) return;
@@ -372,13 +397,13 @@
         resetFace();
     }
 
-    $('#reset-btn').on('pointerdown', (e) => {
-        const pointerType = e.originalEvent.pointerType;
-        if (pointerType === 'mouse' && e.originalEvent.button !== 0) return; // Right click is handled by contextmenu
+    faceButton.addEventListener('pointerdown', (e) => {
+        const pointerType = e.pointerType;
+        if (pointerType === 'mouse' && e.button !== 0) return; // Right click is handled by contextmenu
 
         facePressPointerType = pointerType;
         faceWasLongPress = false;
-        $('#reset-btn').text('😮');
+        faceButton.textContent = '😮';
         if (pointerType !== 'mouse') {
             faceHoldTimer = setTimeout(() => {
                 if (!first && !gameOver) { giveHint(); faceWasLongPress = true; }
@@ -386,7 +411,7 @@
         }
     });
 
-    $('#reset-btn').on('contextmenu', (e) => {
+    faceButton.addEventListener('contextmenu', (e) => {
         e.preventDefault();
         // A touch long press fires contextmenu too, but the hold timer already gives that hint
         if (facePressPointerType === null && !first && !gameOver) giveHint();
@@ -394,12 +419,12 @@
 
     // Document-level move/up/cancel handlers (the cells register theirs above): a press can end anywhere,
     // and touch pointers stay captured by the element they started on. Cells and smiley track separate state.
-    $(document).on('pointermove', (e) => {
+    document.addEventListener('pointermove', (e) => {
         if (facePressPointerType === null) return;
         if (!document.elementFromPoint(e.clientX, e.clientY)?.closest('#reset-btn')) cancelFacePress();
     });
 
-    $(document).on('pointerup', (e) => {
+    document.addEventListener('pointerup', (e) => {
         if (facePressPointerType === null) return;
         const releasedOnFace = document.elementFromPoint(e.clientX, e.clientY)?.closest('#reset-btn');
         const wasLongPress = faceWasLongPress;
@@ -407,16 +432,16 @@
         if (releasedOnFace && !wasLongPress) confirmNewGame();
     });
 
-    $(document).on('pointercancel', cancelFacePress);
+    document.addEventListener('pointercancel', cancelFacePress);
 
     function giveHint() {
         let safeCells = grid.flat().filter(c => !c.isM && !c.rev && !c.flg);
         if (safeCells.length > 0) {
             const hint = safeCells[Math.floor(Math.random() * safeCells.length)];
-            hint.$el.addClass('hint-flash');
+            hint.el.classList.add('hint-flash');
             hintPenaltySeconds += HINT_PENALTY_SECONDS;
             showElapsedTime();
-            setTimeout(() => hint.$el.removeClass('hint-flash'), 1500);
+            setTimeout(() => hint.el.classList.remove('hint-flash'), 1500);
         }
     }
 
@@ -425,23 +450,23 @@
         const cell = grid[r][c];
         if (cell.rev) return;
 
-        cell.$el.empty();
-        
+        cell.el.replaceChildren();
+
         // Cycle Pattern: None -> Flag -> Question -> None
         if (!cell.flg && !cell.qst) {
             cell.flg = true;
-            cell.$el.append(FLAG_HTML);
+            cell.el.innerHTML = FLAG_HTML;
             flags++;
         } else if (cell.flg) {
             cell.flg = false;
             cell.qst = true;
-            cell.$el.text('?');
+            cell.el.textContent = '?';
             flags--;
         } else {
             cell.qst = false;
         }
 
-        $('#mine-count').text(String(Math.max(0, mines - flags)).padStart(3, '0'));
+        mineCountDisplay.textContent = String(Math.max(0, mines - flags)).padStart(3, '0');
     }
 
     function handleAction(r, c) {
@@ -472,7 +497,8 @@
 
     function hitMine(cell) {
         cell.rev = true;
-        cell.$el.addClass('revealed mine-hit').removeClass('outset').empty();
+        cell.el.replaceChildren();
+        cell.el.classList.add('revealed', 'mine-hit');
         end(false);
     }
 
@@ -480,9 +506,9 @@
         const cell = grid[r][c];
         if (gameOver || cell.rev || cell.flg) return;
         if (cell.isM) { hitMine(cell); return; }
-        cell.rev = true; cell.$el.addClass('revealed').removeClass('outset').empty();
+        cell.rev = true; cell.el.replaceChildren(); cell.el.classList.add('revealed');
         safeCellsRevealed++;
-        if (cell.n > 0) cell.$el.text(cell.n).addClass('n-'+cell.n);
+        if (cell.n > 0) { cell.el.textContent = cell.n; cell.el.classList.add('n-'+cell.n); }
         else { for(let i=-1; i<=1; i++) for(let j=-1; j<=1; j++) if(grid[r+i] && grid[r+i][c+j]) reveal(r+i, c+j); }
     }
 
@@ -498,7 +524,7 @@
 
     function showElapsedTime() {
         const displayedSeconds = Math.min(getElapsedSeconds(), MAX_TIME_SECONDS);
-        $('#timer').text(String(displayedSeconds).padStart(3, '0'));
+        timerDisplay.textContent = String(displayedSeconds).padStart(3, '0');
     }
 
     function startClock() {
@@ -510,19 +536,21 @@
         if (gameOver) return;
         gameOver = true; clearInterval(timer);
         showElapsedTime();
-        $('#reset-btn').text(win ? '😎' : '😵');
+        faceButton.textContent = win ? '😎' : '😵';
         if (!win) {
-            grid.flat().forEach(c => { 
-                if (c.isM && !c.flg) { 
-                    c.$el.empty().addClass('mine-revealed').addClass('revealed').removeClass('outset'); 
-                } 
-                else if (!c.isM && c.flg) { 
-                    c.$el.empty().addClass('misflagged').addClass('revealed').removeClass('outset'); 
+            grid.flat().forEach(c => {
+                if (c.isM && !c.flg) {
+                    c.el.replaceChildren();
+                    c.el.classList.add('mine-revealed', 'revealed');
+                }
+                else if (!c.isM && c.flg) {
+                    c.el.replaceChildren();
+                    c.el.classList.add('misflagged', 'revealed');
                 }
             });
         } else {
-            grid.flat().forEach(c => { if(c.isM && !c.flg) { c.flg = true; c.$el.empty().append(FLAG_HTML); } });
-            $('#mine-count').text('000');
+            grid.flat().forEach(c => { if(c.isM && !c.flg) { c.flg = true; c.el.innerHTML = FLAG_HTML; } });
+            mineCountDisplay.textContent = '000';
             const level = currentLvl;
             const time = Math.min(getElapsedSeconds(), MAX_TIME_SECONDS);
             if (isTopScore(level, time)) {
@@ -608,20 +636,34 @@
 
     function showLeaderboard(level = currentLvl) {
         const s = getScores()[level] || [];
-        const $l = $('#score-list').empty();
-        $('#score-title').text(level.toUpperCase() + " Ranking");
+        const scoreList = document.getElementById('score-list');
+        scoreList.replaceChildren();
+        document.getElementById('score-title').textContent = level.toUpperCase() + " Ranking";
         s.forEach((x, i) => {
             // Names are user input, so they go in as text, never as HTML
-            $l.append($('<tr>').append(
-                $('<td style="width:25px">').text(`${i+1}.`),
-                $('<td>').text(x.name),
-                $('<td class="text-end">').text(`${Number(x.time)}s`)
-            ));
+            const rank = document.createElement('td');
+            rank.style.width = '25px';
+            rank.textContent = `${i+1}.`;
+            const name = document.createElement('td');
+            name.textContent = x.name;
+            const time = document.createElement('td');
+            time.textContent = `${Number(x.time)}s`;
+            const row = document.createElement('tr');
+            row.append(rank, name, time);
+            scoreList.append(row);
         });
-        new bootstrap.Modal('#scoreModal').show();
+        scoreDialog.hidden = false;
     }
 
-    $(document).ready(initGame);
+    function closeLeaderboard() {
+        scoreDialog.hidden = true;
+    }
+
+    document.getElementById('score-ok').addEventListener('click', closeLeaderboard);
+    scoreDialog.addEventListener('click', (e) => { if (e.target === scoreDialog) closeLeaderboard(); });
+    document.addEventListener('keydown', (e) => { if ((e.key === 'Escape' || e.key === 'Enter') && !scoreDialog.hidden) closeLeaderboard(); });
+
+    initGame();
 </script>
 </body>
 </html>
