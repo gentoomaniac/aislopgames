@@ -449,7 +449,28 @@ gameWrapper.addEventListener("mousemove", (e) => {
     if(gameState === 'PLAYING') trackCursor(e.clientX, false); 
 });
 
-canvas.addEventListener('pointerdown', () => { if(gameState === 'PLAYING') launchBall(); });
+// A touch can be the start of a swipe to position the paddle, so touch launches on a short tap instead of on touch-down
+const TAP_MAX_DURATION_MS = 300, TAP_MAX_MOVE_PX = 10;
+let touchTapStart = null;
+
+canvas.addEventListener('pointerdown', (e) => {
+    if (gameState !== 'PLAYING') return;
+    if (e.pointerType === 'touch') {
+        touchTapStart = { x: e.clientX, y: e.clientY, timeMs: performance.now() };
+    } else {
+        launchBall();
+    }
+});
+
+canvas.addEventListener('pointerup', (e) => {
+    if (e.pointerType !== 'touch' || !touchTapStart) return;
+    const isShort = performance.now() - touchTapStart.timeMs <= TAP_MAX_DURATION_MS;
+    const movedPx = Math.hypot(e.clientX - touchTapStart.x, e.clientY - touchTapStart.y);
+    touchTapStart = null;
+    if (gameState === 'PLAYING' && isShort && movedPx <= TAP_MAX_MOVE_PX) launchBall();
+});
+
+canvas.addEventListener('pointercancel', () => { touchTapStart = null; });
 
 function spawnBall(isExtra = false, baseX = null, baseY = null) {
     let speed = diffSettings[difficulty].ballSpeed * Math.pow(1.05, loopCount);
