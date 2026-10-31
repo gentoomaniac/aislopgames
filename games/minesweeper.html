@@ -245,7 +245,7 @@
     }
 
     // content is text or a DOM node. Resolves to { isOk, text }; text is only meaningful with inputMaxLength.
-    function showDialog({ title, content, okLabel = 'OK', cancelLabel = null, inputMaxLength = 0 }) {
+    function showDialog({ title, content, okLabel = 'OK', cancelLabel = null, inputMaxLength = 0, inputValue = '' }) {
         finishDialog?.(false);
         dialogTitle.textContent = title;
         dialogContent.replaceChildren(content);
@@ -254,7 +254,7 @@
         dialogCancelButton.hidden = cancelLabel === null;
         dialogInput.hidden = inputMaxLength === 0;
         dialogInput.maxLength = inputMaxLength;
-        dialogInput.value = '';
+        dialogInput.value = inputValue;
         dialogBackdrop.hidden = false;
         dialogShownAtMs = Date.now();
         if (inputMaxLength > 0) dialogInput.focus();
@@ -311,13 +311,19 @@
         confirmNewGame();
     });
 
+    // Only a game in progress has something to lose
+    async function canAbandonGame() {
+        return first || gameOver || await askConfirm('Reset current game?');
+    }
+
     async function confirmNewGame() {
-        if (first || gameOver || await askConfirm('Reset current game?')) initGame();
+        if (await canAbandonGame()) initGame();
     }
 
     document.querySelectorAll('.diff-opt').forEach((option) => {
-        option.addEventListener('click', () => {
+        option.addEventListener('click', async () => {
             closeMenus();
+            if (!await canAbandonGame()) return;
             currentLvl = option.dataset.lvl;
             initGame();
         });
@@ -697,12 +703,18 @@
         return best.length < MAX_SCORES_PER_LEVEL || time < best[best.length - 1].time;
     }
 
+    // A qualifying time is only lost when the player confirms they want to discard it
     async function askNameAndSaveScore(level, time) {
-        const { isOk, text } = await showDialog({
-            title: 'High Score!', content: createMessage('Enter your name:'),
-            okLabel: 'OK', cancelLabel: 'Cancel', inputMaxLength: MAX_NAME_LENGTH,
-        });
-        if (isOk && text) saveScore(level, text, time);
+        let enteredName = '';
+        while (true) {
+            const { isOk, text } = await showDialog({
+                title: 'High Score!', content: createMessage('Enter your name:'),
+                okLabel: 'OK', cancelLabel: 'Cancel', inputMaxLength: MAX_NAME_LENGTH, inputValue: enteredName,
+            });
+            if (isOk && text) { saveScore(level, text, time); return; }
+            if (await askConfirm('Discard your time?')) return;
+            enteredName = text;
+        }
     }
 
     function saveScore(level, name, time) {
