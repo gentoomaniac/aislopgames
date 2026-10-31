@@ -361,6 +361,10 @@ function loop() {
         score += 10;
         foodEatenCount++;
         genFood();
+        if (!food) {
+            draw();
+            return end(true);
+        }
         
         if (foodEatenCount % 5 === 0) genBonus();
 
@@ -387,24 +391,25 @@ function loop() {
     gameTimeout = setTimeout(loop, currentSpeed);
 }
 
-function genFood() {
-    let valid = false;
-    while(!valid){
-        food = {x: Math.floor(Math.random()*TILE_COUNT), y: Math.floor(Math.random()*TILE_COUNT)};
-        valid = !snake.some(p => p.x === food.x && p.y === food.y);
+// Picks among the free cells instead of retrying at random, so it also
+// terminates when the board is (almost) full. Returns null if there is none.
+function pickFreeCell(occupiedCells) {
+    const freeCells = [];
+    for (let y = 0; y < TILE_COUNT; y++) {
+        for (let x = 0; x < TILE_COUNT; x++) {
+            if (!occupiedCells.some(p => p.x === x && p.y === y)) freeCells.push({x, y});
+        }
     }
+    return freeCells.length ? freeCells[Math.floor(Math.random() * freeCells.length)] : null;
+}
+
+function genFood() {
+    food = pickFreeCell(snake);
 }
 
 function genBonus() {
-    let valid = false;
-    while(!valid){
-        bonus = {
-            x: Math.floor(Math.random()*TILE_COUNT), 
-            y: Math.floor(Math.random()*TILE_COUNT),
-            value: Math.random() > 0.7 ? 50 : 20
-        };
-        valid = !snake.some(p => p.x === bonus.x && p.y === bonus.y) && (bonus.x !== food.x || bonus.y !== food.y);
-    }
+    const cell = pickFreeCell([...snake, food]);
+    bonus = cell && {...cell, value: Math.random() > 0.7 ? 50 : 20};
     bonusTimer = Math.floor(4000 / currentSpeed); 
 }
 
@@ -432,14 +437,14 @@ function draw() {
     ctx.fillStyle = 'black';
     snake.forEach(p => drawPixel(p.x, p.y));
 
-    drawFruit(food.x, food.y);
+    if (food) drawFruit(food.x, food.y);
 
     if (bonus) {
         drawBonus(bonus.x, bonus.y, bonusTimer);
     }
 }
 
-function end() {
+function end(isWin = false) {
     clearTimeout(gameTimeout);
     
     const currDiff = DIFFICULTIES[diffIdx];
@@ -460,7 +465,7 @@ function end() {
     if (isHighScore) {
         currentView = 'INPUT';
         contentBox.innerHTML = `
-            <h1>HIGH SCORE!</h1>
+            <h1>${isWin ? 'YOU WIN!' : 'HIGH SCORE!'}</h1>
             <div style="font-size:1.2rem">${currDiff}</div>
             <div>SCORE: ${score}</div>
             <input type="text" id="pName" maxlength="8" placeholder="YOUR NAME" autofocus>
@@ -473,7 +478,7 @@ function end() {
     } else {
         currentView = 'CRASHED';
         contentBox.innerHTML = `
-            <h1>CRASHED!</h1>
+            <h1>${isWin ? 'YOU WIN!' : 'CRASHED!'}</h1>
             <div style="font-size:1.2rem">${currDiff}</div>
             <div>SCORE: ${score}</div>
             <div class="menu-item active" style="margin-top:15px" data-action="main">MENU</div>
