@@ -96,6 +96,8 @@
         .modal .modal-footer { background-color: var(--controls-bg); border-top: 1px solid var(--grid-bg); }
         .modal .modal-content h4 { font-size: 1.5rem; margin-bottom: 1rem; }
         .modal p { color: var(--text-muted); }
+        #confirm-modal .modal-footer { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 4px 16px; }
+        #confirm-modal .modal-footer .btn, #confirm-modal .modal-footer .btn-flat { min-height: 48px; line-height: 48px; margin: 0; touch-action: manipulation; }
         
         /* --- SIDE MENU REORGANIZATION --- */
         .sidenav { background-color: var(--card-bg) !important; width: 320px; }
@@ -410,6 +412,17 @@
         </div>
     </div>
 
+    <div id="confirm-modal" class="modal">
+        <div class="modal-content">
+            <h4 id="confirm-title"></h4>
+            <p id="confirm-message"></p>
+        </div>
+        <div class="modal-footer">
+            <a href="#!" id="confirm-cancel" class="waves-effect btn-flat" style="color: var(--text-muted);">Cancel</a>
+            <a href="#!" id="confirm-accept" class="waves-effect waves-light btn-custom-primary btn"></a>
+        </div>
+    </div>
+
     <main class="main-content">
         <canvas id="firework-canvas"></canvas>
 
@@ -500,7 +513,8 @@
         $(document).ready(function() {
             M.FormSelect.init($('select:not(.browser-default)'));
             $('.sidenav').sidenav(); 
-            $('.modal').modal();
+            $('.modal:not(#confirm-modal)').modal();
+            initConfirmDialog();
             
             // Attached first so input keeps working whatever happens while loading or generating
             $difficulty.on('change', saveGameState);
@@ -537,11 +551,66 @@
             });
         }
 
-        function resetCustomTheme() {
+        // --- Confirm dialog ---
+        const $confirmModal = $('#confirm-modal');
+        let confirmModalInstance = null;
+        let isConfirmAccepted = false;
+        let resolveConfirm = null;
+
+        // Resolves to true if the player confirms, false on cancel, Escape or a click outside.
+        function confirmAction({ title, message, confirmLabel }) {
+            if (resolveConfirm) return Promise.resolve(false);
+            $('#confirm-title').text(title);
+            $('#confirm-message').text(message);
+            $('#confirm-accept').text(confirmLabel);
+            isConfirmAccepted = false;
+            return new Promise(resolve => {
+                resolveConfirm = resolve;
+                confirmModalInstance.open();
+            });
+        }
+
+        function closeConfirmDialog(isAccepted) {
+            isConfirmAccepted = isAccepted;
+            confirmModalInstance.close();
+        }
+
+        function initConfirmDialog() {
+            confirmModalInstance = M.Modal.init($confirmModal[0], {
+                onOpenEnd: () => $('#confirm-accept').focus(),
+                onCloseEnd: () => {
+                    const resolve = resolveConfirm;
+                    resolveConfirm = null;
+                    resolve(isConfirmAccepted);
+                }
+            });
+            $('#confirm-accept').on('click', (e) => { e.preventDefault(); closeConfirmDialog(true); });
+            $('#confirm-cancel').on('click', (e) => { e.preventDefault(); closeConfirmDialog(false); });
+
+            // Capture phase and stopImmediatePropagation: Materialize would otherwise close every
+            // open modal on Escape, including the New Game modal underneath this dialog.
+            document.addEventListener('keydown', (e) => {
+                if (!resolveConfirm || !$confirmModal.hasClass('open')) return;
+                if (e.key === 'Escape') {
+                    e.stopImmediatePropagation();
+                    closeConfirmDialog(false);
+                } else if (e.key === 'Enter' && e.target.id !== 'confirm-cancel') {
+                    e.preventDefault();
+                    closeConfirmDialog(true);
+                }
+            }, true);
+        }
+
+        async function resetCustomTheme() {
             const presetKey = $('#preset-select').val();
             if (!presetKey) return;
             const presetName = $('#preset-select option:selected').text();
-            if (confirm(`Are you sure you want to overwrite your custom colors with the ${presetName} preset?`)) {
+            const isConfirmed = await confirmAction({
+                title: 'Overwrite custom colors?',
+                message: `Your custom colors will be replaced with the ${presetName} preset.`,
+                confirmLabel: 'Overwrite'
+            });
+            if (isConfirmed) {
                 const colors = themePresets[presetKey];
                 Object.keys(colors).forEach(key => {
                     customThemeState[key] = colors[key];
@@ -1058,7 +1127,14 @@
             } catch (e) { return false; }
         }
 
-        function confirmSolveGame() { if (confirm("Are you sure you want to reveal the solution? This will end your current game.")) solveGame(); }
+        async function confirmSolveGame() {
+            const isConfirmed = await confirmAction({
+                title: 'Reveal the solution?',
+                message: 'This will end your current game.',
+                confirmLabel: 'Solve'
+            });
+            if (isConfirmed) solveGame();
+        }
 
         function changeTheme(skipSave = false) {
             const newTheme = $themeSelect.val();
