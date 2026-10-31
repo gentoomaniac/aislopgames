@@ -926,45 +926,97 @@
             writeSavedState(state);
         }
 
+        const SUPPORTED_GRID_SIZES = [4, 5, 9];
+        const HEX_COLOR_PATTERN = /^#[0-9a-f]{3,8}$/i;
+
+        function isDigitGrid(grid, size, minDigit) {
+            return Array.isArray(grid) && grid.length === size && grid.every(row =>
+                Array.isArray(row) && row.length === size &&
+                row.every(n => Number.isInteger(n) && n >= minDigit && n <= size));
+        }
+
+        function isNotesBoard(notes, size) {
+            return Array.isArray(notes) && notes.length === size * size &&
+                notes.every(cellNotes => Array.isArray(cellNotes) &&
+                    cellNotes.every(n => Number.isInteger(n) && n >= 1 && n <= size));
+        }
+
+        // Returns the saved state with every field checked, or null if it can't be trusted.
+        // Optional parts that are missing or broken (settings, notes, colours) fall back to defaults.
+        function parseSavedState(savedText) {
+            let state;
+            try {
+                state = JSON.parse(savedText);
+            } catch (e) {
+                return null;
+            }
+            if (!state || typeof state !== 'object') return null;
+
+            const settings = state.settings && typeof state.settings === 'object' ? state.settings : {};
+            const size = settings.gridSize === undefined ? 9 : parseInt(settings.gridSize);
+            if (!SUPPORTED_GRID_SIZES.includes(size)) return null;
+
+            const isUserBoardValid = Array.isArray(state.userBoard) && state.userBoard.length === size * size &&
+                state.userBoard.every(n => Number.isInteger(n) && n >= 0 && n <= size);
+            if (!isDigitGrid(state.solutionBoard, size, 1) || !isDigitGrid(state.currentBoard, size, 0) || !isUserBoardValid) return null;
+
+            const customColors = {};
+            Object.keys(customThemeState).forEach(key => {
+                const color = state.customColors && state.customColors[key];
+                if (typeof color === 'string' && HEX_COLOR_PATTERN.test(color)) customColors[key] = color;
+            });
+
+            return {
+                gridSize: size, settings: settings, customColors: customColors,
+                solutionBoard: state.solutionBoard, currentBoard: state.currentBoard, userBoard: state.userBoard,
+                notesBoard: isNotesBoard(state.notesBoard, size) ? state.notesBoard : null
+            };
+        }
+
+        function setSelectValue($select, value, fallback) {
+            const isKnownOption = $select.find('option').toArray().some(option => option.value === String(value));
+            $select.val(isKnownOption ? value : fallback);
+        }
+
         function loadGameState() {
-            const saved = readSavedState();
-            if (!saved) return false;
+            const savedText = readSavedState();
+            if (!savedText) return false;
+
+            const state = parseSavedState(savedText);
+            if (!state) return false;
 
             try {
-                const state = JSON.parse(saved);
-                if (!state.solutionBoard || !state.currentBoard || !state.userBoard) return false; 
-
                 solutionBoard = state.solutionBoard; currentBoard = state.currentBoard;
 
-                const settings = state.settings || {};
-                $difficulty.val(settings.difficulty || '40');
-                $themeSelect.val(settings.theme || 'theme-light');
+                const settings = state.settings;
+                setSelectValue($difficulty, settings.difficulty, '40');
+                setSelectValue($themeSelect, settings.theme, 'theme-light');
                 $highlightToggle.prop('checked', settings.highlight !== false);
-                $animToggle.prop('checked', settings.animations !== false);
+                // The toggle is "Disable animations" and the saved flag follows it: true means off
+                $animToggle.prop('checked', settings.animations === true);
                 $hardModeToggle.prop('checked', settings.hardMode === true);
                 $fastFillToggle.prop('checked', settings.fastFill === true);
                 $constraintsToggle.prop('checked', settings.constraints === true);
                 $('#toggle-auto-notes').prop('checked', settings.autoNotes === true);
-                
+
                 fastFillMode = settings.fastFill === true;
                 constraintsEnabled = settings.constraints === true;
-                
-                const loadedSize = settings.gridSize ? parseInt(settings.gridSize) : 9;
-                setGridSize(loadedSize);
-                $gridSizeSelect.val(loadedSize);
+
+                setGridSize(state.gridSize);
+                $gridSizeSelect.val(state.gridSize);
 
                 notesBoard = state.notesBoard || Array(gridSize * gridSize).fill().map(() => []);
-                
-                M.FormSelect.init($('select:not(.browser-default)')); 
-                if (state.customColors) customThemeState = { ...customThemeState, ...state.customColors };
+
+                M.FormSelect.init($('select:not(.browser-default)'));
+                customThemeState = { ...customThemeState, ...state.customColors };
                 changeTheme(true);
-                
+
                 animationsEnabled = !$animToggle.is(':checked');
                 if (!animationsEnabled) $body.addClass('animations-disabled');
                 highlightEnabled = $highlightToggle.is(':checked'); hardModeEnabled = $hardModeToggle.is(':checked');
 
                 if ($('#sudoku-board .cell').length !== (gridSize * gridSize)) initGrid();
-                
+
                 renderBoard(false);
                 const $inputs = $('#sudoku-board input');
                 $inputs.each(function(index) {
@@ -973,7 +1025,7 @@
                         $(this).val(userVal);
                     }
                 });
-                
+
                 if (!hardModeEnabled) {
                     $('#sudoku-board input').each(function(index) {
                         if ($(this).val() !== '' && !$(this).hasClass('given')) {
