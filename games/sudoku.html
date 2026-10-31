@@ -677,8 +677,18 @@
             }
         }
 
+        function isTypingInFormField(target) {
+            return $(target).is('input, select, textarea') && !$(target).is('#sudoku-board input');
+        }
+
+        function isMenuOpen() {
+            const isSidenavOpen = $('.sidenav').toArray().some(el => M.Sidenav.getInstance(el).isOpen);
+            return isSidenavOpen || $('.modal.open').length > 0;
+        }
+
         function handleKeyboardInput(e) {
             if (fastFillMode || !selectedCell || selectedCell.hasClass('locked') || selectedCell.hasClass('given')) return; 
+            if (e.ctrlKey || e.metaKey || e.altKey || isTypingInFormField(e.target) || isMenuOpen()) return;
             const key = e.key;
             const validRegex = new RegExp('^[1-' + gridSize + ']$');
             if (validRegex.test(key)) {
