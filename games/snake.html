@@ -537,10 +537,23 @@ function doAction(act) {
 }
 
 overlay.addEventListener('click', (e) => {
-    if (e.target.classList.contains('menu-item')) {
-        doAction(e.target.getAttribute('data-action'));
+    if (!e.target.classList.contains('menu-item')) return;
+
+    const act = e.target.getAttribute('data-action');
+    if (act === 'diff') {
+        // DIFF has no action of its own, so a click cycles it, like Right does.
+        const items = document.querySelectorAll('.menu-item');
+        menuIdx = [...items].indexOf(e.target);
+        changeDifficulty(1);
+        highlightMenuItem(items);
+        return;
     }
+    doAction(act);
 });
+
+function highlightMenuItem(items) {
+    items.forEach((it, i) => it.classList.toggle('active', i === menuIdx));
+}
 
 function queueTurn(dir) {
     const turn = DIRECTION_VECTORS[dir];
@@ -589,7 +602,7 @@ function handleInput(dir) {
         }
     }
 
-    items.forEach((it, i) => it.classList.toggle('active', i === menuIdx));
+    highlightMenuItem(items);
     
     if (dir === 'OK') {
         doAction(items[menuIdx]?.getAttribute('data-action'));
