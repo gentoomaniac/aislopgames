@@ -655,18 +655,26 @@ window.onkeydown = e => {
     }
 };
 
-let tsX, tsY;
-window.addEventListener('touchstart', e => { 
-    if (e.target.closest('#keypad-area')) return; 
-    tsX = e.touches[0].clientX; 
-    tsY = e.touches[0].clientY; 
+// Where the current touch began, or null if it didn't begin on the game area
+// (e.g. on the keypad), so such a touch never counts as a swipe or tap.
+let swipeStart = null;
+window.addEventListener('touchstart', e => {
+    swipeStart = e.target.closest('#keypad-area')
+        ? null
+        : {x: e.touches[0].clientX, y: e.touches[0].clientY};
 }, {passive: false});
 
 window.addEventListener('touchend', e => {
-    if (e.target.closest('#keypad-area') || e.target.classList.contains('menu-item') || e.target.id === 'pName') return; 
+    const start = swipeStart;
+    swipeStart = null;
+    if (!start) return;
+    if (e.target.classList.contains('menu-item') || e.target.id === 'pName') return;
 
-    let diffX = e.changedTouches[0].clientX - tsX, diffY = e.changedTouches[0].clientY - tsY;
-    if (Math.abs(diffX) < 15 && Math.abs(diffY) < 15) handleInput('OK');
+    let diffX = e.changedTouches[0].clientX - start.x, diffY = e.changedTouches[0].clientY - start.y;
+    if (Math.abs(diffX) < 15 && Math.abs(diffY) < 15) {
+        // A stray tap must not save the score; only the SAVE control does that.
+        if (currentView !== 'INPUT') handleInput('OK');
+    }
     else Math.abs(diffX) > Math.abs(diffY) ? handleInput(diffX > 0 ? 'R' : 'L') : handleInput(diffY > 0 ? 'D' : 'U');
 });
 
