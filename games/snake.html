@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Nokia Snake Retro - Navigation Refined</title>
     <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
     <style>
@@ -22,7 +22,6 @@
             margin: 0;
             font-family: 'VT323', monospace;
             overflow: hidden;
-            touch-action: none;
         }
 
         .phone-body {
@@ -40,6 +39,8 @@
             flex-direction: column;
             align-items: center;
             border: 5px solid #455a64;
+            /* Swipes steer on the phone; outside it the page can still be pinch-zoomed */
+            touch-action: none;
         }
 
         .earpiece {
@@ -689,9 +690,10 @@ window.onkeydown = e => {
 // (e.g. on the keypad), so such a touch never counts as a swipe or tap.
 let swipeStart = null;
 window.addEventListener('touchstart', e => {
-    swipeStart = e.target.closest('#keypad-area')
-        ? null
-        : {x: e.touches[0].clientX, y: e.touches[0].clientY};
+    const isOnGameArea = e.target.closest('.phone-body') && !e.target.closest('#keypad-area');
+    swipeStart = isOnGameArea
+        ? {x: e.touches[0].clientX, y: e.touches[0].clientY}
+        : null;
 }, {passive: false});
 
 window.addEventListener('touchend', e => {
