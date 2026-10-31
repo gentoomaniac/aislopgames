@@ -1299,69 +1299,40 @@
             });
         }
 
+        function revealHintCell($input, digit) {
+            const r = parseInt($input.attr('data-row')); const c = parseInt($input.attr('data-col'));
+
+            $input.val(digit).removeClass('anim-shake error-cell selected-cell').addClass('hint-highlight'); selectCell($input);
+            if (!hardModeEnabled) $input.addClass('locked');
+            if (animationsEnabled) { $input.addClass('anim-pop'); setTimeout(() => $input.removeClass('anim-pop'), 400); }
+            setTimeout(() => $input.removeClass('hint-highlight'), 1200);
+
+            notesBoard[r * gridSize + c] = [];
+            removeNotesFromAffected(r, c, digit);
+        }
+
         function giveHint() {
             stopFireworks(); clearHighlights(); setStatus('', 'neutral');
             if(fastFillMode) { $fastFillToggle.prop('checked', false); toggleFastFill(); } 
-            
-            let board = getBoardState();
-            let tempBoard = board.map(row => [...row]);
-            let isSolvable = false;
-            let hasAnyConflicts = false;
-            
-            for(let r=0; r<gridSize; r++){
-                for(let c=0; c<gridSize; c++){
-                    if(hasConflict(board, r, c)) hasAnyConflicts = true;
-                }
-            }
-            
-            if (!hasAnyConflicts) {
-                isSolvable = fillBoard(tempBoard);
-            }
 
-            if (isSolvable) {
-                let emptyCells = [];
-                $('#sudoku-board input').each(function() {
-                    if ($(this).val() === '') emptyCells.push($(this));
-                });
-                
-                if (emptyCells.length > 0) {
-                    const randomInput = emptyCells[Math.floor(Math.random() * emptyCells.length)];
-                    const r = parseInt(randomInput.attr('data-row')); const c = parseInt(randomInput.attr('data-col'));
-                    
-                    randomInput.val(tempBoard[r][c]).removeClass('anim-shake error-cell selected-cell').addClass('hint-highlight'); selectCell(randomInput);
-                    if (!hardModeEnabled) randomInput.addClass('locked');
-                    if (animationsEnabled) { randomInput.addClass('anim-pop'); setTimeout(() => randomInput.removeClass('anim-pop'), 400); }
-                    setTimeout(() => randomInput.removeClass('hint-highlight'), 1200);
-                    
-                    notesBoard[r * gridSize + c] = [];
-                    removeNotesFromAffected(r, c, tempBoard[r][c]);
-                    solutionBoard = tempBoard.map(row => [...row]); 
-                } else {
-                    setStatus('No hints needed! The board is currently correct.', 'neutral');
-                }
+            const wrongCells = [];
+            const emptyCells = [];
+            $('#sudoku-board input').each(function() {
+                const $input = $(this);
+                const r = parseInt($input.attr('data-row')); const c = parseInt($input.attr('data-col'));
+                if ($input.val() === '') emptyCells.push($input);
+                else if (!$input.hasClass('given') && parseInt($input.val()) !== solutionBoard[r][c]) wrongCells.push($input);
+            });
+
+            // Mistakes come first, so the hint never builds on a wrong value
+            const hintCells = wrongCells.length > 0 ? wrongCells : emptyCells;
+            if (hintCells.length > 0) {
+                const $hintCell = hintCells[Math.floor(Math.random() * hintCells.length)];
+                const r = parseInt($hintCell.attr('data-row')); const c = parseInt($hintCell.attr('data-col'));
+                revealHintCell($hintCell, solutionBoard[r][c]);
+                if (wrongCells.length > 0) setStatus('Corrected a mistake to help you progress!', 'neutral');
             } else {
-                let wrongCells = [];
-                $('#sudoku-board input').each(function() {
-                    const $input = $(this);
-                    const r = parseInt($input.attr('data-row')); const c = parseInt($input.attr('data-col'));
-                    if (!$input.hasClass('given') && $input.val() !== '' && parseInt($input.val()) !== solutionBoard[r][c]) {
-                        wrongCells.push($input);
-                    }
-                });
-                
-                if (wrongCells.length > 0) {
-                    const randomInput = wrongCells[Math.floor(Math.random() * wrongCells.length)];
-                    const r = parseInt(randomInput.attr('data-row')); const c = parseInt(randomInput.attr('data-col'));
-                    
-                    randomInput.val(solutionBoard[r][c]).removeClass('anim-shake error-cell selected-cell').addClass('hint-highlight'); selectCell(randomInput);
-                    if (!hardModeEnabled) randomInput.addClass('locked');
-                    if (animationsEnabled) { randomInput.addClass('anim-pop'); setTimeout(() => randomInput.removeClass('anim-pop'), 400); }
-                    setTimeout(() => randomInput.removeClass('hint-highlight'), 1200);
-                    
-                    notesBoard[r * gridSize + c] = [];
-                    removeNotesFromAffected(r, c, solutionBoard[r][c]);
-                    setStatus('Corrected a mistake to help you progress!', 'neutral');
-                }
+                setStatus('No hints needed! The board is currently correct.', 'neutral');
             }
             
             if ($('#toggle-auto-notes').is(':checked')) autoFillNotes();
