@@ -612,24 +612,31 @@ keypadArea.addEventListener('touchstart', triggerKeypadEvent, {passive: false});
 
 // Desktop Key Controls
 window.onkeydown = e => {
+    // Browser shortcuts (Ctrl+C, Cmd+D, ...) must not steer or abort the game.
+    if (e.ctrlKey || e.metaKey || e.altKey || !e.key) return;
+
+    const key = e.key.toLowerCase();
     const isTyping = document.activeElement && document.activeElement.id === 'pName';
     
     // Always allow Escape to trigger 'C' and exit safely
-    if (e.key === 'Escape') {
+    if (key === 'escape') {
         if (isTyping) document.activeElement.blur();
         handleInput('C');
         return;
     }
     
     if (!isTyping) { 
-        if (e.key === 'ArrowUp' || e.key === 'w' || e.key === '2') handleInput('U');
-        if (e.key === 'ArrowDown' || e.key === 's' || e.key === '8') handleInput('D');
-        if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === '4') handleInput('L');
-        if (e.key === 'ArrowRight' || e.key === 'd' || e.key === '6') handleInput('R');
-        if (e.key.toLowerCase() === 'c' || e.key === 'Backspace') handleInput('C');
+        if (key === 'arrowup' || key === 'w' || key === '2') handleInput('U');
+        if (key === 'arrowdown' || key === 's' || key === '8') handleInput('D');
+        if (key === 'arrowleft' || key === 'a' || key === '4') handleInput('L');
+        if (key === 'arrowright' || key === 'd' || key === '6') handleInput('R');
+        if (key === 'c' || key === 'backspace') handleInput('C');
+
+        // Stops the browser from scrolling the page while steering
+        if (gameState === 'PLAYING' && key.startsWith('arrow')) e.preventDefault();
     }
     
-    if (e.key === 'Enter' || (!isTyping && e.key === '5')) {
+    if (key === 'enter' || (!isTyping && key === '5')) {
         if (isTyping) document.activeElement.blur(); 
         handleInput('OK');
     }
