@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chroma Breakout - AislopGames</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
@@ -541,13 +541,17 @@ const gameWrapper = document.getElementById('game-wrapper');
 // preventDefault on a touch that starts on a button would swallow its click
 function isTouchOnButton(e) { return e.target.closest('button') !== null; }
 
+// A second finger means a pinch (the page may zoom around the play area), not steering
 gameWrapper.addEventListener("touchstart", (e) => { 
-    if(gameState === 'PLAYING' && !isTouchOnButton(e)) { e.preventDefault(); trackCursor(e.touches[0].clientX, true); } 
+    if(gameState === 'PLAYING' && !isTouchOnButton(e) && e.touches.length === 1) { e.preventDefault(); trackCursor(e.touches[0].clientX, true); } 
 }, { passive: false });
 
 gameWrapper.addEventListener("touchmove", (e) => { 
-    if(gameState === 'PLAYING' && !isTouchOnButton(e)) { e.preventDefault(); trackCursor(e.touches[0].clientX, false); } 
+    if(gameState === 'PLAYING' && !isTouchOnButton(e) && e.touches.length === 1) { e.preventDefault(); trackCursor(e.touches[0].clientX, false); } 
 }, { passive: false });
+
+// The finger left over after a pinch must not make the paddle jump by the distance it moved during it
+gameWrapper.addEventListener("touchend", (e) => { if (e.touches.length <= 1) lastCursorX = null; });
 
 gameWrapper.addEventListener("mouseenter", (e) => { 
     if(gameState === 'PLAYING') trackCursor(e.clientX, true); 
@@ -564,6 +568,7 @@ let touchTapStart = null;
 canvas.addEventListener('pointerdown', (e) => {
     if (gameState !== 'PLAYING') return;
     if (e.pointerType === 'touch') {
+        if (!e.isPrimary) { touchTapStart = null; return; }
         touchTapStart = { x: e.clientX, y: e.clientY, timeMs: performance.now() };
     } else {
         launchBall();
@@ -571,7 +576,7 @@ canvas.addEventListener('pointerdown', (e) => {
 });
 
 canvas.addEventListener('pointerup', (e) => {
-    if (e.pointerType !== 'touch' || !touchTapStart) return;
+    if (e.pointerType !== 'touch' || !e.isPrimary || !touchTapStart) return;
     const isShort = performance.now() - touchTapStart.timeMs <= TAP_MAX_DURATION_MS;
     const movedPx = Math.hypot(e.clientX - touchTapStart.x, e.clientY - touchTapStart.y);
     touchTapStart = null;
