@@ -331,12 +331,18 @@ const gameLevels = [
 let rightPressed = false, leftPressed = false;
 
 document.addEventListener("keydown", (e) => {
+    // Leave browser shortcuts (Ctrl+P, Alt+E, Cmd+N, ...) alone
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+
     let key = e.key.toLowerCase();
+    // Holding a toggle key would flip the state on every auto-repeat
+    if (e.repeat && ['n', 'e', 'p'].includes(key)) return;
     if (key === 'n' && gameState === 'LEADERBOARD' && !document.getElementById('new-game-hint').classList.contains('hidden')) { startGame(); return; }
     if (key === 'e' && ['PLAYING', 'PAUSED', 'INTERMISSION'].includes(gameState)) { exitToMenu(); return; }
     if (key === 'p' && ['PLAYING', 'PAUSED'].includes(gameState)) { togglePause(); return; }
     if ((e.key === " " || e.key === "ArrowUp") && gameState === 'PLAYING') launchBall();
     if (gameState === 'PLAYING') {
+        if ([" ", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Left", "Right"].includes(e.key)) e.preventDefault();
         if (e.key === "Right" || e.key === "ArrowRight") rightPressed = true;
         else if (e.key === "Left" || e.key === "ArrowLeft") leftPressed = true;
     } else if (gameState === 'LEADERBOARD') {
