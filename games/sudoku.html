@@ -493,6 +493,8 @@
             hinted: '#FFC800', text: '#1D1C1D', userText: '#1164A3', hintedText: '#000000', link: '#1164A3', btn: '#1164A3', btnText: '#FFFFFF'
         };
 
+        const SAVED_STATE_KEY = 'zenSudokuState';
+
         const pickrInstances = {};
 
         $(document).ready(function() {
@@ -500,15 +502,7 @@
             $('.sidenav').sidenav(); 
             $('.modal').modal();
             
-            initGrid(); 
-            const hasSavedData = loadGameState();
-            initPickers(); 
-
-            if (!hasSavedData) {
-                newGame();
-            }
-            updateQuickToggleIcon();
-
+            // Attached first so input keeps working whatever happens while loading or generating
             $difficulty.on('change', saveGameState);
             $('.num-tile').on('click', handlePadClick);
             $(document).on('keydown', handleKeyboardInput);
@@ -519,6 +513,15 @@
                     stopFireworks();
                 }
             });
+
+            initGrid(); 
+            const hasSavedData = loadGameState();
+            initPickers(); 
+
+            if (!hasSavedData) {
+                newGame();
+            }
+            updateQuickToggleIcon();
         });
 
         function initPickers() {
@@ -888,6 +891,23 @@
             updateNumberPad(); checkWinCondition(); saveGameState();
         }
 
+        // Storage can be blocked or full (private mode, quota); the game must still be playable.
+        function readSavedState() {
+            try {
+                return localStorage.getItem(SAVED_STATE_KEY);
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function writeSavedState(state) {
+            try {
+                localStorage.setItem(SAVED_STATE_KEY, JSON.stringify(state));
+            } catch (e) {
+                // Playing without saving is better than not playing
+            }
+        }
+
         function saveGameState() {
             const userBoard = [];
             $('#sudoku-board input').each(function() {
@@ -903,11 +923,11 @@
                 },
                 customColors: customThemeState
             };
-            localStorage.setItem('zenSudokuState', JSON.stringify(state));
+            writeSavedState(state);
         }
 
         function loadGameState() {
-            const saved = localStorage.getItem('zenSudokuState');
+            const saved = readSavedState();
             if (!saved) return false;
 
             try {
