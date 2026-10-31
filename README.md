@@ -9,6 +9,9 @@ AI Slop Games is a private, educational sandbox built to explore modern web deve
 
 This project is strictly non-commercial and serves purely as a personal learning environment.
 
+## 🛠️ Development
+`make` lists the helper targets. `make screenshots` regenerates the game card images in `screenshots/` with headless Chrome (installs puppeteer-core into `.tools/` on first run; `OUT=<dir>` writes elsewhere, `CHROME_PATH=<bin>` picks the browser).
+
 ## 📄 License
 All games and source code in this repository are provided "as is" and released under the **MIT License**.
 
