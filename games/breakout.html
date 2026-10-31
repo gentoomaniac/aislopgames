@@ -316,7 +316,7 @@ let lastCursorX = null;
 let lastTime = 0;
 let accumulator = 0;
 const FPS = 60;
-const TICK_RATE = 1000 / FPS;
+const TICK_MS = 1000 / FPS;
 
 const diffSettings = {
     // Buff durations: Easy (12s), Medium (8s), Hard (4s)
@@ -331,6 +331,7 @@ let paddle = { x: 350, y: 550, width: 100, height: 15, baseSpeed: 8, speedMultip
 let balls = [], bricks = [], drops = [], lasers = [];
 
 // CEILING_Y sets the impenetrable ceiling height to perfectly protect the HUD overlay
+const TRAIL_LENGTH = 6;
 const BALL_RADIUS = 6, BRICK_PADDING = 2, BRICK_OFFSET_TOP = 60, BRICK_OFFSET_LEFT = 10, CEILING_Y = 35;
 let BASE_DROP_RATE = 0.15; 
 
@@ -613,6 +614,7 @@ function initLevel(levelIdx) {
     paddle.renderWidth = paddle.width; 
     paddle.x = (canvas.width - paddle.width) / 2;
     paddle.renderX = paddle.x;
+    paddle.prevX = paddle.x;
     paddle.targetX = null;
     
     paddle.baseSpeed = diffSettings[difficulty].paddleBase * Math.pow(1.05, loopCount);
@@ -701,8 +703,22 @@ function findFirstCollision(ball, moveX, moveY) {
     return first;
 }
 
+// Remembers where everything was before this tick, so drawAll can show positions between two ticks
+// (the simulation is 60Hz, the screen may refresh faster). Things born during a tick have no previous position yet.
+function snapshotPreviousPositions() {
+    paddle.prevX = paddle.renderX;
+    balls.forEach(ball => { ball.prevX = ball.x; ball.prevY = ball.y; });
+    drops.forEach(drop => { drop.prevY = drop.y; });
+    lasers.forEach(laser => { laser.prevY = laser.y; });
+}
+
+function lerp(previous, current, blend) {
+    return previous === undefined ? current : previous + (current - previous) * blend;
+}
+
 function updateLogic() {
     timeTicks++;
+    snapshotPreviousPositions();
     
     let currentSpeed = paddle.baseSpeed * paddle.speedMultiplier;
     let currentWidth = paddle.effects.expand > 0 ? paddle.width * 1.5 : paddle.width;
@@ -793,7 +809,7 @@ function updateLogic() {
 
         if (!b.history) b.history = [];
         b.history.unshift({x: b.x, y: b.y});
-        if (b.history.length > 6) b.history.pop();
+        if (b.history.length > TRAIL_LENGTH + 1) b.history.pop();
 
         let timeRemaining = 1.0;
         let maxBounces = 4;
@@ -940,7 +956,8 @@ function syncPowerupHud() {
     }
 }
 
-function drawAll() {
+// tickBlend is how far we are from the last tick towards the next one, 0 to 1
+function drawAll(tickBlend) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
     ctx.fillStyle = '#333';
@@ -973,35 +990,40 @@ function drawAll() {
             ctx.shadowColor = '#00ff00';
         }
         
-        ctx.fillText(pData.icon, d.x, d.y); ctx.shadowBlur = 0; 
+        ctx.fillText(pData.icon, d.x, lerp(d.prevY, d.y, tickBlend)); ctx.shadowBlur = 0; 
     }
 
     ctx.fillStyle = '#ff0055';
-    for(let i = lasers.length - 1; i >= 0; i--) { ctx.fillRect(lasers[i].x, lasers[i].y, lasers[i].width, lasers[i].height); }
+    for(let i = lasers.length - 1; i >= 0; i--) { ctx.fillRect(lasers[i].x, lerp(lasers[i].prevY, lasers[i].y, tickBlend), lasers[i].width, lasers[i].height); }
 
-    ctx.beginPath(); ctx.rect(paddle.renderX, paddle.y, paddle.renderWidth, paddle.height);
+    const paddleDrawX = lerp(paddle.prevX, paddle.renderX, tickBlend);
+    ctx.beginPath(); ctx.rect(paddleDrawX, paddle.y, paddle.renderWidth, paddle.height);
     ctx.fillStyle = paddle.effects.laser > 0 ? '#ffd700' : '#f0f0f0'; ctx.fill();
     ctx.strokeStyle = '#555'; ctx.lineWidth = 2; ctx.stroke(); ctx.closePath();
     if (paddle.effects.laser > 0 && Math.floor(timeTicks / 15) % 2 === 0) {
         ctx.fillStyle = '#000'; ctx.font = '12px "Apple Color Emoji", "Segoe UI Emoji", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText('⚡\uFE0E', paddle.renderX + paddle.renderWidth / 2, paddle.y + paddle.height / 2 + 1);
+        ctx.fillText('⚡\uFE0E', paddleDrawX + paddle.renderWidth / 2, paddle.y + paddle.height / 2 + 1);
     }
 
     let hasInactive = false;
     balls.forEach(ball => {
         if (!ball.active) hasInactive = true;
 
+        // A trail dot is where the ball was i+1 ticks ago, so it moves from history[i + 1] to history[i]
+        // (the newest entry equals ball.prevX/prevY)
         if (ball.active && ball.history) {
-            ball.history.forEach((h, i) => {
+            for (let i = 0; i < TRAIL_LENGTH; i++) {
+                const older = ball.history[i + 1], newer = ball.history[i];
+                if (!older) break;
                 ctx.beginPath(); 
-                ctx.arc(h.x, h.y, Math.max(1, BALL_RADIUS - (i * 0.8)), 0, Math.PI * 2);
+                ctx.arc(lerp(older.x, newer.x, tickBlend), lerp(older.y, newer.y, tickBlend), Math.max(1, BALL_RADIUS - (i * 0.8)), 0, Math.PI * 2);
                 ctx.fillStyle = `rgba(255, 255, 255, ${0.8 - (i / 8)})`; 
                 ctx.fill(); 
                 ctx.closePath();
-            });
+            }
         }
 
-        ctx.beginPath(); ctx.arc(ball.x, ball.y, BALL_RADIUS, 0, Math.PI * 2); 
+        ctx.beginPath(); ctx.arc(lerp(ball.prevX, ball.x, tickBlend), lerp(ball.prevY, ball.y, tickBlend), BALL_RADIUS, 0, Math.PI * 2); 
         ctx.fillStyle = '#fff'; ctx.fill(); 
         ctx.shadowBlur = 10; ctx.shadowColor = '#fff'; 
         ctx.closePath(); ctx.shadowBlur = 0;
@@ -1017,10 +1039,10 @@ function gameLoop(ts) {
     let dt = ts - lastTime; lastTime = ts;
     if (dt > 250) dt = 250;
     accumulator += dt;
-    while (accumulator >= TICK_RATE) {
-        updateLogic(); accumulator -= TICK_RATE; if (gameState !== 'PLAYING') break; 
+    while (accumulator >= TICK_MS) {
+        updateLogic(); accumulator -= TICK_MS; if (gameState !== 'PLAYING') break; 
     }
-    if (gameState === 'PLAYING') { drawAll(); animationId = requestAnimationFrame(gameLoop); }
+    if (gameState === 'PLAYING') { drawAll(accumulator / TICK_MS); animationId = requestAnimationFrame(gameLoop); }
 }
 
 function startGame() {
