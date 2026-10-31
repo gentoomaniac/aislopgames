@@ -378,7 +378,7 @@ document.addEventListener("keydown", (e) => {
     // Holding a toggle key would flip the state on every auto-repeat
     if (e.repeat && ['n', 'e', 'p'].includes(key)) return;
     if (key === 'n' && gameState === 'LEADERBOARD' && !document.getElementById('new-game-hint').classList.contains('hidden')) { startGame(); return; }
-    if (key === 'e' && ['PLAYING', 'PAUSED', 'INTERMISSION'].includes(gameState)) { exitToMenu(); return; }
+    if (key === 'e' && ['PLAYING', 'PAUSED', 'INTERMISSION'].includes(gameState)) { confirmQuit(); return; }
     if (key === 'p' && ['PLAYING', 'PAUSED'].includes(gameState)) { togglePause(); return; }
     if ((e.key === " " || e.key === "ArrowUp") && gameState === 'PLAYING') launchBall();
     if (gameState === 'PLAYING') {
@@ -443,11 +443,26 @@ function togglePause() {
         document.getElementById('intermission-screen').classList.remove('hidden');
     } else if (gameState === 'PAUSED') {
         document.getElementById('intermission-screen').classList.add('hidden');
-        gameState = 'PLAYING'; 
-        lastCursorX = null; 
-        lastTime = performance.now(); 
-        animationId = requestAnimationFrame(gameLoop);
+        resumePlaying();
     }
+}
+
+function resumePlaying() {
+    gameState = 'PLAYING';
+    lastCursorX = null;
+    lastTime = performance.now();
+    animationId = requestAnimationFrame(gameLoop);
+}
+
+// The loop is stopped while asking, so the game cannot move under the dialog; NO restores the state it was in
+function confirmQuit() {
+    const stateBeforeAsking = gameState;
+    cancelAnimationFrame(animationId);
+    gameState = 'CONFIRMING';
+    showConfirm('QUIT GAME?', 'Your run ends and its score is lost.', exitToMenu, () => {
+        if (stateBeforeAsking === 'PLAYING') resumePlaying();
+        else gameState = stateBeforeAsking;
+    });
 }
 
 function exitToMenu() {
@@ -1132,13 +1147,12 @@ document.getElementById('pause-btn').addEventListener('click', (e) => {
 });
 document.getElementById('confirm-yes').addEventListener('click', () => answerConfirm(true));
 document.getElementById('confirm-no').addEventListener('click', () => answerConfirm(false));
-document.getElementById('exit-btn').addEventListener('click', exitToMenu);
+document.getElementById('exit-btn').addEventListener('click', confirmQuit);
 
 document.getElementById('continue-btn').addEventListener('click', () => { 
     document.getElementById('intermission-screen').classList.add('hidden'); 
     if (gameState === 'INTERMISSION') { initLevel(currentLevelIdx); } 
-    lastCursorX = null;
-    gameState = 'PLAYING'; lastTime = performance.now(); animationId = requestAnimationFrame(gameLoop); 
+    resumePlaying();
 });
 
 document.getElementById('leaderboard-btn').addEventListener('click', () => { gameState = 'LEADERBOARD'; lbDiffIndex = DIFF_ORDER.indexOf(difficulty); document.getElementById('new-game-hint').classList.add('hidden'); document.getElementById('menu-screen').classList.add('hidden'); document.getElementById('leaderboard-screen').classList.remove('hidden'); renderLeaderboard(); });
