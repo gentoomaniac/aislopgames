@@ -20,8 +20,16 @@ work into `main` after a separate reviewer approves it.
 - **Single file.** All game code, CSS and assets live inline in the game's `.html` file.
   Images/sounds as data: URIs, canvas drawing or WebAudio. No local imports, no `../` paths,
   no build step.
+- **No regressions.** Everything that works for players today keeps working: controls,
+  rules, settings, saved state and high scores in `localStorage`. Read the surrounding code
+  before changing it, and test the old behaviour, not only the new one. See
+  "We don't break userspace" in `.claude/agents.md`.
 - **CDN libraries are allowed** (cdnjs, jsDelivr, unpkg, code.jquery.com, Google Fonts).
-  Pin an exact version in the URL. Prefer plain JS when a library isn't really needed.
+  Pin an exact version in the URL and add Subresource Integrity:
+  `integrity="sha384-…" crossorigin="anonymous"`. Compute the hash from the exact URL:
+  `curl -sL <url> | openssl dgst -sha384 -binary | openssl base64 -A`.
+  Google Fonts CSS is exempt (it differs per browser). Prefer plain JS when a library isn't
+  really needed.
 - **Stay in scope.** Only change what the task asks for. Don't reformat or refactor
   unrelated code, and don't edit `index.html` unless the task explicitly says so.
 - **Match the existing style** of the file you're editing (naming, comment density, structure).
@@ -37,10 +45,14 @@ work into `main` after a separate reviewer approves it.
    ```
    node -e 'const s=require("fs").readFileSync(process.argv[1],"utf8");const re=/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g;let m,i=0;while((m=re.exec(s))){try{new Function(m[1])}catch(e){console.error("script",i,e.message);process.exitCode=1}i++}' games/<file>.html
    ```
-2. Re-read your diff (`git diff main...HEAD`) for unrelated changes and leftover debug code.
-3. Re-read it once more as a human seeing it for the first time: are the names right, are
+2. Load the game in headless Chrome and play through the affected feature:
+   `node /home/marco/git-private/slopdoku/.claude/tools/check-page.cjs games/<file>.html /tmp/<shot>.png [actions.json]`
+   (run from your worktree; see `.claude/agents.md` → Environment notes). It must report
+   `no errors`. Look at the screenshot.
+3. Re-read your diff (`git diff main...HEAD`) for unrelated changes and leftover debug code.
+4. Re-read it once more as a human seeing it for the first time: are the names right, are
    comments explaining *why* and not *what*, is there anything simpler?
-4. Commit on your branch with message `<Game>: <short description>`. Do not push, do not
+5. Commit on your branch with message `<Game>: <short description>`. Do not push, do not
    touch `main`, and never rewrite history with a force push.
 
 ## Report back

@@ -9,8 +9,20 @@ for how code here is written and reviewed.
 - A collection of small browser games, each one a **single, self-contained HTML file** in `games/`.
 - Plain JavaScript, inline CSS and JS. No build step, no bundler, no package.json.
 - Public CDN libraries are allowed (cdnjs, jsDelivr, unpkg, code.jquery.com, Google Fonts).
+  Every CDN script/stylesheet is pinned to an exact version **and** carries a Subresource
+  Integrity hash (`integrity="sha384-…" crossorigin="anonymous"`). Exception: Google Fonts CSS
+  is generated per browser and can't be hashed.
   Everything else (code, images, sounds) must be inline (data: URIs, canvas drawing, WebAudio),
   so a game file can be copied anywhere and still work.
+
+## We don't break userspace
+
+No regressions. Players are the userspace: anything that works for them today must keep
+working after a change. That includes controls (keyboard, mouse, touch), game rules and
+difficulty, settings, saved games and high scores in `localStorage`, and links into the
+game files. A change that fixes one thing but breaks another isn't integrated. If breaking
+something is truly unavoidable (e.g. a saved-state format change), it needs a migration,
+or the user's explicit OK before it lands.
 - `index.html` is the landing page: lists every game as a card (screenshot from `screenshots/`)
   and explains the project intent. It may reference local assets (`logo.png`, `screenshots/`).
 - Persistent settings/state go in `localStorage` under a key unique to the game.
@@ -52,6 +64,8 @@ for how code here is written and reviewed.
 ## Integration criteria (all must hold)
 
 - Reviewer verdict is `APPROVED` against the current task brief.
+- No regressions (see "We don't break userspace"); the game loads without console errors
+  in the browser check.
 - Game files are still single-file and self-contained (see reviewer checklist).
 - Inline scripts pass a syntax check (see reviewer for the command).
 - Rebased cleanly on `main`; no unrelated changes slipped in.
@@ -81,5 +95,16 @@ for how code here is written and reviewed.
 
 ## Environment notes
 
-- `node` is available (use it for syntax checks); there is no headless browser installed,
-  so runtime testing in a real browser is up to the user. Mention this in the report.
+- `node` is available (use it for syntax checks).
+- Headless Chrome: `/usr/bin/google-chrome-stable`, driven by `puppeteer-core` installed in the
+  git-ignored `.tools/` folder (`cd .tools && npm i puppeteer-core@24` if missing).
+  `node .claude/tools/check-page.cjs <game.html> [shot.png] [actions.json]` loads a page,
+  reports console errors, uncaught exceptions and failed requests, and saves a screenshot.
+  Agents can write their own throwaway puppeteer scripts (outside the repo) for deeper play-tests.
+  Fine feel (game speed, touch on a real phone) still needs a human; mention it in the report.
+
+## Audits
+
+For a review of existing code (no diff), spawn a `reviewer` in audit mode on a game file.
+Triage the findings, then turn the ones worth fixing into developer tasks through the normal
+workflow. Bigger or risky changes go to the user first.

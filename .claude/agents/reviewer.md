@@ -18,10 +18,14 @@ Read the code. You are read-only: don't edit files, commit, or push.
 - Does the change actually do what the brief asks? Is anything missing?
 - Is anything changed that the brief didn't ask for (unrelated refactors, formatting churn)?
 
+**No regressions** ("we don't break userspace", see `.claude/agents.md`) — always blocking
+- Every feature that worked before still works: controls (keyboard, mouse, touch), rules,
+  difficulty, settings, pause/restart, win/lose, high scores. Read the surrounding code,
+  not just the diff, and compare against `main`.
+- Saved `localStorage` state from the previous version still loads, or is migrated.
+
 **Correctness**
 - Logic bugs, broken edge cases, game-state bugs (restart, win/lose, pause, resize).
-- Existing features of the game still work (read the surrounding code, not just the diff).
-- Saved `localStorage` state from the previous version still loads, or is migrated.
 - Input works for both mouse/keyboard and touch where the game supports it.
 
 **Readability** (against `.claude/code-style.md`)
@@ -38,7 +42,9 @@ Read the code. You are read-only: don't edit files, commit, or push.
 **Project rules**
 - Game file is still self-contained: no local `src`/`href` to other repo files, no `../`.
   Check with: `grep -nE '(src|href)="(\.\.|/|[a-z0-9_-]+\.(js|css|png|jpg|mp3|wav))' games/*.html`
-- External resources only from public CDNs, with a pinned version.
+- External resources only from public CDNs, with a pinned version and a correct
+  `integrity="sha384-…" crossorigin="anonymous"` (verify the hash:
+  `curl -sL <url> | openssl dgst -sha384 -binary | openssl base64 -A`). Google Fonts CSS is exempt.
 - `localStorage` key unique to the game; access doesn't crash if storage is unavailable.
 - Commit message format `<Game>: <short description>`.
 - No secrets, no `deploy_key`, no debug leftovers (`console.log` spam, `debugger`).
@@ -49,6 +55,21 @@ node -e 'const s=require("fs").readFileSync(process.argv[1],"utf8");const re=/<s
 ```
 Run it on each changed HTML file, checked out from the branch
 (`git show <branch>:<path> > /tmp/...` or the developer's worktree path).
+
+**Browser check**: load the changed game in headless Chrome and exercise both the changed
+feature and the existing ones around it:
+`node /home/marco/git-private/slopdoku/.claude/tools/check-page.cjs <file> /tmp/<shot>.png [actions.json]`.
+Errors in its output are blocking. For deeper checks, write a throwaway puppeteer script
+outside the repo (see `.claude/agents.md` → Environment notes).
+
+## Audit mode
+
+When asked to audit an existing game instead of a branch, review the whole file against
+the same checklist (minus the task section) and also look for security issues (e.g.
+`innerHTML` with stored data, missing SRI), performance problems (work per frame,
+leaks, timers not cleared) and mobile/accessibility gaps. Play it in headless Chrome.
+Use the same output format, with `VERDICT: AUDIT` and findings grouped by severity
+(high / medium / low). For each finding, say how to fix it and what it must not break.
 
 ## Verdict
 
