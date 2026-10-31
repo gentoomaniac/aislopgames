@@ -673,10 +673,18 @@ function confirmQuitGame(onNo) {
     showConfirm('QUIT GAME?', showMenu, onNo);
 }
 
+// The name field is blurred so typing can't change the name behind the question.
+function confirmDiscardScore() {
+    const nameInput = document.getElementById('pName');
+    nameInput.blur();
+    showConfirm('DISCARD SCORE?', showMenu, () => nameInput.focus());
+}
+
 // 'C' Back/Exit Key handling
 function handleBackKey() {
     if (dialog) dialog.onCancel();
     else if (gameState === 'PLAYING') confirmQuitGame(resumeGame);
+    else if (currentView === 'INPUT') confirmDiscardScore();
     else showMenu();
 }
 
@@ -744,6 +752,10 @@ window.onkeydown = e => {
     if (e.ctrlKey || e.metaKey || e.altKey || !e.key) return;
 
     const key = e.key.toLowerCase();
+
+    // A key that closes a dialog must not also act on whatever it refocuses
+    // (C would be typed into the name field, Backspace would delete from it).
+    if (dialog) e.preventDefault();
     const isTyping = document.activeElement && document.activeElement.id === 'pName';
     
     // Always allow Escape to trigger 'C' and exit safely
