@@ -1349,15 +1349,6 @@
             return true;
         }
 
-        const HOLES_BY_DIFFICULTY = {
-            4: { 30: 4, 40: 6, 55: 8, 65: 10 },
-            5: { 30: 6, 40: 9, 55: 12, 65: 15 },
-            9: { 30: 30, 40: 40, 55: 55, 65: 65 }
-        };
-        // Targets near the minimum clue count (Expert 9x9) are often out of reach, so a few
-        // fresh grids are tried before settling for the puzzle with the most holes.
-        const MAX_GENERATION_ATTEMPTS = 3;
-
         // Counts solutions by backtracking on the most constrained empty cell, and stops at
         // `limit` so the uniqueness check never explores more than it has to.
         function countSolutions(board, limit) {
@@ -1771,34 +1762,68 @@
             return hardest;
         }
 
-        // Punches holes one at a time in random order and keeps only removals that leave
-        // exactly one solution. One pass is enough: once a cell is needed, it stays needed.
-        function punchHoles(solution, targetHoles) {
+        // ---- Puzzle generation ----
+        // What each difficulty means: the hardest technique tier a puzzle needs (see TIER), with a
+        // range for how many givens it keeps, so the tier is the rule and the givens are a nudge.
+        // Small grids hardly ever need more than singles (measured over thousands of minimal
+        // puzzles: 4x4 never, 5x5 about 1% in Expert), so every difficulty there is an Easy-tier
+        // puzzle and the difficulties differ by how few givens are left. 9x9 uses all four tiers.
+        const DIFFICULTY_PROFILES = {
+            30: { tier: TIER.EASY, givens: { 4: [9, 10], 5: [15, 17], 9: [38, 46] } },
+            40: { tier: TIER.MEDIUM, givens: { 4: [7, 8], 5: [12, 14], 9: [30, 35] } },
+            55: { tier: TIER.HARD, givens: { 4: [5, 6], 5: [9, 11], 9: [26, 31] } },
+            65: { tier: TIER.EXPERT, givens: { 4: [0, 0], 5: [0, 0], 9: [0, 0] } }
+        };
+        const REACHABLE_TIER_BY_GRID_SIZE = { 4: TIER.EASY, 5: TIER.EASY, 9: TIER.EXPERT };
+
+        // Rating needs many solver runs, so hard puzzles can take a while to find. After this
+        // long the best puzzle found so far is used, so starting a game never feels stuck.
+        const GENERATION_BUDGET_MS = 400;
+
+        // Punches holes one at a time in random order and keeps only removals that leave exactly
+        // one solution and, below Expert, still need nothing harder than `tier`. One pass is
+        // enough: once a cell is needed, it stays needed. Stops at `targetGivens`.
+        function punchHoles(solution, tier, targetGivens) {
             const board = solution.map(row => [...row]);
             const cells = [];
             for (let r = 0; r < gridSize; r++) for (let c = 0; c < gridSize; c++) cells.push([r, c]);
             cells.sort(() => Math.random() - 0.5);
 
-            let holes = 0;
+            let givens = gridSize * gridSize;
             for (const [r, c] of cells) {
-                if (holes === targetHoles) break;
+                if (givens <= targetGivens) break;
                 const digit = board[r][c];
                 board[r][c] = 0;
-                if (countSolutions(board, 2) === 1) holes++;
+                const isUnique = countSolutions(board, 2) === 1;
+                if (isUnique && (tier === TIER.EXPERT || rateByLogic(board, tier) <= tier)) givens--;
                 else board[r][c] = digit;
             }
-            return { board, holes };
+            return { board, givens };
         }
 
-        function generatePuzzle(targetHoles) {
+        // How far a puzzle's rating is from the wanted tier; puzzles no technique can finish are
+        // the worst fallback.
+        function tierDistance(rating, tier) {
+            return rating === TIER.UNSOLVED_BY_LOGIC ? Infinity : Math.abs(rating - tier);
+        }
+
+        function generatePuzzle(difficulty) {
+            const profile = DIFFICULTY_PROFILES[difficulty];
+            const tier = Math.min(profile.tier, REACHABLE_TIER_BY_GRID_SIZE[gridSize]);
+            const [minGivens, maxGivens] = profile.givens[gridSize];
+            const startMs = performance.now();
+
             let best = null;
-            for (let attempt = 0; attempt < MAX_GENERATION_ATTEMPTS; attempt++) {
+            do {
                 const solution = Array.from({ length: gridSize }, () => Array(gridSize).fill(0));
                 fillBoard(solution);
-                const { board, holes } = punchHoles(solution, targetHoles);
-                if (!best || holes > best.holes) best = { solution, board, holes };
-                if (holes === targetHoles) break;
-            }
+                const targetGivens = minGivens + Math.floor(Math.random() * (maxGivens - minGivens + 1));
+                const { board, givens } = punchHoles(solution, tier, targetGivens);
+                const rating = rateByLogic(board);
+                const candidate = { solution, board, rating, givens };
+                if (rating === tier) return candidate;
+                if (!best || tierDistance(rating, tier) < tierDistance(best.rating, tier)) best = candidate;
+            } while (performance.now() - startMs < GENERATION_BUDGET_MS);
             return best;
         }
 
@@ -1849,7 +1874,7 @@
 
             setStatus('', 'neutral'); stopFireworks(); clearHighlights(); selectCell(null);
 
-            const puzzle = generatePuzzle(HOLES_BY_DIFFICULTY[gridSize][$difficulty.val()]);
+            const puzzle = generatePuzzle($difficulty.val());
             solutionBoard = puzzle.solution;
             currentBoard = puzzle.board;
 
