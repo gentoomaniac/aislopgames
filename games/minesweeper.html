@@ -164,7 +164,7 @@
 <script>
     const STORAGE_KEY = 'win95_minesweeper_permanent_scores';
 
-    let rows, cols, mines, grid, timer, sec, gameOver, flags, revealed, first;
+    let rows, cols, mines, grid, timer, sec, gameOver, flags, safeCellsRevealed, first;
     let cellHoldTimer, faceHoldTimer;
     let blockContextMenu = false; // Prevents the double-triggering of contextmenu
     const HOLD_DELAY = 500;
@@ -216,7 +216,7 @@
         clearInterval(timer);
         const config = levels[currentLvl];
         rows = config.r; cols = config.c; mines = config.m;
-        sec = 0; revealed = 0; flags = 0; gameOver = false; first = true;
+        sec = 0; safeCellsRevealed = 0; flags = 0; gameOver = false; first = true;
         
         $('.diff-opt span').text('');
         $(`#check-${currentLvl}`).text('✓');
@@ -300,9 +300,11 @@
             }
         }
         if (flagCount === cell.n) {
-            neighbors.forEach(n => {
-                if (!n.data.flg && !n.data.rev) reveal(n.r, n.c, true);
-            });
+            const targets = neighbors.filter(n => !n.data.flg && !n.data.rev);
+            // Safe cells first so nothing gets flood-revealed after a wrongly flagged chord hits a mine.
+            targets.filter(n => !n.data.isM).forEach(n => reveal(n.r, n.c));
+            targets.filter(n => n.data.isM).forEach(n => hitMine(n.data));
+            checkWin();
         }
     }
 
@@ -372,7 +374,8 @@
         if (cell.flg || cell.qst || cell.rev) return;
 
         if (first) { spawnMines(r, c); startClock(); first = false; }
-        reveal(r, c, true);
+        reveal(r, c);
+        checkWin();
     }
 
     function spawnMines(exR, exC) {
@@ -390,20 +393,31 @@
         }
     }
 
-    function reveal(r, c, isClick = false) {
+    function hitMine(cell) {
+        cell.rev = true;
+        cell.$el.addClass('revealed mine-hit').removeClass('outset').empty();
+        end(false);
+    }
+
+    function reveal(r, c) {
         const cell = grid[r][c];
-        if (cell.rev || cell.flg) return;
+        if (gameOver || cell.rev || cell.flg) return;
+        if (cell.isM) { hitMine(cell); return; }
         cell.rev = true; cell.$el.addClass('revealed').removeClass('outset').empty();
-        revealed++;
-        if (cell.isM) { if(isClick) cell.$el.addClass('mine-hit'); end(false); return; }
+        safeCellsRevealed++;
         if (cell.n > 0) cell.$el.text(cell.n).addClass('n-'+cell.n);
         else { for(let i=-1; i<=1; i++) for(let j=-1; j<=1; j++) if(grid[r+i] && grid[r+i][c+j]) reveal(r+i, c+j); }
-        if (revealed === (rows * cols) - mines) end(true);
+    }
+
+    // Called once after a whole click or chord, not per revealed cell, so a flood fill can't win repeatedly.
+    function checkWin() {
+        if (!gameOver && safeCellsRevealed === (rows * cols) - mines) end(true);
     }
 
     function startClock() { timer = setInterval(() => { sec++; $('#timer').text(String(Math.min(sec, 999)).padStart(3, '0')); }, 1000); }
 
     function end(win) {
+        if (gameOver) return;
         gameOver = true; clearInterval(timer);
         $('#reset-btn').text(win ? '😎' : '😵');
         if (!win) {
