@@ -316,6 +316,15 @@ let balls = [], bricks = [], drops = [], lasers = [];
 const BALL_RADIUS = 6, BRICK_PADDING = 2, BRICK_OFFSET_TOP = 60, BRICK_OFFSET_LEFT = 10, CEILING_Y = 35;
 let BASE_DROP_RATE = 0.15; 
 
+// Walls are thick so a fast ball can never tunnel through them
+const WALL_THICKNESS = 200;
+const WALLS = [
+    { x: -WALL_THICKNESS, y: -WALL_THICKNESS, w: WALL_THICKNESS, h: canvas.height + 2 * WALL_THICKNESS, id: 'wall' },
+    { x: canvas.width, y: -WALL_THICKNESS, w: WALL_THICKNESS, h: canvas.height + 2 * WALL_THICKNESS, id: 'wall' },
+    { x: -WALL_THICKNESS, y: -WALL_THICKNESS, w: canvas.width + 2 * WALL_THICKNESS, h: WALL_THICKNESS + CEILING_Y, id: 'wall' },
+    { x: -WALL_THICKNESS, y: canvas.height, w: canvas.width + 2 * WALL_THICKNESS, h: WALL_THICKNESS, id: 'bottom' }
+];
+
 const POWERUPS = {
     POINTS: { icon: '💰', type: 'good', effect: () => addScore(50) },
     MULTI:  { icon: '🫧', type: 'good', effect: () => spawnExtraBalls() },
@@ -403,12 +412,20 @@ function exitToMenu() {
     ctx.fillStyle = '#0f0f1b'; ctx.fillRect(0, 0, canvas.width, canvas.height);
 }
 
+// Cached because reading it forces a layout and trackCursor runs on every mouse move
+let canvasRect = canvas.getBoundingClientRect();
+function updateCanvasRect() { canvasRect = canvas.getBoundingClientRect(); }
+
+window.addEventListener('resize', updateCanvasRect);
+new ResizeObserver(updateCanvasRect).observe(canvas);
+
 function trackCursor(clientX, isStart = false) {
     if (gameState !== 'PLAYING') return;
     
-    let rect = canvas.getBoundingClientRect();
-    let scaleX = canvas.width / rect.width;
-    let currentCursorX = (clientX - rect.left) * scaleX;
+    // Moves without a resize (e.g. the legend appearing shifts the centred layout) are caught when tracking restarts
+    if (isStart || lastCursorX === null) updateCanvasRect();
+    let scaleX = canvas.width / canvasRect.width;
+    let currentCursorX = (clientX - canvasRect.left) * scaleX;
     
     if (isStart || lastCursorX === null) {
         lastCursorX = currentCursorX;
@@ -533,6 +550,7 @@ function initLevel(levelIdx) {
     paddle.baseSpeed = diffSettings[difficulty].paddleBase * Math.pow(1.05, loopCount);
     paddle.speedMultiplier = 1.0;
     paddle.effects = {};
+    syncPowerupHud();
     
     balls = []; spawnBall(); drops = []; lasers = [];
 }
@@ -594,6 +612,25 @@ function sweptAABB(bx, by, br, vx, vy, boxX, boxY, boxW, boxH) {
     else { nx = vx < 0 ? 1 : -1; ny = vy < 0 ? 1 : -1; }
 
     return { t: t, nx: nx, ny: ny };
+}
+
+// Earliest thing the ball hits while moving by (moveX, moveY): walls, then paddle, then bricks in row order.
+// Ties go to the first one tested, so keep that order.
+function findFirstCollision(ball, moveX, moveY) {
+    let first = null;
+    const consider = (x, y, w, h, id, brick) => {
+        const hit = sweptAABB(ball.x, ball.y, BALL_RADIUS, moveX, moveY, x, y, w, h);
+        if (hit && (!first || hit.t < first.hit.t)) first = { hit: hit, id: id, brick: brick };
+    };
+
+    for (const wall of WALLS) consider(wall.x, wall.y, wall.w, wall.h, wall.id, null);
+    consider(paddle.renderX, paddle.y, paddle.renderWidth, paddle.height, 'paddle', null);
+    for (const row of bricks) {
+        for (const brick of row) {
+            if (brick.status > 0) consider(brick.x, brick.y, brick.width, brick.height, 'brick', brick);
+        }
+    }
+    return first;
 }
 
 function updateLogic() {
@@ -695,43 +732,16 @@ function updateLogic() {
         let ballDead = false;
 
         while (timeRemaining > 0 && maxBounces > 0) {
-            let firstHit = null, hitObj = null;
             let cvx = b.dx * timeRemaining, cvy = b.dy * timeRemaining;
+            const collision = findFirstCollision(b, cvx, cvy);
 
-            let walls = [
-                { x: -200, y: -200, w: 200, h: canvas.height + 400, id: 'wall' }, 
-                { x: canvas.width, y: -200, w: 200, h: canvas.height + 400, id: 'wall' }, 
-                { x: -200, y: -200, w: canvas.width + 400, h: 200 + CEILING_Y, id: 'wall' }, 
-                { x: -200, y: canvas.height, w: canvas.width + 400, h: 200, id: 'bottom' } 
-            ];
-
-            let colliders = [
-                ...walls,
-                { x: paddle.renderX, y: paddle.y, w: paddle.renderWidth, h: paddle.height, id: 'paddle' }
-            ];
-
-            for (let r = 0; r < bricks.length; r++) {
-                for (let c = 0; c < bricks[r].length; c++) {
-                    if (bricks[r][c].status > 0) {
-                        colliders.push({ ...bricks[r][c], id: 'brick', originalObj: bricks[r][c] });
-                    }
-                }
-            }
-
-            for (let obj of colliders) {
-                let w = obj.w !== undefined ? obj.w : obj.width;
-                let h = obj.h !== undefined ? obj.h : obj.height;
-                
-                let hit = sweptAABB(b.x, b.y, BALL_RADIUS, cvx, cvy, obj.x, obj.y, w, h);
-                if (hit && (!firstHit || hit.t < firstHit.t)) { firstHit = hit; hitObj = obj; }
-            }
-
-            if (firstHit) {
+            if (collision) {
+                const firstHit = collision.hit;
                 b.x += cvx * firstHit.t; b.y += cvy * firstHit.t;
                 let piercing = false;
 
-                if (hitObj.id === 'brick') {
-                    let br = hitObj.originalObj;
+                if (collision.id === 'brick') {
+                    let br = collision.brick;
                     piercing = (paddle.effects.break > 0 && br.status === 1);
                     br.status -= 1;
                     if (paddle.effects.break > 0 && br.status === 1) br.status = 0;
@@ -745,9 +755,9 @@ function updateLogic() {
                     }
                 }
 
-                if (hitObj.id === 'bottom') {
+                if (collision.id === 'bottom') {
                     ballDead = true; break;
-                } else if (hitObj.id === 'paddle' && firstHit.ny === -1) {
+                } else if (collision.id === 'paddle' && firstHit.ny === -1) {
                     let hitPoint = b.x - (paddle.renderX + paddle.renderWidth / 2);
                     let normalizedHit = hitPoint / (paddle.renderWidth / 2);
                     normalizedHit = Math.max(-1, Math.min(1, normalizedHit));
@@ -818,28 +828,48 @@ function updateLogic() {
     }
 }
 
+const EFFECT_ICONS = {
+    laser: POWERUPS.LASER.icon, expand: POWERUPS.EXPAND.icon, break: POWERUPS.BREAK.icon,
+    invert: POWERUPS.INVERT.icon, slow: POWERUPS.SLOW.icon
+};
+const DEBUFF_EFFECTS = ['invert', 'slow'];
+const powerupBadges = {}; // effect key -> { element, secondsText }
+
 function manageEffects() { 
-    let activeHTML = '';
-    for(let key in paddle.effects) { 
-        if(paddle.effects[key] > 0) {
-            paddle.effects[key]--; 
-            let seconds = Math.ceil(paddle.effects[key] / 60);
-            let icon = '';
-            
-            if(key === 'laser') icon = POWERUPS.LASER.icon;
-            if(key === 'expand') icon = POWERUPS.EXPAND.icon;
-            if(key === 'break') icon = POWERUPS.BREAK.icon;
-            if(key === 'invert') icon = POWERUPS.INVERT.icon;
-            if(key === 'slow') icon = POWERUPS.SLOW.icon;
-            
-            let colorClass = (key === 'invert' || key === 'slow') ? 'debuff-text' : 'buff-text';
-            
-            activeHTML += `<span style="margin: 0 5px; display: inline-block;" class="${colorClass}"><span class="emoji-icon">${icon}</span> ${seconds}s</span>`;
-        } else {
-            delete paddle.effects[key];
+    for (let key in paddle.effects) { 
+        if (paddle.effects[key] > 0) paddle.effects[key]--; 
+        else delete paddle.effects[key];
+    }
+    syncPowerupHud();
+}
+
+// Badges are created once and only their seconds text changes, otherwise the flash animation restarts every tick
+function syncPowerupHud() {
+    const hud = document.getElementById('active-powerups');
+
+    for (let key in powerupBadges) {
+        if (paddle.effects[key] === undefined) {
+            powerupBadges[key].element.remove();
+            delete powerupBadges[key];
         }
     }
-    document.getElementById('active-powerups').innerHTML = activeHTML;
+
+    for (let key in paddle.effects) {
+        if (!powerupBadges[key]) {
+            const element = document.createElement('span');
+            element.style.cssText = 'margin: 0 5px; display: inline-block;';
+            element.className = DEBUFF_EFFECTS.includes(key) ? 'debuff-text' : 'buff-text';
+            const icon = document.createElement('span');
+            icon.className = 'emoji-icon';
+            icon.textContent = EFFECT_ICONS[key];
+            const secondsText = document.createTextNode('');
+            element.append(icon, secondsText);
+            hud.appendChild(element);
+            powerupBadges[key] = { element: element, secondsText: secondsText };
+        }
+        const text = ' ' + Math.ceil(paddle.effects[key] / 60) + 's';
+        if (powerupBadges[key].secondsText.data !== text) powerupBadges[key].secondsText.data = text;
+    }
 }
 
 function drawAll() {
