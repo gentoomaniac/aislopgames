@@ -175,7 +175,7 @@
 <script>
     const STORAGE_KEY = 'win95_minesweeper_permanent_scores';
 
-    let rows, cols, mines, grid, timer, sec, gameOver, flags, safeCellsRevealed, first;
+    let rows, cols, mines, grid, timer, startTimeMs, hintPenaltySeconds, gameOver, flags, safeCellsRevealed, first;
     let cellHoldTimer, faceHoldTimer;
     let pressedCell = null; // {row, col} while a pointer is down on a cell and still counts as a tap
     let lastTap = null; // {row, col, timeMs} of the last completed tap/click, for double-tap chording
@@ -184,6 +184,8 @@
     const DOUBLE_TAP_DELAY = 300;
     const MAX_TIME_SECONDS = 999; // What the timer display can show; scores use the same cap
     const MAX_SCORES_PER_LEVEL = 10;
+    const HINT_PENALTY_SECONDS = 5;
+    const TIMER_REFRESH_MS = 250;
     const FLAG_HTML = '<div class="flag-icon"><div class="flag-pole"></div><div class="flag-banner"></div><div class="flag-base"></div></div>';
 
     const levels = {
@@ -232,7 +234,7 @@
         clearInterval(timer);
         const config = levels[currentLvl];
         rows = config.r; cols = config.c; mines = config.m;
-        sec = 0; safeCellsRevealed = 0; flags = 0; gameOver = false; first = true;
+        startTimeMs = null; hintPenaltySeconds = 0; safeCellsRevealed = 0; flags = 0; gameOver = false; first = true;
         
         $('.diff-opt span').text('');
         $(`#check-${currentLvl}`).text('✓');
@@ -387,8 +389,8 @@
         if (safeCells.length > 0) {
             const hint = safeCells[Math.floor(Math.random() * safeCells.length)];
             hint.$el.addClass('hint-flash');
-            sec += 5;
-            $('#timer').text(String(Math.min(sec, MAX_TIME_SECONDS)).padStart(3, '0'));
+            hintPenaltySeconds += HINT_PENALTY_SECONDS;
+            showElapsedTime();
             setTimeout(() => hint.$el.removeClass('hint-flash'), 1500);
         }
     }
@@ -464,11 +466,25 @@
         if (!gameOver && safeCellsRevealed === (rows * cols) - mines) end(true);
     }
 
-    function startClock() { timer = setInterval(() => { sec++; $('#timer').text(String(Math.min(sec, MAX_TIME_SECONDS)).padStart(3, '0')); }, 1000); }
+    // Derived from the wall clock because background tabs throttle timers, so counting ticks would under-count
+    function getElapsedSeconds() {
+        return Math.floor((Date.now() - startTimeMs) / 1000) + hintPenaltySeconds;
+    }
+
+    function showElapsedTime() {
+        const displayedSeconds = Math.min(getElapsedSeconds(), MAX_TIME_SECONDS);
+        $('#timer').text(String(displayedSeconds).padStart(3, '0'));
+    }
+
+    function startClock() {
+        startTimeMs = Date.now();
+        timer = setInterval(showElapsedTime, TIMER_REFRESH_MS);
+    }
 
     function end(win) {
         if (gameOver) return;
         gameOver = true; clearInterval(timer);
+        showElapsedTime();
         $('#reset-btn').text(win ? '😎' : '😵');
         if (!win) {
             grid.flat().forEach(c => { 
@@ -483,7 +499,7 @@
             grid.flat().forEach(c => { if(c.isM && !c.flg) { c.flg = true; c.$el.empty().append(FLAG_HTML); } });
             $('#mine-count').text('000');
             const level = currentLvl;
-            const time = Math.min(sec, MAX_TIME_SECONDS);
+            const time = Math.min(getElapsedSeconds(), MAX_TIME_SECONDS);
             if (isTopScore(level, time)) {
                 setTimeout(() => { const n = prompt("High Score! Enter name:"); if (n) saveScore(level, n, time); }, 300);
             }
