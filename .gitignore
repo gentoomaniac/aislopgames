@@ -1,3 +1,4 @@
 deploy_key
 deploy_key.pub
 .tools/
+.claude/worktrees/
