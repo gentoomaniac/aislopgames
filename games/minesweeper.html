@@ -121,13 +121,20 @@
         }
         .dialog { display: block; width: 100%; }
         @media (min-width: 576px) { .dialog { max-width: 300px; } }
+        .dialog-body { background: var(--win-gray); padding: 10px; }
+        .dialog-message { color: black; font-size: 13px; line-height: 1.4; white-space: pre-line; padding: 4px 2px 8px; }
+        .dialog-input {
+            display: block; width: 100%; margin-bottom: 4px; padding: 4px 6px; background: var(--win-white); color: black;
+            font-family: inherit; font-size: 16px; /* 16px keeps mobile browsers from zooming in on focus */
+        }
+        .dialog-buttons { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
         .dialog-button {
-            display: inline-block; vertical-align: middle; width: 100%; margin-top: 0.5rem; padding: 0.25rem 0.5rem;
+            flex: 1; padding: 0.25rem 0.5rem;
             font-family: inherit; font-size: 0.875rem; line-height: 1.5; color: #212529; text-align: center;
             background: var(--win-gray); border-radius: 0; cursor: pointer;
         }
+        @media (pointer: coarse) { .dialog-button { min-height: 2.75rem; } }
         .dialog-button:focus-visible { outline: 1px dotted black; outline-offset: -6px; }
-        .score-box { background: var(--win-gray); padding: 10px; }
         .score-list-container { background: var(--win-gray); border: 2px solid; border-color: var(--win-shadow) var(--win-white) var(--win-white) var(--win-shadow); height: 220px; }
         .score-table { width: 100%; border-collapse: collapse; font-size: 13px; color: black; }
         .score-table td:last-child { text-align: right; }
@@ -171,12 +178,16 @@
     </div>
 </div>
 
-<div class="dialog-backdrop" id="score-dialog" hidden>
-    <div class="dialog window outset" role="dialog" aria-modal="true" aria-labelledby="score-title">
-        <div class="title-bar"><span id="score-title">Scores</span></div>
-        <div class="score-box">
-            <div class="score-list-container"><table class="score-table"><tbody id="score-list"></tbody></table></div>
-            <button class="dialog-button outset" id="score-ok">OK</button>
+<div class="dialog-backdrop" id="dialog" hidden>
+    <div class="dialog window outset" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+        <div class="title-bar"><span id="dialog-title"></span></div>
+        <div class="dialog-body">
+            <div id="dialog-content"></div>
+            <input class="dialog-input inset" id="dialog-input" type="text" autocomplete="off" hidden>
+            <div class="dialog-buttons">
+                <button class="dialog-button outset" id="dialog-ok"></button>
+                <button class="dialog-button outset" id="dialog-cancel"></button>
+            </div>
         </div>
     </div>
 </div>
@@ -196,6 +207,9 @@
     const FACE_HOLD_DELAY = 800;
     const MAX_TIME_SECONDS = 999; // What the timer display can show; scores use the same cap
     const MAX_SCORES_PER_LEVEL = 10;
+    const MAX_NAME_LENGTH = 12;
+    const GHOST_CLICK_WINDOW_MS = 400;
+    const HELP_TEXT = 'Controls:\n- Click Smiley: New Game\n- Right Click Smiley: Hint (+5s)\n- Right Click Number: Chord Sweep\n- Double Tap Number: Chord Sweep\n- Right Click/Long Press Cell: Toggle Flag / Question Mark';
     const HINT_PENALTY_SECONDS = 5;
     const TIMER_REFRESH_MS = 250;
     const FLAG_HTML = '<div class="flag-icon"><div class="flag-pole"></div><div class="flag-banner"></div><div class="flag-base"></div></div>';
@@ -213,7 +227,68 @@
     const timerDisplay = document.getElementById('timer');
     const faceButton = document.getElementById('reset-btn');
     const minefield = document.getElementById('minefield');
-    const scoreDialog = document.getElementById('score-dialog');
+    const dialogBackdrop = document.getElementById('dialog');
+    const dialogTitle = document.getElementById('dialog-title');
+    const dialogContent = document.getElementById('dialog-content');
+    const dialogInput = document.getElementById('dialog-input');
+    const dialogOkButton = document.getElementById('dialog-ok');
+    const dialogCancelButton = document.getElementById('dialog-cancel');
+
+    // ---- In-page dialog (no blocking alert/confirm/prompt): Enter = OK, Escape or a click outside = Cancel ----
+
+    let finishDialog = null; // Set while a dialog is open; closes it with the player's answer
+    let dialogShownAtMs = 0;
+
+    // A tap that opens a dialog ends with a synthesized click on whatever is now under the finger, e.g. the dialog's own buttons
+    function isGhostClick() {
+        return Date.now() - dialogShownAtMs < GHOST_CLICK_WINDOW_MS;
+    }
+
+    // content is text or a DOM node. Resolves to { isOk, text }; text is only meaningful with inputMaxLength.
+    function showDialog({ title, content, okLabel = 'OK', cancelLabel = null, inputMaxLength = 0 }) {
+        finishDialog?.(false);
+        dialogTitle.textContent = title;
+        dialogContent.replaceChildren(content);
+        dialogOkButton.textContent = okLabel;
+        dialogCancelButton.textContent = cancelLabel;
+        dialogCancelButton.hidden = cancelLabel === null;
+        dialogInput.hidden = inputMaxLength === 0;
+        dialogInput.maxLength = inputMaxLength;
+        dialogInput.value = '';
+        dialogBackdrop.hidden = false;
+        dialogShownAtMs = Date.now();
+        if (inputMaxLength > 0) dialogInput.focus();
+
+        return new Promise((resolve) => {
+            finishDialog = (isOk) => {
+                finishDialog = null;
+                dialogBackdrop.hidden = true;
+                resolve({ isOk, text: dialogInput.value });
+            };
+        });
+    }
+
+    function createMessage(text) {
+        const message = document.createElement('div');
+        message.className = 'dialog-message';
+        message.textContent = text;
+        return message;
+    }
+
+    async function askConfirm(question) {
+        const { isOk } = await showDialog({ title: 'Minesweeper', content: createMessage(question), okLabel: 'Yes', cancelLabel: 'No' });
+        return isOk;
+    }
+
+    dialogOkButton.addEventListener('click', () => { if (!isGhostClick()) finishDialog?.(true); });
+    dialogCancelButton.addEventListener('click', () => { if (!isGhostClick()) finishDialog?.(false); });
+    dialogBackdrop.addEventListener('click', (e) => { if (e.target === dialogBackdrop && !isGhostClick()) finishDialog?.(false); });
+    document.addEventListener('keydown', (e) => {
+        if (!finishDialog) return;
+        if (e.key === 'Escape') finishDialog(false);
+        // A focused button handles Enter itself, so Enter on Cancel still cancels
+        else if (e.key === 'Enter' && e.target.tagName !== 'BUTTON') finishDialog(true);
+    });
 
     function closeMenus() {
         gameMenuContent.classList.remove('open');
@@ -228,7 +303,7 @@
 
     document.getElementById('help-trigger').addEventListener('click', () => {
         closeMenus();
-        alert('Controls:\n- Click Smiley: New Game\n- Right Click Smiley: Hint (+5s)\n- Right Click Number: Chord Sweep\n- Double Tap Number: Chord Sweep\n- Right Click/Long Press Cell: Toggle Flag / Question Mark');
+        showDialog({ title: 'Help', content: createMessage(HELP_TEXT) });
     });
 
     document.getElementById('btn-new-game').addEventListener('click', () => {
@@ -236,8 +311,8 @@
         confirmNewGame();
     });
 
-    function confirmNewGame() {
-        if (first || gameOver || confirm("Reset current game?")) initGame();
+    async function confirmNewGame() {
+        if (first || gameOver || await askConfirm('Reset current game?')) initGame();
     }
 
     document.querySelectorAll('.diff-opt').forEach((option) => {
@@ -553,9 +628,7 @@
             mineCountDisplay.textContent = '000';
             const level = currentLvl;
             const time = Math.min(getElapsedSeconds(), MAX_TIME_SECONDS);
-            if (isTopScore(level, time)) {
-                setTimeout(() => { const n = prompt("High Score! Enter name:"); if (n) saveScore(level, n, time); }, 300);
-            }
+            if (isTopScore(level, time)) askNameAndSaveScore(level, time);
         }
     }
 
@@ -624,10 +697,18 @@
         return best.length < MAX_SCORES_PER_LEVEL || time < best[best.length - 1].time;
     }
 
+    async function askNameAndSaveScore(level, time) {
+        const { isOk, text } = await showDialog({
+            title: 'High Score!', content: createMessage('Enter your name:'),
+            okLabel: 'OK', cancelLabel: 'Cancel', inputMaxLength: MAX_NAME_LENGTH,
+        });
+        if (isOk && text) saveScore(level, text, time);
+    }
+
     function saveScore(level, name, time) {
         let s = getScores();
         if (!s[level]) s[level] = [];
-        s[level].push({ name: name.substring(0, 12), time });
+        s[level].push({ name: name.substring(0, MAX_NAME_LENGTH), time });
         s[level].sort((a,b) => a.time - b.time);
         s[level] = s[level].slice(0, MAX_SCORES_PER_LEVEL);
         writeStoredScores(s);
@@ -636,9 +717,8 @@
 
     function showLeaderboard(level = currentLvl) {
         const s = getScores()[level] || [];
-        const scoreList = document.getElementById('score-list');
-        scoreList.replaceChildren();
-        document.getElementById('score-title').textContent = level.toUpperCase() + " Ranking";
+        const scoreTable = document.createElement('table');
+        scoreTable.className = 'score-table';
         s.forEach((x, i) => {
             // Names are user input, so they go in as text, never as HTML
             const rank = document.createElement('td');
@@ -650,18 +730,13 @@
             time.textContent = `${Number(x.time)}s`;
             const row = document.createElement('tr');
             row.append(rank, name, time);
-            scoreList.append(row);
+            scoreTable.append(row);
         });
-        scoreDialog.hidden = false;
+        const scoreList = document.createElement('div');
+        scoreList.className = 'score-list-container';
+        scoreList.append(scoreTable);
+        showDialog({ title: level.toUpperCase() + " Ranking", content: scoreList });
     }
-
-    function closeLeaderboard() {
-        scoreDialog.hidden = true;
-    }
-
-    document.getElementById('score-ok').addEventListener('click', closeLeaderboard);
-    scoreDialog.addEventListener('click', (e) => { if (e.target === scoreDialog) closeLeaderboard(); });
-    document.addEventListener('keydown', (e) => { if ((e.key === 'Escape' || e.key === 'Enter') && !scoreDialog.hidden) closeLeaderboard(); });
 
     initGame();
 </script>
