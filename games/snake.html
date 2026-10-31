@@ -668,6 +668,28 @@ function resumeGame() {
 
 // The game is paused by stopping its tick timer, so speed and the tick-based
 // bonus timer are untouched while a dialog is open.
+function showPause() {
+    clearTimeout(gameTimeout);
+    showDialog('PAUSE', 'PAUSED', [
+        {label: 'RESUME', run: () => { closeDialog(); resumeGame(); }}
+    ], 0, () => confirmQuitGame(showPause));
+}
+
+function togglePause() {
+    if (dialog && dialog.kind === 'PAUSE') dialog.options[0].run();
+    else if (gameState === 'PLAYING' && !dialog) showPause();
+}
+
+// Never resumes by itself: coming back to the tab leaves the game paused.
+function pauseIfPlaying() {
+    if (gameState === 'PLAYING' && !dialog) showPause();
+}
+
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) pauseIfPlaying();
+});
+window.addEventListener('blur', pauseIfPlaying);
+
 function confirmQuitGame(onNo) {
     clearTimeout(gameTimeout);
     showConfirm('QUIT GAME?', showMenu, onNo);
@@ -694,13 +716,19 @@ function handleInput(dir) {
         return;
     }
 
+    if (dir === 'P') {
+        togglePause();
+        return;
+    }
+
     if (dialog) {
         handleDialogInput(dir);
         return;
     }
 
     if (gameState === 'PLAYING') {
-        queueTurn(dir);
+        if (dir === 'OK') showPause();
+        else queueTurn(dir);
         return;
     } 
     
@@ -756,6 +784,9 @@ window.onkeydown = e => {
     // A key that closes a dialog must not also act on whatever it refocuses
     // (C would be typed into the name field, Backspace would delete from it).
     if (dialog) e.preventDefault();
+
+    // A held pause key would flip between paused and running.
+    if (e.repeat && (key === 'p' || key === '5' || key === 'enter')) return;
     const isTyping = document.activeElement && document.activeElement.id === 'pName';
     
     // Always allow Escape to trigger 'C' and exit safely
@@ -771,6 +802,7 @@ window.onkeydown = e => {
         if (key === 'arrowleft' || key === 'a' || key === '4') handleInput('L');
         if (key === 'arrowright' || key === 'd' || key === '6') handleInput('R');
         if (key === 'c' || key === 'backspace') handleInput('C');
+        if (key === 'p') handleInput('P');
 
         // Stops the browser from scrolling the page while steering
         if (gameState === 'PLAYING' && key.startsWith('arrow')) e.preventDefault();
@@ -792,11 +824,11 @@ window.addEventListener('touchstart', e => {
         : null;
 }, {passive: false});
 
-// A stray tap must not answer a confirmation or save the score (only the
-// SAVE control does that).
+// A stray tap must not answer a confirmation, pause the game or save the score
+// (only the SAVE control does that).
 function isTapActionSafe() {
     if (dialog) return dialog.kind === 'PAUSE';
-    return currentView !== 'INPUT';
+    return gameState !== 'PLAYING' && currentView !== 'INPUT';
 }
 
 window.addEventListener('touchend', e => {
