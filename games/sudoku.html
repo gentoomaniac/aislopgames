@@ -1601,16 +1601,17 @@
             ctx.fillRect(0, 0, $fireworkCanvas[0].width, $fireworkCanvas[0].height);
             ctx.globalCompositeOperation = 'source-over';
 
-            particles.forEach((p, index) => { 
+            particles.forEach(p => { 
                 p.update(); 
                 p.draw(); 
-                if (p.life <= 0) particles.splice(index, 1); 
             });
+            particles = particles.filter(p => p.life > 0);
             
             if (particles.length > 0 || isFiring) { 
                 animationFrameId = requestAnimationFrame(particleLoop); 
             } else {
                 $fireworkCanvas.hide();
+                canInterruptFireworks = false;
                 ctx.clearRect(0, 0, $fireworkCanvas[0].width, $fireworkCanvas[0].height);
             }
         }
@@ -1649,6 +1650,7 @@
             animationFrameId = null; 
             particles = [];
             isFiring = false;
+            canInterruptFireworks = false;
             if (ctx) ctx.clearRect(0, 0, $fireworkCanvas[0].width, $fireworkCanvas[0].height); 
             $fireworkCanvas.hide();
         }
