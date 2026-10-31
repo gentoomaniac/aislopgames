@@ -225,7 +225,18 @@ const DIFFICULTIES = ['EASY', 'MEDIUM', 'HARD', 'PROGRESSIVE'];
 let diffIdx = 1; 
 let currentSpeed = 140;
 
+const DIRECTION_VECTORS = {
+    U: {dx: 0, dy: -1},
+    D: {dx: 0, dy: 1},
+    L: {dx: -1, dy: 0},
+    R: {dx: 1, dy: 0}
+};
+const MAX_QUEUED_TURNS = 2;
+
 let snake, food, bonus, dx, dy, score, gameTimeout;
+// Turns pressed since the last tick, applied one per tick, so a quick Up+Left
+// makes both turns instead of one of them reversing the snake into itself.
+let queuedTurns = [];
 let gameState = 'MENU'; 
 let currentView = 'MAIN'; 
 let menuIdx = 0;
@@ -286,6 +297,7 @@ const saveScore = (n, s, difficulty) => {
 function init() {
     snake = [{x: 10, y: 10}];
     dx = 1; dy = 0; score = 0; foodEatenCount = 0;
+    queuedTurns = [];
     bonus = null;
     
     let diff = DIFFICULTIES[diffIdx];
@@ -303,6 +315,11 @@ function init() {
 }
 
 function loop() {
+    if (queuedTurns.length) {
+        const turn = DIRECTION_VECTORS[queuedTurns.shift()];
+        dx = turn.dx; dy = turn.dy;
+    }
+
     const head = {x: snake[0].x + dx, y: snake[0].y + dy};
     
     if (head.x < 0 || head.x >= TILE_COUNT || head.y < 0 || head.y >= TILE_COUNT || 
@@ -488,6 +505,19 @@ overlay.addEventListener('click', (e) => {
     }
 });
 
+function queueTurn(dir) {
+    const turn = DIRECTION_VECTORS[dir];
+    if (!turn || queuedTurns.length >= MAX_QUEUED_TURNS) return;
+
+    // Compare with the direction the snake will be heading after the queued turns.
+    const lastQueued = DIRECTION_VECTORS[queuedTurns[queuedTurns.length - 1]];
+    const heading = lastQueued || {dx, dy};
+    const isSameAxis = heading.dx === turn.dx || heading.dy === turn.dy;
+    if (isSameAxis) return;
+
+    queuedTurns.push(dir);
+}
+
 function handleInput(dir) {
     // 'C' Back/Exit Key handling
     if (dir === 'C') {
@@ -497,10 +527,7 @@ function handleInput(dir) {
     }
 
     if (gameState === 'PLAYING') {
-        if (dir === 'U' && dy === 0) { dx = 0; dy = -1; }
-        if (dir === 'D' && dy === 0) { dx = 0; dy = 1; }
-        if (dir === 'L' && dx === 0) { dx = -1; dy = 0; }
-        if (dir === 'R' && dx === 0) { dx = 1; dy = 0; }
+        queueTurn(dir);
         return;
     } 
     
