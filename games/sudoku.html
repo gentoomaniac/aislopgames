@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sudoku</title>
     
     <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
@@ -54,6 +54,8 @@
         }
 
         /* --- GLOBAL LAYOUT --- */
+        /* Tapping never double-tap-zooms, while pinch zoom stays available */
+        body, body * { touch-action: manipulation; }
         body {
             font-family: 'Roboto', sans-serif; background-color: var(--bg-color); color: var(--text-main);
             display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; 
@@ -1300,7 +1302,7 @@
                 const $cell = $('<div>').addClass('cell');
                 const $input = $('<input>')
                     .attr({ type: 'text', inputmode: 'none', readonly: true, 'data-row': row, 'data-col': col })
-                    .on('touchstart click', handleCellClick); 
+                    .on('click', handleCellClick);
                 const $notesTop = $('<div>').addClass('notes-display notes-top');
                 const $notesBottom = $('<div>').addClass('notes-display notes-bottom');
                 $cell.append($input).append($notesTop).append($notesBottom); $board.append($cell);
