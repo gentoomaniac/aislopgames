@@ -1167,6 +1167,100 @@
             return true;
         }
 
+        const HOLES_BY_DIFFICULTY = {
+            4: { 30: 4, 40: 6, 55: 8, 65: 10 },
+            5: { 30: 6, 40: 9, 55: 12, 65: 15 },
+            9: { 30: 30, 40: 40, 55: 55, 65: 65 }
+        };
+        // Targets near the minimum clue count (Expert 9x9) are often out of reach, so a few
+        // fresh grids are tried before settling for the puzzle with the most holes.
+        const MAX_GENERATION_ATTEMPTS = 3;
+
+        // Counts solutions by backtracking on the most constrained empty cell, and stops at
+        // `limit` so the uniqueness check never explores more than it has to.
+        function countSolutions(board, limit) {
+            const allDigits = (1 << gridSize) - 1;
+            const boxCount = subGridSize > 1 ? gridSize : 0;
+            const usedInRow = Array(gridSize).fill(0);
+            const usedInCol = Array(gridSize).fill(0);
+            const usedInBox = Array(boxCount).fill(0);
+            const boxOf = (r, c) => Math.floor(r / subGridSize) * subGridSize + Math.floor(c / subGridSize);
+            const emptyCells = [];
+
+            for (let r = 0; r < gridSize; r++) {
+                for (let c = 0; c < gridSize; c++) {
+                    if (board[r][c] === 0) { emptyCells.push([r, c]); continue; }
+                    const bit = 1 << (board[r][c] - 1);
+                    usedInRow[r] |= bit; usedInCol[c] |= bit;
+                    if (boxCount) usedInBox[boxOf(r, c)] |= bit;
+                }
+            }
+
+            let found = 0;
+            function search(remaining) {
+                if (remaining === 0) { found++; return; }
+
+                let bestIndex = -1; let bestCandidates = 0; let bestCount = gridSize + 1;
+                for (let i = 0; i < remaining; i++) {
+                    const [r, c] = emptyCells[i];
+                    const used = usedInRow[r] | usedInCol[c] | (boxCount ? usedInBox[boxOf(r, c)] : 0);
+                    const candidates = allDigits & ~used;
+                    let count = 0;
+                    for (let m = candidates; m; m &= m - 1) count++;
+                    if (count < bestCount) {
+                        bestIndex = i; bestCandidates = candidates; bestCount = count;
+                        if (count <= 1) break;
+                    }
+                }
+                if (bestCount === 0) return;
+
+                // Move the chosen cell out of the active range [0, remaining - 1)
+                [emptyCells[bestIndex], emptyCells[remaining - 1]] = [emptyCells[remaining - 1], emptyCells[bestIndex]];
+                const [r, c] = emptyCells[remaining - 1];
+                for (let m = bestCandidates; m && found < limit; m &= m - 1) {
+                    const bit = m & -m;
+                    usedInRow[r] |= bit; usedInCol[c] |= bit;
+                    if (boxCount) usedInBox[boxOf(r, c)] |= bit;
+                    search(remaining - 1);
+                    usedInRow[r] &= ~bit; usedInCol[c] &= ~bit;
+                    if (boxCount) usedInBox[boxOf(r, c)] &= ~bit;
+                }
+            }
+            search(emptyCells.length);
+            return found;
+        }
+
+        // Punches holes one at a time in random order and keeps only removals that leave
+        // exactly one solution. One pass is enough: once a cell is needed, it stays needed.
+        function punchHoles(solution, targetHoles) {
+            const board = solution.map(row => [...row]);
+            const cells = [];
+            for (let r = 0; r < gridSize; r++) for (let c = 0; c < gridSize; c++) cells.push([r, c]);
+            cells.sort(() => Math.random() - 0.5);
+
+            let holes = 0;
+            for (const [r, c] of cells) {
+                if (holes === targetHoles) break;
+                const digit = board[r][c];
+                board[r][c] = 0;
+                if (countSolutions(board, 2) === 1) holes++;
+                else board[r][c] = digit;
+            }
+            return { board, holes };
+        }
+
+        function generatePuzzle(targetHoles) {
+            let best = null;
+            for (let attempt = 0; attempt < MAX_GENERATION_ATTEMPTS; attempt++) {
+                const solution = Array.from({ length: gridSize }, () => Array(gridSize).fill(0));
+                fillBoard(solution);
+                const { board, holes } = punchHoles(solution, targetHoles);
+                if (!best || holes > best.holes) best = { solution, board, holes };
+                if (holes === targetHoles) break;
+            }
+            return best;
+        }
+
         function newGame() {
             const selectedSize = parseInt($gridSizeSelect.val());
             if (selectedSize !== gridSize) {
@@ -1175,32 +1269,10 @@
             }
 
             setStatus('', 'neutral'); stopFireworks(); clearHighlights(); selectCell(null);
-            
-            let board = Array.from({ length: gridSize }, () => Array(gridSize).fill(0));
-            fillBoard(board);
-            solutionBoard = board.map(row => [...row]);
-            
-            let holes = parseInt($difficulty.val());
-            if (gridSize === 4) {
-                if (holes <= 30) holes = 4;
-                else if (holes <= 40) holes = 6;
-                else if (holes <= 55) holes = 8;
-                else holes = 10;
-            } else if (gridSize === 5) {
-                if (holes <= 30) holes = 6;
-                else if (holes <= 40) holes = 9;
-                else if (holes <= 55) holes = 12;
-                else holes = 15;
-            }
 
-            currentBoard = board.map(row => [...row]);
-            let attempts = holes;
-
-            while (attempts > 0) {
-                let row = Math.floor(Math.random() * gridSize);
-                let col = Math.floor(Math.random() * gridSize);
-                if (currentBoard[row][col] !== 0) { currentBoard[row][col] = 0; attempts--; }
-            }
+            const puzzle = generatePuzzle(HOLES_BY_DIFFICULTY[gridSize][$difficulty.val()]);
+            solutionBoard = puzzle.solution;
+            currentBoard = puzzle.board;
 
             notesBoard = Array(gridSize * gridSize).fill().map(() => []);
             renderBoard(true); 
