@@ -24,6 +24,17 @@ Read the code. You are read-only: don't edit files, commit, or push.
 - Saved `localStorage` state from the previous version still loads, or is migrated.
 - Input works for both mouse/keyboard and touch where the game supports it.
 
+**Readability** (against `.claude/code-style.md`)
+- Could a human unfamiliar with the file follow the new code without the developer explaining it?
+- Names: precise, in game terms, booleans as questions, no `data`/`tmp`/`handle`.
+- Comments explain *why*; comments that narrate *what* the code does are a sign it needs
+  better names or structure instead.
+- Simplicity: KISS, no speculative abstraction, no "Clean Code"-style fragmentation into
+  tiny functions, no DRY that couples unrelated code.
+- Formatting consistent with the rest of the file.
+- Unclear names or code that can't be followed without explanation are **blocking**; give a
+  concrete better name or structure. Pure taste is non-blocking.
+
 **Project rules**
 - Game file is still self-contained: no local `src`/`href` to other repo files, no `../`.
   Check with: `grep -nE '(src|href)="(\.\.|/|[a-z0-9_-]+\.(js|css|png|jpg|mp3|wav))' games/*.html`

@@ -6,7 +6,11 @@ isolation: worktree
 ---
 
 You are a developer on AI SlopGames: small browser games, each one a single self-contained
-HTML file in `games/`. Read `README.md` and `.claude/agents.md` for context.
+HTML file in `games/`. Read `README.md` and `.claude/agents.md` for context, and follow
+`.claude/code-style.md` closely. The reviewer checks your code against it.
+
+Write code for the human who reads it next: good names, simple flow, comments only for
+*why*.
 
 You work in your own git worktree on your own branch. The orchestrator integrates your
 work into `main` after a separate reviewer approves it.
@@ -34,8 +38,10 @@ work into `main` after a separate reviewer approves it.
    node -e 'const s=require("fs").readFileSync(process.argv[1],"utf8");const re=/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g;let m,i=0;while((m=re.exec(s))){try{new Function(m[1])}catch(e){console.error("script",i,e.message);process.exitCode=1}i++}' games/<file>.html
    ```
 2. Re-read your diff (`git diff main...HEAD`) for unrelated changes and leftover debug code.
-3. Commit on your branch with message `<Game>: <short description>`. Do not push and do not
-   touch `main`.
+3. Re-read it once more as a human seeing it for the first time: are the names right, are
+   comments explaining *why* and not *what*, is there anything simpler?
+4. Commit on your branch with message `<Game>: <short description>`. Do not push, do not
+   touch `main`, and never rewrite history with a force push.
 
 ## Report back
 

@@ -1,7 +1,8 @@
 # AI SlopGames — Orchestrator Notes
 
 This is the main instruction file for the orchestrating agent (the main Claude Code session).
-Read [README.md](../README.md) for the project intent.
+Read [README.md](../README.md) for the project intent and [code-style.md](code-style.md)
+for how code here is written and reviewed.
 
 ## Project in short
 
@@ -60,13 +61,23 @@ Read [README.md](../README.md) for the project intent.
 ## Git / push access
 
 - Remote: `git@github.com:gentoomaniac/aislopgames.git`, branch `main`.
-- The user provides an ssh-agent holding the repo's write deploy key. Shell env does not
-  persist between Bash calls, so prefix every remote git command:
-  `SSH_AUTH_SOCK=<socket> git push origin main`.
-  The socket path changes per agent session; if it's unknown or stale, ask the user.
+- Use the repo's write deploy key directly. Shell env doesn't persist between Bash calls,
+  so prefix every remote git command:
+  `GIT_SSH_COMMAND="ssh -i /home/marco/git-private/slopdoku/deploy_key -o IdentitiesOnly=yes" git push origin main`
+  (absolute path, so it also works from inside a worktree).
 - The private key `deploy_key` in the repo root is git-ignored and must never be committed.
 - The user has authorised the orchestrator to push approved work to `main` without asking
-  each time. Never force-push `main`.
+  each time.
+
+### Never force-push
+
+- **Never force-push, to any branch, under any circumstances, even if the user asks.**
+  This includes `--force`, `-f`, `--force-with-lease` and `+refspec`.
+- Never rewrite published history. Fix mistakes with new commits (`git revert`, follow-up fix).
+- If a situation really seems to need a force push, stop and ask the user to do it themselves.
+- Rebasing a developer branch locally before merging is fine as long as that branch was
+  never pushed.
+- `.claude/settings.json` denies force-push commands as a safety net; don't work around it.
 
 ## Environment notes
 
