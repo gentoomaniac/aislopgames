@@ -669,10 +669,22 @@
             updateNumberPad();
         }
 
-        function toggleAutoNotes() {
-            if ($('#toggle-auto-notes').is(':checked')) {
+        async function toggleAutoNotes() {
+            const $autoNotesToggle = $('#toggle-auto-notes');
+            if ($autoNotesToggle.is(':checked')) {
                 autoFillNotes();
             } else {
+                if (hasNotes()) {
+                    const isConfirmed = await confirmAction({
+                        title: 'Turn off auto-notes?',
+                        message: 'All notes on the board will be cleared.',
+                        confirmLabel: 'Turn off'
+                    });
+                    if (!isConfirmed) {
+                        $autoNotesToggle.prop('checked', true);
+                        return;
+                    }
+                }
                 notesBoard = Array(gridSize * gridSize).fill().map(() => []);
                 renderNotes();
             }
@@ -1441,10 +1453,13 @@
             }, delayMs);
         }
 
+        function hasNotes() {
+            return notesBoard.some(cellNotes => cellNotes.length > 0);
+        }
+
         function hasPlayerProgress() {
             const hasEntries = $('#sudoku-board input:not(.given)').toArray().some(input => input.value !== '');
-            const hasNotes = notesBoard.some(cellNotes => cellNotes.length > 0);
-            return hasEntries || hasNotes;
+            return hasEntries || hasNotes();
         }
 
         function isPuzzleFinished() {
