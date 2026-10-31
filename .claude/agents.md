@@ -25,6 +25,13 @@ for how code here is written and reviewed.
   game. No blocking `alert`/`confirm`/`prompt`.
 - **Physics are the rules:** e.g. Breakout lasers pass through the gaps between bricks. That's
   how the game works; don't "fix" it.
+- **Saved data (high scores, settings, saved games)** — lessons from the first review round:
+  - Read from `localStorage` on every access, so two open tabs don't overwrite each other.
+    Keep an in-memory copy only as the fallback when storage is blocked or a write failed.
+  - Validate per entry: drop only malformed entries, never a whole table because one entry is bad.
+  - Never write on read (migrations of legacy keys excepted). Only an actual save writes.
+  - All storage access in try/catch; the game stays playable without storage.
+  - Render stored strings with `textContent`, never `innerHTML`.
 - **Pinch zoom stays possible:** no `user-scalable=no`/`maximum-scale=1`; lock touch gestures
   only on the play area.
 
