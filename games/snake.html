@@ -71,7 +71,7 @@
 
         canvas { display: block; image-rendering: pixelated; }
 
-        #ui-overlay {
+        #ui-overlay, #dialog-overlay {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
             display: flex; flex-direction: column;
@@ -79,6 +79,12 @@
             background: var(--lcd-bg);
             z-index: 10;
             text-align: center;
+        }
+
+        /* Pause and confirmation questions cover the screen or menu beneath them */
+        #dialog-overlay {
+            display: none;
+            z-index: 20;
         }
 
         h1 { margin: 0; font-size: 2.2rem; line-height: 1; }
@@ -182,6 +188,7 @@
                     </div>
                 </div>
             </div>
+            <div id="dialog-overlay"></div>
             <canvas id="gameCanvas" width="240" height="240"></canvas>
         </div>
     </div>
@@ -219,6 +226,7 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const overlay = document.getElementById('ui-overlay');
+const dialogOverlay = document.getElementById('dialog-overlay');
 const contentBox = document.getElementById('content-box');
 const scoreDisplay = document.getElementById('score-board');
 const keypadArea = document.getElementById('keypad-area');
@@ -548,6 +556,61 @@ function showHighScores() {
     menuIdx = 0; 
 }
 
+// --- Dialogs: a pause screen or a question shown over the LCD ---
+
+// {kind, title, options: [{label, run}], selectedIdx, onCancel} while one is open.
+// onCancel is what the back key (C / Escape) does.
+let dialog = null;
+
+function showDialog(kind, title, options, selectedIdx, onCancel) {
+    dialog = {kind, title, options, selectedIdx, onCancel};
+    dialogOverlay.style.display = 'flex';
+    renderDialog();
+}
+
+function renderDialog() {
+    const titleEl = document.createElement('h1');
+    titleEl.textContent = dialog.title;
+    const optionEls = dialog.options.map((option, i) => {
+        const optionEl = document.createElement('div');
+        optionEl.className = 'menu-item' + (i === dialog.selectedIdx ? ' active' : '');
+        optionEl.textContent = option.label;
+        optionEl.dataset.optionIdx = i;
+        return optionEl;
+    });
+    dialogOverlay.replaceChildren(titleEl, ...optionEls);
+}
+
+function closeDialog() {
+    dialog = null;
+    dialogOverlay.style.display = 'none';
+    dialogOverlay.replaceChildren();
+}
+
+function handleDialogInput(dir) {
+    const count = dialog.options.length;
+    if (dir === 'U' || dir === 'L') dialog.selectedIdx = (dialog.selectedIdx - 1 + count) % count;
+    if (dir === 'D' || dir === 'R') dialog.selectedIdx = (dialog.selectedIdx + 1) % count;
+    if (dir === 'OK') {
+        dialog.options[dialog.selectedIdx].run();
+        return;
+    }
+    renderDialog();
+}
+
+dialogOverlay.addEventListener('click', (e) => {
+    const optionIdx = e.target.dataset.optionIdx;
+    if (optionIdx !== undefined) dialog.options[optionIdx].run();
+});
+
+// Asks YES / NO, with NO preselected so a stray OK never destroys anything.
+function showConfirm(question, onYes, onNo) {
+    showDialog('CONFIRM', question, [
+        {label: 'YES', run: () => { closeDialog(); onYes(); }},
+        {label: 'NO', run: () => { closeDialog(); onNo(); }}
+    ], 1, () => { closeDialog(); onNo(); });
+}
+
 function changeDifficulty(step) {
     diffIdx = (diffIdx + step + DIFFICULTIES.length) % DIFFICULTIES.length;
     const diffEl = document.querySelector('[data-action="diff"]');
@@ -599,11 +662,32 @@ function queueTurn(dir) {
     queuedTurns.push(dir);
 }
 
+function resumeGame() {
+    gameTimeout = setTimeout(loop, currentSpeed);
+}
+
+// The game is paused by stopping its tick timer, so speed and the tick-based
+// bonus timer are untouched while a dialog is open.
+function confirmQuitGame(onNo) {
+    clearTimeout(gameTimeout);
+    showConfirm('QUIT GAME?', showMenu, onNo);
+}
+
+// 'C' Back/Exit Key handling
+function handleBackKey() {
+    if (dialog) dialog.onCancel();
+    else if (gameState === 'PLAYING') confirmQuitGame(resumeGame);
+    else showMenu();
+}
+
 function handleInput(dir) {
-    // 'C' Back/Exit Key handling
     if (dir === 'C') {
-        if (gameTimeout) clearTimeout(gameTimeout);
-        showMenu();
+        handleBackKey();
+        return;
+    }
+
+    if (dialog) {
+        handleDialogInput(dir);
         return;
     }
 
@@ -696,6 +780,13 @@ window.addEventListener('touchstart', e => {
         : null;
 }, {passive: false});
 
+// A stray tap must not answer a confirmation or save the score (only the
+// SAVE control does that).
+function isTapActionSafe() {
+    if (dialog) return dialog.kind === 'PAUSE';
+    return currentView !== 'INPUT';
+}
+
 window.addEventListener('touchend', e => {
     const start = swipeStart;
     swipeStart = null;
@@ -704,8 +795,7 @@ window.addEventListener('touchend', e => {
 
     let diffX = e.changedTouches[0].clientX - start.x, diffY = e.changedTouches[0].clientY - start.y;
     if (Math.abs(diffX) < 15 && Math.abs(diffY) < 15) {
-        // A stray tap must not save the score; only the SAVE control does that.
-        if (currentView !== 'INPUT') handleInput('OK');
+        if (isTapActionSafe()) handleInput('OK');
     }
     else Math.abs(diffX) > Math.abs(diffY) ? handleInput(diffX > 0 ? 'R' : 'L') : handleInput(diffY > 0 ? 'D' : 'U');
 });
