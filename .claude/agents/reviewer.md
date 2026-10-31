@@ -60,7 +60,9 @@ Run it on each changed HTML file, checked out from the branch
 feature and the existing ones around it:
 `node /home/marco/git-private/slopdoku/.claude/tools/check-page.cjs <file> /tmp/<shot>.png [actions.json]`.
 Errors in its output are blocking. For deeper checks, write a throwaway puppeteer script
-outside the repo (see `.claude/agents.md` → Environment notes).
+outside the repo (see `.claude/agents.md` → Environment notes), in your own scratch
+directory (given in the brief, otherwise `/tmp/claude-1000/review-<game>/`), never a
+shared one.
 
 ## Audit mode
 

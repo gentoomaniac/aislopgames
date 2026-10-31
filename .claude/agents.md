@@ -101,6 +101,9 @@ or the user's explicit OK before it lands.
   `node .claude/tools/check-page.cjs <game.html> [shot.png] [actions.json]` loads a page,
   reports console errors, uncaught exceptions and failed requests, and saves a screenshot.
   Agents can write their own throwaway puppeteer scripts (outside the repo) for deeper play-tests.
+- Scratch files: every agent uses its own directory, `/tmp/claude-1000/<role>-<game>/`
+  (e.g. `/tmp/claude-1000/dev-snake/`), never a shared one. Parallel agents overwrote
+  each other's test scripts once. Say the directory in every brief.
   Fine feel (game speed, touch on a real phone) still needs a human; mention it in the report.
 
 ## Audits

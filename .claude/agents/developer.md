@@ -45,7 +45,10 @@ work into `main` after a separate reviewer approves it.
    ```
    node -e 'const s=require("fs").readFileSync(process.argv[1],"utf8");const re=/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g;let m,i=0;while((m=re.exec(s))){try{new Function(m[1])}catch(e){console.error("script",i,e.message);process.exitCode=1}i++}' games/<file>.html
    ```
-2. Load the game in headless Chrome and play through the affected feature:
+2. Keep test scripts and screenshots in your own scratch directory (given in the brief,
+   otherwise `/tmp/claude-1000/dev-<game>/`); other agents run in parallel. Keep your
+   regression script around so you can re-run it after review rounds.
+   Load the game in headless Chrome and play through the affected feature:
    `node /home/marco/git-private/slopdoku/.claude/tools/check-page.cjs games/<file>.html /tmp/<shot>.png [actions.json]`
    (run from your worktree; see `.claude/agents.md` → Environment notes). It must report
    `no errors`. Look at the screenshot.
