@@ -607,6 +607,10 @@ function updateLogic() {
         currentSpeed *= 0.5;
     }
     
+    // Grow and shrink around the centre; keeping the left edge fixed would push the paddle off the right wall
+    const widthChange = currentWidth - paddle.renderWidth;
+    paddle.x -= widthChange / 2;
+    if (paddle.targetX !== null) paddle.targetX -= widthChange / 2;
     paddle.renderWidth = currentWidth;
     
     let moveR = rightPressed;
