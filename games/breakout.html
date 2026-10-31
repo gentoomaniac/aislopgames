@@ -904,9 +904,66 @@ const DEFAULT_SCORES = {
     'Hard': [{ name: "SUPER_CPU", score: 30000, level: 3 }, { name: "ARCADE_ACE", score: 27000, level: 3 }, { name: "THE_PRO", score: 24000, level: 3 }, { name: "GOD_MODE", score: 21000, level: 3 }, { name: "T_REX", score: 18000, level: 3 }, { name: "STARFOX", score: 15000, level: 2 }, { name: "RED_LEADER", score: 12000, level: 2 }, { name: "BLUE_ROGUE", score: 9000, level: 2 }, { name: "ASH_KETCH", score: 6000, level: 1 }, { name: "NOOB", score: 3000, level: 1 }]
 };
 
-function getHighScores() { let data = localStorage.getItem(DB_KEY); if (!data) { localStorage.setItem(DB_KEY, JSON.stringify(DEFAULT_SCORES)); return JSON.parse(JSON.stringify(DEFAULT_SCORES)); } try { return JSON.parse(data); } catch(e) { return JSON.parse(JSON.stringify(DEFAULT_SCORES)); } }
-function checkIsHighScore(score, diff) { let scores = getHighScores()[diff] || []; if (scores.length < 10) return true; return score > scores[scores.length - 1].score; }
-function saveHighScore(name, score, level, diff) { let allScores = getHighScores(); if (!allScores[diff]) allScores[diff] = []; allScores[diff].push({ name: name || "ANON", score: score, level: level }); allScores[diff].sort((a, b) => b.score - a.score || b.level - a.level); allScores[diff] = allScores[diff].slice(0, 10); localStorage.setItem(DB_KEY, JSON.stringify(allScores)); }
+const ANONYMOUS_NAME = 'ANONYMOUS';
+const SCORES_PER_DIFFICULTY = 10;
+
+// Used when localStorage is unusable (blocked, full, ...) so the game still shows and keeps scores for the session
+let inMemoryScores = null;
+
+function copyDefaultScores() { return JSON.parse(JSON.stringify(DEFAULT_SCORES)); }
+
+function isValidScoreRow(row) {
+    return row !== null && typeof row === 'object' && typeof row.name === 'string' && Number.isFinite(row.score) && Number.isFinite(row.level);
+}
+
+function compareScoreRows(a, b) { return b.score - a.score || b.level - a.level; }
+
+// Keeps whatever rows of a stored table are usable; returns null if it is not a table at all
+function sanitizeScoreTable(table) {
+    if (table === null || typeof table !== 'object' || Array.isArray(table)) return null;
+    const clean = {};
+    DIFF_ORDER.forEach(diff => {
+        clean[diff] = Array.isArray(table[diff]) ? table[diff].filter(isValidScoreRow).sort(compareScoreRows) : [];
+    });
+    return clean;
+}
+
+function readStoredScores() {
+    try {
+        const stored = localStorage.getItem(DB_KEY);
+        if (stored === null) {
+            localStorage.setItem(DB_KEY, JSON.stringify(DEFAULT_SCORES));
+            return copyDefaultScores();
+        }
+        return sanitizeScoreTable(JSON.parse(stored));
+    } catch (e) {
+        return null;
+    }
+}
+
+function getHighScores() {
+    if (inMemoryScores) return inMemoryScores;
+    return readStoredScores() || copyDefaultScores();
+}
+
+function checkIsHighScore(score, diff) {
+    const scores = getHighScores()[diff] || [];
+    if (scores.length < SCORES_PER_DIFFICULTY) return true;
+    return score > scores[scores.length - 1].score;
+}
+
+function saveHighScore(name, score, level, diff) {
+    const allScores = getHighScores();
+    if (!allScores[diff]) allScores[diff] = [];
+    allScores[diff].push({ name: name || ANONYMOUS_NAME, score: score, level: level });
+    allScores[diff].sort(compareScoreRows);
+    allScores[diff] = allScores[diff].slice(0, SCORES_PER_DIFFICULTY);
+    try {
+        localStorage.setItem(DB_KEY, JSON.stringify(allScores));
+    } catch (e) {
+        inMemoryScores = allScores;
+    }
+}
 function renderLeaderboard() { let currentDiff = DIFF_ORDER[lbDiffIndex]; document.getElementById('lb-diff-display').innerText = currentDiff === 'Medium' ? 'NORMAL' : currentDiff.toUpperCase(); const tbody = document.getElementById('score-table-body'); tbody.innerHTML = ''; const scores = getHighScores()[currentDiff] || []; for (let i = 0; i < 10; i++) { let tr = document.createElement('tr'); if (scores[i]) { tr.innerHTML = `<td>${i + 1}</td><td>${scores[i].name.toUpperCase()}</td><td>${scores[i].score}</td><td>${scores[i].level}</td>`; } else { tr.className = 'empty-row'; tr.innerHTML = `<td>${i + 1}</td><td>---</td><td>0</td><td>-</td>`; } tbody.appendChild(tr); } }
 
 document.querySelectorAll('.diff-btn').forEach(btn => { btn.addEventListener('click', (e) => { document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active')); e.target.classList.add('active'); difficulty = e.target.dataset.diff; }); });
@@ -924,7 +981,7 @@ document.getElementById('continue-btn').addEventListener('click', () => {
 document.getElementById('leaderboard-btn').addEventListener('click', () => { gameState = 'LEADERBOARD'; lbDiffIndex = DIFF_ORDER.indexOf(difficulty); document.getElementById('new-game-hint').classList.add('hidden'); document.getElementById('menu-screen').classList.add('hidden'); document.getElementById('leaderboard-screen').classList.remove('hidden'); renderLeaderboard(); });
 document.getElementById('close-leaderboard-btn').addEventListener('click', () => { gameState = 'MENU'; document.getElementById('leaderboard-screen').classList.add('hidden'); document.getElementById('menu-screen').classList.remove('hidden'); });
 
-function commitScore() { saveHighScore(document.getElementById('player-name').value.trim() || 'ANONYMOUS', score, currentLevelIdx + 1, difficulty); showPostGameLeaderboard(); }
+function commitScore() { saveHighScore(document.getElementById('player-name').value.trim() || ANONYMOUS_NAME, score, currentLevelIdx + 1, difficulty); showPostGameLeaderboard(); }
 document.getElementById('save-score-btn').addEventListener('click', commitScore);
 document.getElementById('player-name').addEventListener('keydown', (e) => { if (e.key === 'Enter') commitScore(); });
 
