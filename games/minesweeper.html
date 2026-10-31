@@ -484,22 +484,55 @@
         }
     }
 
+    const LEGACY_STORAGE_KEYS = ['ms_final_sri', 'ms_final_v11', 'ms_final_v10', 'ms_final_chord'];
+    let scoresInMemory = null; // Only used when localStorage can't be written, so scores last for the session
+
+    function isValidScores(data) {
+        if (typeof data !== 'object' || data === null || Array.isArray(data)) return false;
+        return Object.values(data).every(entries => Array.isArray(entries) && entries.every(entry =>
+            typeof entry === 'object' && entry !== null && typeof entry.name === 'string' && Number.isFinite(entry.time)
+        ));
+    }
+
+    function readStoredScores(key) {
+        try {
+            const scores = JSON.parse(localStorage.getItem(key));
+            return isValidScores(scores) ? scores : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function writeStoredScores(scores) {
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(scores));
+            scoresInMemory = null;
+        } catch (e) {
+            scoresInMemory = scores;
+        }
+    }
+
+    function createSeededScores() {
+        const scores = {};
+        const ai = ["Gemini", "DeepBlue", "Clippy", "Woz", "Ada", "Turing", "Hopper", "Carmack", "Gates", "Jobs"];
+        Object.keys(levels).forEach(lvl => {
+            scores[lvl] = ai.map((name, i) => ({ name, time: levels[lvl].base + (i * 10) }));
+        });
+        return scores;
+    }
+
     function getScores() {
-        let s = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+        if (scoresInMemory) return scoresInMemory;
+        let s = readStoredScores(STORAGE_KEY);
         if (!s) {
-            const oldKeys = ['ms_final_sri', 'ms_final_v11', 'ms_final_v10', 'ms_final_chord'];
-            for (let key of oldKeys) {
-                let oldData = JSON.parse(localStorage.getItem(key) || 'null');
-                if (oldData) { s = oldData; localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); break; }
+            for (const key of LEGACY_STORAGE_KEYS) {
+                s = readStoredScores(key);
+                if (s) { writeStoredScores(s); break; }
             }
         }
         if (!s) {
-            s = {};
-            const ai = ["Gemini", "DeepBlue", "Clippy", "Woz", "Ada", "Turing", "Hopper", "Carmack", "Gates", "Jobs"];
-            Object.keys(levels).forEach(lvl => {
-                s[lvl] = ai.map((name, i) => ({ name, time: levels[lvl].base + (i * 10) }));
-            });
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+            s = createSeededScores();
+            writeStoredScores(s);
         }
         return s;
     }
@@ -510,7 +543,7 @@
         s[currentLvl].push({ name: name.substring(0, 12), time });
         s[currentLvl].sort((a,b) => a.time - b.time);
         s[currentLvl] = s[currentLvl].slice(0, 10);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+        writeStoredScores(s);
         showLeaderboard();
     }
 
