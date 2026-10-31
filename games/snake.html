@@ -273,8 +273,8 @@ function readStorage(key) {
 }
 
 function writeStorage(key, value) {
-    try { localStorage.setItem(key, value); }
-    catch (e) { /* scores stay in memory for this session */ }
+    try { localStorage.setItem(key, value); return true; }
+    catch (e) { return false; }
 }
 
 function parseJson(text) {
@@ -321,11 +321,23 @@ function loadScores() {
 
 let highScores = loadScores();
 
-const getScores = () => highScores;
+// Once a save has failed, storage holds older data than memory, so it is not read again.
+let isStorageOutOfSync = false;
+
+// Reads storage on every call so scores saved from another tab are not lost;
+// falls back to the in-memory copy when storage is unreadable.
+function getScores() {
+    const storedScores = isStorageOutOfSync ? null : parseJson(readStorage(CURRENT_VERSION_KEY));
+    if (storedScores) highScores = toValidScores(storedScores);
+    return highScores;
+}
+
 const saveScore = (n, s, difficulty) => {
-    highScores[difficulty].push({name: sanitizeName(n.toUpperCase()), score: s});
-    highScores[difficulty] = highScores[difficulty].sort((a,b) => b.score - a.score).slice(0, MAX_SCORES_PER_DIFFICULTY);
-    writeStorage(CURRENT_VERSION_KEY, JSON.stringify(highScores));
+    const allScores = getScores();
+    allScores[difficulty].push({name: sanitizeName(n.toUpperCase()), score: s});
+    allScores[difficulty] = allScores[difficulty].sort((a,b) => b.score - a.score).slice(0, MAX_SCORES_PER_DIFFICULTY);
+    highScores = allScores;
+    if (!writeStorage(CURRENT_VERSION_KEY, JSON.stringify(allScores))) isStorageOutOfSync = true;
 };
 
 function init() {
@@ -413,7 +425,9 @@ function genFood() {
 
 function genBonus() {
     const cell = pickFreeCell([...snake, food]);
-    bonus = cell && {...cell, value: Math.random() > 0.7 ? 50 : 20};
+    if (!cell) return;
+
+    bonus = {...cell, value: Math.random() > 0.7 ? 50 : 20};
     bonusTimer = Math.floor(4000 / currentSpeed); 
 }
 
@@ -470,6 +484,7 @@ function end(isWin = false) {
         currentView = 'INPUT';
         contentBox.innerHTML = `
             <h1>${isWin ? 'YOU WIN!' : 'HIGH SCORE!'}</h1>
+            ${isWin ? '<div>HIGH SCORE!</div>' : ''}
             <div style="font-size:1.2rem">${currDiff}</div>
             <div>SCORE: ${score}</div>
             <input type="text" id="pName" maxlength="8" placeholder="YOUR NAME" autofocus>
