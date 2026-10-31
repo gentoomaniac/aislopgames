@@ -17,13 +17,21 @@
             --win-white: #ffffff;
             --win-shadow: #808080;
             --win-blue: #000080;
+            --page-gutter: 4px;
+            /* Horizontal space around the cells: page gutters, window border/padding, panel padding, board border */
+            --board-chrome: 36px;
+            --cell-max: 30px;
+            --cell-min: 20px;
         }
 
         body {
             background-color: #008080;
             font-family: 'Tahoma', sans-serif;
-            display: flex; justify-content: center; align-items: center;
-            height: 100vh; margin: 0; touch-action: none;
+            display: flex; justify-content: safe center; align-items: safe center;
+            min-height: 100vh; min-height: 100dvh; margin: 0; padding: 0 var(--page-gutter);
+            box-sizing: border-box; overscroll-behavior: none;
+            /* Panning is allowed so big boards can scroll on phones; pinch and double-tap zoom stay off */
+            touch-action: pan-x pan-y;
             
             /* Crucial for mobile: Disables system text selection and iOS long-press popups */
             -webkit-touch-callout: none;
@@ -34,7 +42,7 @@
         .outset { border: 2px solid; border-color: var(--win-white) var(--win-shadow) var(--win-shadow) var(--win-white); }
         .inset { border: 2px solid; border-color: var(--win-shadow) var(--win-white) var(--win-white) var(--win-shadow); }
 
-        .window { background-color: var(--win-gray); padding: 3px; display: inline-block; box-shadow: 2px 2px 0px black; }
+        .window { background-color: var(--win-gray); padding: 3px; display: inline-block; max-width: 100%; box-sizing: border-box; box-shadow: 2px 2px 0px black; }
         
         .title-bar { 
             background: linear-gradient(90deg, var(--win-blue), #1084d0); 
@@ -71,31 +79,34 @@
             font-size: 22px; padding: 0 5px; min-width: 55px; text-align: center; 
         }
 
-        #minefield { display: grid; border: 3px solid; border-color: var(--win-shadow) var(--win-white) var(--win-white) var(--win-shadow); }
+        /* Phones: shrink cells to fit the screen, down to --cell-min; wider boards scroll sideways */
+        #minefield-scroll { overflow-x: auto; }
+        #minefield { --cell: clamp(var(--cell-min), calc((100vw - var(--board-chrome)) / var(--cols)), var(--cell-max)); display: grid; border: 3px solid; border-color: var(--win-shadow) var(--win-white) var(--win-white) var(--win-shadow); }
         
         .cell { 
-            width: 30px; height: 30px; background-color: var(--win-gray); 
+            width: var(--cell); height: var(--cell); background-color: var(--win-gray); 
             border: 3px solid; border-color: var(--win-white) var(--win-shadow) var(--win-shadow) var(--win-white); 
-            display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; 
+            display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: min(18px, calc(var(--cell) * 0.7)); 
             position: relative;
         }
         .cell.revealed { border: 1px solid #7b7b7b; background-color: #bdbdbd; }
 
-        .flag-icon { position: relative; width: 14px; height: 18px; pointer-events: none;}
-        .flag-pole { position: absolute; left: 4px; top: 2px; width: 2px; height: 14px; background: black; }
+        /* Sized in em (18px at full cell size) so flags shrink with small cells */
+        .flag-icon { position: relative; font-size: min(18px, calc(var(--cell) * 0.6)); width: 0.7778em; height: 1em; pointer-events: none;}
+        .flag-pole { position: absolute; left: 0.2222em; top: 0.1111em; width: 0.1111em; height: 0.7778em; background: black; }
         .flag-banner {
-            position: absolute; left: 6px; top: 2px; width: 0; height: 0;
-            border-top: 5px solid transparent; border-bottom: 5px solid transparent; border-left: 8px solid red;
+            position: absolute; left: 0.3333em; top: 0.1111em; width: 0; height: 0;
+            border-top: 0.2778em solid transparent; border-bottom: 0.2778em solid transparent; border-left: 0.4444em solid red;
         }
-        .flag-base { position: absolute; left: 2px; top: 14px; width: 6px; height: 2px; background: black; }
+        .flag-base { position: absolute; left: 0.1111em; top: 0.7778em; width: 0.3333em; height: 0.1111em; background: black; }
 
         .cell.mine-hit { background-color: red !important; }
-        .cell.mine-revealed::after { content: '💣'; font-size: 16px; }
+        .cell.mine-revealed::after { content: '💣'; font-size: min(16px, calc(var(--cell) * 0.55)); }
         
-        .cell.misflagged::after { content: '💣'; font-size: 16px; opacity: 0.7; }
+        .cell.misflagged::after { content: '💣'; font-size: min(16px, calc(var(--cell) * 0.55)); opacity: 0.7; }
         .cell.misflagged::before { 
-            content: '✕'; position: absolute; color: red; font-size: 28px; 
-            z-index: 5; top: -4px; font-weight: bold;
+            content: '✕'; position: absolute; color: red; font-size: min(28px, calc(var(--cell) * 0.93)); 
+            z-index: 5; top: calc(var(--cell) * -0.13); font-weight: bold;
         }
 
         .cell.hint-flash { background-color: #ffd700 !important; border: 2px solid white; transition: background 0.2s; }
@@ -107,7 +118,7 @@
         .score-list-container { background: var(--win-gray); border: 2px solid; border-color: var(--win-shadow) var(--win-white) var(--win-white) var(--win-shadow); height: 220px; }
         .score-table { width: 100%; border-collapse: collapse; font-size: 13px; color: black; }
 
-        @media (max-width: 600px) { .cell { width: 28px; height: 28px; } }
+        @media (max-width: 600px) { :root { --cell-max: 28px; } }
     </style>
 </head>
 <body>
@@ -142,7 +153,7 @@
             <div id="reset-btn" class="outset" style="width:36px; height:36px; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size: 22px;">🙂</div>
             <div id="timer" class="digit-display">000</div>
         </div>
-        <div id="minefield"></div>
+        <div id="minefield-scroll"><div id="minefield"></div></div>
     </div>
 </div>
 
@@ -227,6 +238,7 @@
         $('#timer').text('000'); $('#mine-count').text(String(mines).padStart(3, '0')); $('#reset-btn').text('🙂');
         
         const $f = $('#minefield').empty().css('grid-template-columns', `repeat(${cols}, auto)`);
+        $f[0].style.setProperty('--cols', cols);
         grid = Array.from({ length: rows }, () => []);
 
         for (let r = 0; r < rows; r++) {
