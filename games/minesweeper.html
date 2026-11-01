@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Win95 Minesweeper - Final Stable</title>
+    <title>Win95 Minesweeper</title>
     
     <style>
         *, ::before, ::after { box-sizing: border-box; }
@@ -196,36 +196,61 @@
 </div>
 
 <script>
-    const STORAGE_KEY = 'win95_minesweeper_permanent_scores';
+    // ---- Constants ----
 
-    let rows, cols, mines, grid, timer, startTimeMs, pausedAtMs, hintPenaltySeconds, gameOver, flags, safeCellsRevealed, first;
+    const STORAGE_KEY = 'win95_minesweeper_permanent_scores';
+    const LEGACY_STORAGE_KEYS = ['ms_final_sri', 'ms_final_v11', 'ms_final_v10', 'ms_final_chord'];
+
+    const LEVELS = {
+        beginner: { rows: 9, cols: 9, mines: 10, seededBestSeconds: 20 },
+        intermediate: { rows: 16, cols: 16, mines: 40, seededBestSeconds: 85 },
+        expert: { rows: 16, cols: 30, mines: 99, seededBestSeconds: 190 }
+    };
+    const SEEDED_NAMES = ['Gemini', 'DeepBlue', 'Clippy', 'Woz', 'Ada', 'Turing', 'Hopper', 'Carmack', 'Gates', 'Jobs'];
+    const SEEDED_STEP_SECONDS = 10;
+
+    const FACE_IDLE = '🙂';
+    const FACE_PRESSED = '😮';
+    const FACE_WON = '😎';
+    const FACE_LOST = '😵';
+    const FLAG_HTML = '<div class="flag-icon"><div class="flag-pole"></div><div class="flag-banner"></div><div class="flag-base"></div></div>';
+    const HELP_TEXT = 'Controls:\n- Click Smiley: New Game\n- Right Click Smiley: Hint (+5s)\n- Right Click Number: Chord Sweep\n- Double Tap Number: Chord Sweep\n- Right Click/Long Press Cell: Toggle Flag / Question Mark';
+
+    const COUNTER_DIGITS = 3;
+    const MAX_TIME_SECONDS = 999; // What the timer display can show; scores use the same cap
+    const HINT_PENALTY_SECONDS = 5;
+    const HINT_FLASH_MS = 1500;
+    const TIMER_REFRESH_MS = 250;
+
+    const HOLD_TO_FLAG_MS = 500;
+    const CONTEXT_MENU_BLOCK_MS = 500;
+    const DOUBLE_TAP_MS = 300;
+    const FACE_HOLD_MS = 800;
+    const GHOST_CLICK_WINDOW_MS = 400;
+
+    const MAX_SCORES_PER_LEVEL = 10;
+    const MAX_NAME_LENGTH = 12;
+
+    // ---- State ----
+
+    let currentLevel = 'beginner';
+    let rows, cols, mineCount, grid; // grid[row][col] = { row, col, el, isMine, isRevealed, isFlagged, isQuestioned, adjacentMines }
+    let isFirstClick, isGameOver, flagCount, safeCellsRevealed;
+    let clockInterval, startTimeMs, pausedAtMs, hintPenaltySeconds;
+
     let cellHoldTimer, faceHoldTimer;
-    let facePressPointerType = null; // Set while a pointer is down on the smiley
-    let faceWasLongPress = false;
     let pressedCell = null; // {row, col} while a pointer is down on a cell and still counts as a tap
     let lastTap = null; // {row, col, timeMs} of the last completed tap/click, for double-tap chording
     let blockContextMenu = false; // Prevents the double-triggering of contextmenu
-    const HOLD_DELAY = 500;
-    const DOUBLE_TAP_DELAY = 300;
-    const FACE_HOLD_DELAY = 800;
-    const MAX_TIME_SECONDS = 999; // What the timer display can show; scores use the same cap
-    const MAX_SCORES_PER_LEVEL = 10;
-    const MAX_NAME_LENGTH = 12;
-    const GHOST_CLICK_WINDOW_MS = 400;
-    const HELP_TEXT = 'Controls:\n- Click Smiley: New Game\n- Right Click Smiley: Hint (+5s)\n- Right Click Number: Chord Sweep\n- Double Tap Number: Chord Sweep\n- Right Click/Long Press Cell: Toggle Flag / Question Mark';
-    const HINT_PENALTY_SECONDS = 5;
-    const TIMER_REFRESH_MS = 250;
-    const FLAG_HTML = '<div class="flag-icon"><div class="flag-pole"></div><div class="flag-banner"></div><div class="flag-base"></div></div>';
+    let facePressPointerType = null; // Set while a pointer is down on the smiley
+    let faceWasLongPress = false;
 
-    const levels = {
-        beginner: { r: 9, c: 9, m: 10, base: 20 },
-        intermediate: { r: 16, c: 16, m: 40, base: 85 },
-        expert: { r: 16, c: 30, m: 99, base: 190 }
-    };
-    let currentLvl = 'beginner';
+    let scoresInMemory = null; // Only used when localStorage can't be written, so scores last for the session
 
     const gameMenuTrigger = document.getElementById('game-menu-trigger');
     const gameMenuContent = document.getElementById('game-menu-content');
+    const levelOptions = document.querySelectorAll('.diff-opt');
+    const levelChecks = document.querySelectorAll('.diff-opt span');
     const mineCountDisplay = document.getElementById('mine-count');
     const timerDisplay = document.getElementById('timer');
     const faceButton = document.getElementById('reset-btn');
@@ -293,6 +318,8 @@
         else if (e.key === 'Enter' && e.target.tagName !== 'BUTTON') finishDialog(true);
     });
 
+    // ---- Menu ----
+
     function closeMenus() {
         gameMenuContent.classList.remove('open');
         gameMenuTrigger.classList.remove('active');
@@ -316,18 +343,18 @@
 
     // Only a game in progress has something to lose
     async function canAbandonGame() {
-        return first || gameOver || await askConfirm('Reset current game?');
+        return isFirstClick || isGameOver || await askConfirm('Reset current game?');
     }
 
     async function confirmNewGame() {
         if (await canAbandonGame()) initGame();
     }
 
-    document.querySelectorAll('.diff-opt').forEach((option) => {
+    levelOptions.forEach((option) => {
         option.addEventListener('click', async () => {
             closeMenus();
             if (!await canAbandonGame()) return;
-            currentLvl = option.dataset.lvl;
+            currentLevel = option.dataset.lvl;
             initGame();
         });
     });
@@ -335,36 +362,80 @@
     document.getElementById('btn-scores').addEventListener('click', () => { closeMenus(); showLeaderboard(); });
     document.addEventListener('click', closeMenus);
 
-    function initGame() {
-        clearInterval(timer);
-        const config = levels[currentLvl];
-        rows = config.r; cols = config.c; mines = config.m;
-        startTimeMs = null; pausedAtMs = null; hintPenaltySeconds = 0; safeCellsRevealed = 0; flags = 0; gameOver = false; first = true;
-        
-        document.querySelectorAll('.diff-opt span').forEach((check) => { check.textContent = ''; });
-        document.getElementById(`check-${currentLvl}`).textContent = '✓';
+    // ---- Board setup ----
 
-        timerDisplay.textContent = '000';
+    function formatCounter(value) {
+        return String(value).padStart(COUNTER_DIGITS, '0');
+    }
+
+    function showRemainingMines() {
+        mineCountDisplay.textContent = formatCounter(Math.max(0, mineCount - flagCount));
+    }
+
+    function initGame() {
+        clearInterval(clockInterval);
+        ({ rows, cols, mines: mineCount } = LEVELS[currentLevel]);
+        startTimeMs = null;
+        pausedAtMs = null;
+        hintPenaltySeconds = 0;
+        safeCellsRevealed = 0;
+        flagCount = 0;
+        isGameOver = false;
+        isFirstClick = true;
+
+        levelChecks.forEach((check) => { check.textContent = ''; });
+        document.getElementById(`check-${currentLevel}`).textContent = '✓';
+
+        timerDisplay.textContent = formatCounter(0);
         timerDisplay.classList.remove('paused');
-        mineCountDisplay.textContent = String(mines).padStart(3, '0');
-        faceButton.textContent = '🙂';
+        showRemainingMines();
+        faceButton.textContent = FACE_IDLE;
 
         minefield.replaceChildren();
         minefield.style.gridTemplateColumns = `repeat(${cols}, auto)`;
         minefield.style.setProperty('--cols', cols);
         grid = Array.from({ length: rows }, () => []);
 
-        for (let r = 0; r < rows; r++) {
-            for (let c = 0; c < cols; c++) {
+        for (let row = 0; row < rows; row++) {
+            for (let col = 0; col < cols; col++) {
                 const el = document.createElement('div');
                 el.className = 'cell';
-                el.dataset.row = r;
-                el.dataset.col = c;
+                el.dataset.row = row;
+                el.dataset.col = col;
                 minefield.append(el);
 
-                grid[r][c] = { isM: false, rev: false, flg: false, qst: false, n: 0, el };
+                grid[row][col] = { row, col, el, isMine: false, isRevealed: false, isFlagged: false, isQuestioned: false, adjacentMines: 0 };
             }
         }
+    }
+
+    function getNeighbors(row, col) {
+        const neighbors = [];
+        for (let rowOffset = -1; rowOffset <= 1; rowOffset++) {
+            for (let colOffset = -1; colOffset <= 1; colOffset++) {
+                if (rowOffset === 0 && colOffset === 0) continue;
+                const neighbor = grid[row + rowOffset]?.[col + colOffset];
+                if (neighbor) neighbors.push(neighbor);
+            }
+        }
+        return neighbors;
+    }
+
+    // Mines are placed on the first click, so the clicked cell and its neighbours are always safe
+    function spawnMines(safeRow, safeCol) {
+        let placedMines = 0;
+        while (placedMines < mineCount) {
+            const row = Math.floor(Math.random() * rows);
+            const col = Math.floor(Math.random() * cols);
+            const isNearFirstClick = Math.abs(row - safeRow) <= 1 && Math.abs(col - safeCol) <= 1;
+            if (!grid[row][col].isMine && !isNearFirstClick) {
+                grid[row][col].isMine = true;
+                placedMines++;
+            }
+        }
+        grid.flat().forEach((cell) => {
+            cell.adjacentMines = getNeighbors(cell.row, cell.col).filter((neighbor) => neighbor.isMine).length;
+        });
     }
 
     // ---- Cell input: Pointer Events, one code path for mouse, touch and pen ----
@@ -379,7 +450,7 @@
     }
 
     function resetFace() {
-        if (!gameOver) faceButton.textContent = '🙂';
+        if (!isGameOver) faceButton.textContent = FACE_IDLE;
     }
 
     function cancelPress() {
@@ -394,29 +465,29 @@
             cellHoldTimer = null;
             pressedCell = null;
             blockContextMenu = true; // The browser may fire a contextmenu for the same long press
-            setTimeout(() => blockContextMenu = false, 500);
-            handleCycleMark(cell.row, cell.col);
+            setTimeout(() => { blockContextMenu = false; }, CONTEXT_MENU_BLOCK_MS);
+            cycleMark(cell.row, cell.col);
             resetFace();
-        }, HOLD_DELAY);
+        }, HOLD_TO_FLAG_MS);
     }
 
     minefield.addEventListener('pointerdown', (e) => {
         resumeClock();
         const cell = cellFromElement(e.target);
-        if (!cell || gameOver) return;
+        if (!cell || isGameOver) return;
         const isMouse = e.pointerType === 'mouse';
         if (isMouse && e.button !== 0) return; // Right click is handled by contextmenu
 
-        const isDoubleTap = isSameCell(cell, lastTap) && Date.now() - lastTap.timeMs < DOUBLE_TAP_DELAY;
-        if (isDoubleTap && grid[cell.row][cell.col].rev) {
+        const isDoubleTap = isSameCell(cell, lastTap) && Date.now() - lastTap.timeMs < DOUBLE_TAP_MS;
+        if (isDoubleTap && grid[cell.row][cell.col].isRevealed) {
             lastTap = null;
             cancelPress();
-            handleChord(cell.row, cell.col);
+            chord(cell.row, cell.col);
             return;
         }
 
         pressedCell = cell;
-        faceButton.textContent = '😮';
+        faceButton.textContent = FACE_PRESSED;
         clearTimeout(cellHoldTimer);
         // A slow mouse click is still a click; only touch and pen hold to flag
         if (!isMouse) startHoldToFlag(cell);
@@ -435,7 +506,7 @@
         cancelPress();
         if (!isSameCell(releasedOn, tappedCell)) return;
         lastTap = { row: tappedCell.row, col: tappedCell.col, timeMs: Date.now() };
-        handleAction(tappedCell.row, tappedCell.col);
+        openCell(tappedCell.row, tappedCell.col);
     });
 
     document.addEventListener('pointercancel', cancelPress);
@@ -444,38 +515,19 @@
         e.preventDefault();
         resumeClock();
         const cell = cellFromElement(e.target);
-        if (!cell || gameOver || blockContextMenu) return;
+        if (!cell || isGameOver || blockContextMenu) return;
 
         cancelPress();
-        const { rev, n } = grid[cell.row][cell.col];
-        if (rev && n > 0) handleChord(cell.row, cell.col);
-        else handleCycleMark(cell.row, cell.col);
+        const { isRevealed, adjacentMines } = grid[cell.row][cell.col];
+        if (isRevealed && adjacentMines > 0) chord(cell.row, cell.col);
+        else cycleMark(cell.row, cell.col);
     });
 
-    function handleChord(r, c) {
-        const cell = grid[r][c];
-        let flagCount = 0;
-        let neighbors = [];
-        for (let i = -1; i <= 1; i++) {
-            for (let j = -1; j <= 1; j++) {
-                if (i === 0 && j === 0) continue;
-                if (grid[r+i] && grid[r+i][c+j]) {
-                    let n = grid[r+i][c+j];
-                    neighbors.push({r: r+i, c: c+j, data: n});
-                    if (n.flg) flagCount++;
-                }
-            }
-        }
-        if (flagCount === cell.n) {
-            const targets = neighbors.filter(n => !n.data.flg && !n.data.rev);
-            // Safe cells first so nothing gets flood-revealed after a wrongly flagged chord hits a mine.
-            targets.filter(n => !n.data.isM).forEach(n => reveal(n.r, n.c));
-            targets.filter(n => n.data.isM).forEach(n => hitMine(n.data));
-            checkWin();
-        }
-    }
-
     // ---- Smiley: click = new game, right-click or long press = hint ----
+
+    function canGiveHint() {
+        return !isFirstClick && !isGameOver;
+    }
 
     function cancelFacePress() {
         clearTimeout(faceHoldTimer);
@@ -485,23 +537,23 @@
     }
 
     faceButton.addEventListener('pointerdown', (e) => {
-        const pointerType = e.pointerType;
-        if (pointerType === 'mouse' && e.button !== 0) return; // Right click is handled by contextmenu
+        const isMouse = e.pointerType === 'mouse';
+        if (isMouse && e.button !== 0) return; // Right click is handled by contextmenu
 
-        facePressPointerType = pointerType;
+        facePressPointerType = e.pointerType;
         faceWasLongPress = false;
-        faceButton.textContent = '😮';
-        if (pointerType !== 'mouse') {
+        faceButton.textContent = FACE_PRESSED;
+        if (!isMouse) {
             faceHoldTimer = setTimeout(() => {
-                if (!first && !gameOver) { giveHint(); faceWasLongPress = true; }
-            }, FACE_HOLD_DELAY);
+                if (canGiveHint()) { giveHint(); faceWasLongPress = true; }
+            }, FACE_HOLD_MS);
         }
     });
 
     faceButton.addEventListener('contextmenu', (e) => {
         e.preventDefault();
         // A touch long press fires contextmenu too, but the hold timer already gives that hint
-        if (facePressPointerType === null && !first && !gameOver) giveHint();
+        if (facePressPointerType === null && canGiveHint()) giveHint();
     });
 
     // Document-level move/up/cancel handlers (the cells register theirs above): a press can end anywhere,
@@ -522,87 +574,132 @@
     document.addEventListener('pointercancel', cancelFacePress);
 
     function giveHint() {
-        let safeCells = grid.flat().filter(c => !c.isM && !c.rev && !c.flg);
-        if (safeCells.length > 0) {
-            const hint = safeCells[Math.floor(Math.random() * safeCells.length)];
-            hint.el.classList.add('hint-flash');
-            hintPenaltySeconds += HINT_PENALTY_SECONDS;
-            showElapsedTime();
-            setTimeout(() => hint.el.classList.remove('hint-flash'), 1500);
-        }
+        const safeCells = grid.flat().filter((cell) => !cell.isMine && !cell.isRevealed && !cell.isFlagged);
+        if (safeCells.length === 0) return;
+
+        const hintCell = safeCells[Math.floor(Math.random() * safeCells.length)];
+        hintCell.el.classList.add('hint-flash');
+        hintPenaltySeconds += HINT_PENALTY_SECONDS;
+        showElapsedTime();
+        setTimeout(() => hintCell.el.classList.remove('hint-flash'), HINT_FLASH_MS);
     }
 
-    function handleCycleMark(r, c) {
-        if (gameOver) return;
-        const cell = grid[r][c];
-        if (cell.rev) return;
+    // ---- Game actions ----
+
+    // Cycle: none -> flag -> question mark -> none
+    function cycleMark(row, col) {
+        if (isGameOver) return;
+        const cell = grid[row][col];
+        if (cell.isRevealed) return;
 
         cell.el.replaceChildren();
 
-        // Cycle Pattern: None -> Flag -> Question -> None
-        if (!cell.flg && !cell.qst) {
-            cell.flg = true;
+        if (!cell.isFlagged && !cell.isQuestioned) {
+            cell.isFlagged = true;
             cell.el.innerHTML = FLAG_HTML;
-            flags++;
-        } else if (cell.flg) {
-            cell.flg = false;
-            cell.qst = true;
+            flagCount++;
+        } else if (cell.isFlagged) {
+            cell.isFlagged = false;
+            cell.isQuestioned = true;
             cell.el.textContent = '?';
-            flags--;
+            flagCount--;
         } else {
-            cell.qst = false;
+            cell.isQuestioned = false;
         }
 
-        mineCountDisplay.textContent = String(Math.max(0, mines - flags)).padStart(3, '0');
+        showRemainingMines();
     }
 
-    function handleAction(r, c) {
-        if (gameOver) return;
-        const cell = grid[r][c];
-        
-        if (cell.flg || cell.qst || cell.rev) return;
+    function openCell(row, col) {
+        if (isGameOver) return;
+        const cell = grid[row][col];
+        if (cell.isFlagged || cell.isQuestioned || cell.isRevealed) return;
 
-        if (first) { spawnMines(r, c); startClock(); first = false; }
-        reveal(r, c);
+        if (isFirstClick) {
+            spawnMines(row, col);
+            startClock();
+            isFirstClick = false;
+        }
+        reveal(cell);
         checkWin();
     }
 
-    function spawnMines(exR, exC) {
-        let p = 0;
-        while (p < mines) {
-            let r = Math.floor(Math.random() * rows), c = Math.floor(Math.random() * cols);
-            if (!grid[r][c].isM && (Math.abs(r-exR) > 1 || Math.abs(c-exC) > 1)) { grid[r][c].isM = true; p++; }
-        }
-        for(let r=0; r<rows; r++) for(let c=0; c<cols; c++) {
-            if(!grid[r][c].isM) {
-                let count = 0;
-                for(let i=-1; i<=1; i++) for(let j=-1; j<=1; j++) if(grid[r+i] && grid[r+i][c+j]?.isM) count++;
-                grid[r][c].n = count;
-            }
-        }
+    // Reveals every unflagged neighbour once the flags around a number match it
+    function chord(row, col) {
+        const neighbors = getNeighbors(row, col);
+        const neighborFlags = neighbors.filter((neighbor) => neighbor.isFlagged).length;
+        if (neighborFlags !== grid[row][col].adjacentMines) return;
+
+        const targets = neighbors.filter((neighbor) => !neighbor.isFlagged && !neighbor.isRevealed);
+        // Safe cells first so nothing gets flood-revealed after a wrongly flagged chord hits a mine.
+        targets.filter((target) => !target.isMine).forEach(reveal);
+        targets.filter((target) => target.isMine).forEach(hitMine);
+        checkWin();
     }
 
     function hitMine(cell) {
-        cell.rev = true;
+        cell.isRevealed = true;
         cell.el.replaceChildren();
         cell.el.classList.add('revealed', 'mine-hit');
-        end(false);
+        endGame(false);
     }
 
-    function reveal(r, c) {
-        const cell = grid[r][c];
-        if (gameOver || cell.rev || cell.flg) return;
-        if (cell.isM) { hitMine(cell); return; }
-        cell.rev = true; cell.el.replaceChildren(); cell.el.classList.add('revealed');
+    function reveal(cell) {
+        if (isGameOver || cell.isRevealed || cell.isFlagged) return;
+        if (cell.isMine) { hitMine(cell); return; }
+
+        cell.isRevealed = true;
+        cell.el.replaceChildren();
+        cell.el.classList.add('revealed');
         safeCellsRevealed++;
-        if (cell.n > 0) { cell.el.textContent = cell.n; cell.el.classList.add('n-'+cell.n); }
-        else { for(let i=-1; i<=1; i++) for(let j=-1; j<=1; j++) if(grid[r+i] && grid[r+i][c+j]) reveal(r+i, c+j); }
+        if (cell.adjacentMines > 0) {
+            cell.el.textContent = cell.adjacentMines;
+            cell.el.classList.add(`n-${cell.adjacentMines}`);
+        } else {
+            getNeighbors(cell.row, cell.col).forEach(reveal);
+        }
     }
 
     // Called once after a whole click or chord, not per revealed cell, so a flood fill can't win repeatedly.
     function checkWin() {
-        if (!gameOver && safeCellsRevealed === (rows * cols) - mines) end(true);
+        if (!isGameOver && safeCellsRevealed === rows * cols - mineCount) endGame(true);
     }
+
+    function endGame(isWin) {
+        if (isGameOver) return;
+        isGameOver = true;
+        clearInterval(clockInterval);
+        showElapsedTime();
+        faceButton.textContent = isWin ? FACE_WON : FACE_LOST;
+        if (isWin) finishWin();
+        else showMinesAfterLoss();
+    }
+
+    function showMinesAfterLoss() {
+        grid.flat().forEach((cell) => {
+            if (cell.isMine && !cell.isFlagged) {
+                cell.el.replaceChildren();
+                cell.el.classList.add('mine-revealed', 'revealed');
+            } else if (!cell.isMine && cell.isFlagged) {
+                cell.el.replaceChildren();
+                cell.el.classList.add('misflagged', 'revealed');
+            }
+        });
+    }
+
+    function finishWin() {
+        grid.flat().forEach((cell) => {
+            if (cell.isMine && !cell.isFlagged) {
+                cell.isFlagged = true;
+                cell.el.innerHTML = FLAG_HTML;
+            }
+        });
+        mineCountDisplay.textContent = formatCounter(0);
+        const seconds = Math.min(getElapsedSeconds(), MAX_TIME_SECONDS);
+        if (isTopScore(currentLevel, seconds)) askNameAndSaveScore(currentLevel, seconds);
+    }
+
+    // ---- Timer and auto-pause ----
 
     // Derived from the wall clock because background tabs throttle timers, so counting ticks would under-count
     function getElapsedSeconds() {
@@ -612,20 +709,20 @@
 
     function showElapsedTime() {
         const displayedSeconds = Math.min(getElapsedSeconds(), MAX_TIME_SECONDS);
-        timerDisplay.textContent = String(displayedSeconds).padStart(3, '0');
+        timerDisplay.textContent = formatCounter(displayedSeconds);
     }
 
     function startClock() {
         startTimeMs = Date.now();
-        timer = setInterval(showElapsedTime, TIMER_REFRESH_MS);
+        clockInterval = setInterval(showElapsedTime, TIMER_REFRESH_MS);
     }
 
     // Auto-pause: a hidden or unfocused game doesn't count time. It resumes when the player touches the board
     // again, never on its own, and the blinking timer shows that the clock is stopped.
     function pauseClock() {
-        if (first || gameOver || pausedAtMs !== null) return;
+        if (isFirstClick || isGameOver || pausedAtMs !== null) return;
         pausedAtMs = Date.now();
-        clearInterval(timer);
+        clearInterval(clockInterval);
         timerDisplay.classList.add('paused');
         // The pointer may have been released while we were away without us hearing about it
         cancelPress();
@@ -636,53 +733,35 @@
         if (pausedAtMs === null) return;
         startTimeMs += Date.now() - pausedAtMs;
         pausedAtMs = null;
-        timer = setInterval(showElapsedTime, TIMER_REFRESH_MS);
+        clockInterval = setInterval(showElapsedTime, TIMER_REFRESH_MS);
         timerDisplay.classList.remove('paused');
     }
 
     document.addEventListener('visibilitychange', () => { if (document.hidden) pauseClock(); });
     window.addEventListener('blur', pauseClock);
 
-    function end(win) {
-        if (gameOver) return;
-        gameOver = true; clearInterval(timer);
-        showElapsedTime();
-        faceButton.textContent = win ? '😎' : '😵';
-        if (!win) {
-            grid.flat().forEach(c => {
-                if (c.isM && !c.flg) {
-                    c.el.replaceChildren();
-                    c.el.classList.add('mine-revealed', 'revealed');
-                }
-                else if (!c.isM && c.flg) {
-                    c.el.replaceChildren();
-                    c.el.classList.add('misflagged', 'revealed');
-                }
-            });
-        } else {
-            grid.flat().forEach(c => { if(c.isM && !c.flg) { c.flg = true; c.el.innerHTML = FLAG_HTML; } });
-            mineCountDisplay.textContent = '000';
-            const level = currentLvl;
-            const time = Math.min(getElapsedSeconds(), MAX_TIME_SECONDS);
-            if (isTopScore(level, time)) askNameAndSaveScore(level, time);
-        }
-    }
-
-    const LEGACY_STORAGE_KEYS = ['ms_final_sri', 'ms_final_v11', 'ms_final_v10', 'ms_final_chord'];
-    let scoresInMemory = null; // Only used when localStorage can't be written, so scores last for the session
+    // ---- High scores ----
 
     function isValidScoreEntry(entry) {
         return typeof entry === 'object' && entry !== null && typeof entry.name === 'string' && Number.isFinite(entry.time);
+    }
+
+    function createSeededScores() {
+        const scores = {};
+        Object.entries(LEVELS).forEach(([level, { seededBestSeconds }]) => {
+            scores[level] = SEEDED_NAMES.map((name, rank) => ({ name, time: seededBestSeconds + rank * SEEDED_STEP_SECONDS }));
+        });
+        return scores;
     }
 
     // Keeps whatever is usable per level, so one bad entry or level never costs the player's other scores
     function sanitizeScores(data) {
         const seededScores = createSeededScores();
         const scores = {};
-        Object.keys(levels).forEach(lvl => {
-            scores[lvl] = Array.isArray(data[lvl])
-                ? data[lvl].filter(isValidScoreEntry).sort((a, b) => a.time - b.time)
-                : seededScores[lvl];
+        Object.keys(LEVELS).forEach((level) => {
+            scores[level] = Array.isArray(data[level])
+                ? data[level].filter(isValidScoreEntry).sort((a, b) => a.time - b.time)
+                : seededScores[level];
         });
         return scores;
     }
@@ -706,15 +785,6 @@
         }
     }
 
-    function createSeededScores() {
-        const scores = {};
-        const ai = ["Gemini", "DeepBlue", "Clippy", "Woz", "Ada", "Turing", "Hopper", "Carmack", "Gates", "Jobs"];
-        Object.keys(levels).forEach(lvl => {
-            scores[lvl] = ai.map((name, i) => ({ name, time: levels[lvl].base + (i * 10) }));
-        });
-        return scores;
-    }
-
     // Reading never writes, except migrating legacy data; only saveScore persists changes
     function getScores() {
         if (scoresInMemory) return scoresInMemory;
@@ -728,48 +798,46 @@
     }
 
     // A tie with the last place doesn't qualify: saveScore sorts the newer entry behind older ones
-    function isTopScore(level, time) {
-        const best = getScores()[level] || [];
-        return best.length < MAX_SCORES_PER_LEVEL || time < best[best.length - 1].time;
+    function isTopScore(level, seconds) {
+        const levelScores = getScores()[level];
+        return levelScores.length < MAX_SCORES_PER_LEVEL || seconds < levelScores[levelScores.length - 1].time;
     }
 
     // A qualifying time is only lost when the player confirms they want to discard it
-    async function askNameAndSaveScore(level, time) {
+    async function askNameAndSaveScore(level, seconds) {
         let enteredName = '';
         while (true) {
             const { isOk, text } = await showDialog({
                 title: 'High Score!', content: createMessage('Enter your name:'),
                 okLabel: 'OK', cancelLabel: 'Cancel', inputMaxLength: MAX_NAME_LENGTH, inputValue: enteredName,
             });
-            if (isOk && text) { saveScore(level, text, time); return; }
+            if (isOk && text) { saveScore(level, text, seconds); return; }
             if (await askConfirm('Discard your time?')) return;
             enteredName = text;
         }
     }
 
-    function saveScore(level, name, time) {
-        let s = getScores();
-        if (!s[level]) s[level] = [];
-        s[level].push({ name: name.substring(0, MAX_NAME_LENGTH), time });
-        s[level].sort((a,b) => a.time - b.time);
-        s[level] = s[level].slice(0, MAX_SCORES_PER_LEVEL);
-        writeStoredScores(s);
+    function saveScore(level, name, seconds) {
+        const scores = getScores();
+        scores[level].push({ name: name.substring(0, MAX_NAME_LENGTH), time: seconds });
+        scores[level].sort((a, b) => a.time - b.time);
+        scores[level] = scores[level].slice(0, MAX_SCORES_PER_LEVEL);
+        writeStoredScores(scores);
         showLeaderboard(level);
     }
 
-    function showLeaderboard(level = currentLvl) {
-        const s = getScores()[level] || [];
+    function showLeaderboard(level = currentLevel) {
         const scoreTable = document.createElement('table');
         scoreTable.className = 'score-table';
-        s.forEach((x, i) => {
+        getScores()[level].forEach((score, index) => {
             // Names are user input, so they go in as text, never as HTML
             const rank = document.createElement('td');
             rank.style.width = '25px';
-            rank.textContent = `${i+1}.`;
+            rank.textContent = `${index + 1}.`;
             const name = document.createElement('td');
-            name.textContent = x.name;
+            name.textContent = score.name;
             const time = document.createElement('td');
-            time.textContent = `${Number(x.time)}s`;
+            time.textContent = `${Number(score.time)}s`;
             const row = document.createElement('tr');
             row.append(rank, name, time);
             scoreTable.append(row);
@@ -777,7 +845,7 @@
         const scoreList = document.createElement('div');
         scoreList.className = 'score-list-container';
         scoreList.append(scoreTable);
-        showDialog({ title: level.toUpperCase() + " Ranking", content: scoreList });
+        showDialog({ title: `${level.toUpperCase()} Ranking`, content: scoreList });
     }
 
     initGame();
