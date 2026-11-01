@@ -106,6 +106,21 @@
         .btn-custom-hint { background-color: var(--btn-hint-bg); color: var(--btn-hint-text); }
         .btn-custom-solve { color: var(--link-color); }
         .btn-muted { color: var(--text-muted); }
+        /* --- TIMER --- */
+        .game-clock {
+            display: flex; justify-content: space-between; align-items: baseline; gap: 8px; width: 100%;
+            min-height: 1.4rem; margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-muted);
+        }
+        .game-clock[hidden] { display: none; }
+        .game-clock-time { font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text-main); }
+        .game-clock.is-paused .game-clock-time { opacity: 0.6; }
+        .game-clock-note { text-align: right; }
+
+        .best-times-table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+        .best-times-table th, .best-times-table td { padding: 6px 4px; text-align: center; border-bottom: 1px solid var(--grid-bg); }
+        .best-times-table th { font-weight: 500; color: var(--text-muted); }
+        .best-times-table-wrapper { overflow-x: auto; }
+
         .bottom-actions { display: flex; align-items: center; justify-content: center; gap: 15px; margin-top: 10px; margin-bottom: 0; flex-wrap: wrap; width: 100%; }
 
         .field { margin-top: 25px; }
@@ -255,14 +270,21 @@
         /* --- NUMBER PAD --- */
         #number-pad { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; width: 100%; margin-bottom: 0.5rem; transition: all 0.3s; }
         
-        .num-tile {
-            flex: 1 1 calc(11% - 8px); min-width: 35px; max-width: 50px; height: 45px; 
+        .num-tile, .erase-tile {
+            flex: 1 1 calc(10% - 8px); min-width: 35px; max-width: 50px; height: 45px; 
             display: flex; align-items: center; justify-content: center; background-color: var(--cell-given-bg); color: var(--pad-text);
             font-size: 1.25rem; font-weight: 700; border-radius: 6px; cursor: pointer; border: 1px solid var(--grid-bg); box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             transition: all 0.15s; user-select: none;
         }
         
-        @media (max-width: 400px) { .num-tile { flex: 1 1 calc(18% - 8px); } }
+        .erase-tile { padding: 0; font-family: inherit; }
+
+        /* 9x9 wraps into two rows of five; the small grids (at most six tiles) stay on one row */
+        @media (max-width: 480px) {
+            .num-tile, .erase-tile { flex: 1 1 calc(18% - 8px); max-width: none; }
+            body.is-5x5 .num-tile, body.is-5x5 .erase-tile,
+            body.is-4x4 .num-tile, body.is-4x4 .erase-tile { flex-basis: calc(16% - 8px); }
+        }
 
         /* Dynamic Pad Hiding Based on Grid Size */
         body.is-4x4 .num-tile[data-val="5"], body.is-4x4 .num-tile[data-val="6"], body.is-4x4 .num-tile[data-val="7"],
@@ -271,8 +293,8 @@
         body.is-5x5 .num-tile[data-val="6"], body.is-5x5 .num-tile[data-val="7"],
         body.is-5x5 .num-tile[data-val="8"], body.is-5x5 .num-tile[data-val="9"] { display: none !important; }
 
-        .num-tile:active { transform: scale(0.95); }
-        .num-tile:hover { background-color: var(--highlight-bg); }
+        .num-tile:active, .erase-tile:active { transform: scale(0.95); }
+        .num-tile:hover, .erase-tile:hover { background-color: var(--highlight-bg); }
         .num-tile.active-hl { background-color: var(--highlight-bg); box-shadow: inset 0 0 0 2px var(--cell-focus-shadow); }
         .num-tile.selected-num { background-color: var(--cell-focus-bg); box-shadow: inset 0 0 0 3px var(--link-color); transform: translateY(-2px); }
         .num-tile.complete { opacity: 0.25; pointer-events: none; }
@@ -337,6 +359,7 @@
         </div>
         <div class="brand"><i class="material-icons">grid_on</i>Sudoku</div>
         <div class="top-bar-actions">
+            <button type="button" class="icon-btn" id="btn-best-times" title="Best Times" aria-label="Best Times"><i class="material-icons">emoji_events</i></button>
             <button type="button" class="icon-btn" id="btn-new-game" title="New Game" aria-label="New Game"><i class="material-icons">add</i></button>
             <button type="button" class="icon-btn" onclick="quickToggleTheme()" title="Toggle Theme" aria-label="Toggle Theme"><i id="quick-theme-icon" class="material-icons">brightness_4</i></button>
         </div>
@@ -464,6 +487,17 @@
         </div>
     </dialog>
 
+    <dialog id="best-times-dialog" class="modal">
+        <div class="modal-content">
+            <h4>Best Times</h4>
+            <p>Hints add 15 s. Games with a revealed solution don't count.</p>
+            <div class="best-times-table-wrapper"><table class="best-times-table" id="best-times-table"></table></div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn-flat btn-muted" id="btn-close-best-times">Close</button>
+        </div>
+    </dialog>
+
     <dialog id="confirm-dialog" class="modal">
         <form method="dialog">
             <div class="modal-content">
@@ -482,6 +516,11 @@
 
         <div class="game-card">
 
+            <div class="game-clock" id="game-clock" hidden>
+                <span class="game-clock-time" id="game-clock-time"></span>
+                <span class="game-clock-note" id="game-clock-note"></span>
+            </div>
+
             <div id="sudoku-board-container">
                 <div id="sudoku-board" class="grid-9x9"></div>
             </div>
@@ -496,13 +535,14 @@
                 <div class="num-tile" data-val="7">7</div>
                 <div class="num-tile" data-val="8">8</div>
                 <div class="num-tile" data-val="9">9</div>
+                <button type="button" class="erase-tile" id="pad-erase" title="Erase" aria-label="Erase">&#9003;</button>
             </div>
 
             <div class="bottom-actions">
                 <button id="btn-note-mode" class="btn" onclick="toggleNoteMode()" title="Toggle Note Mode">
                     <i class="material-icons">edit</i>Notes
                 </button>
-                <button class="btn btn-custom-hint" onclick="giveHint()" title="Get a Hint">
+                <button class="btn btn-custom-hint" onclick="giveHint()" title="Get a Hint (adds 15 s to your time)">
                     <i class="material-icons">lightbulb_outline</i>Hint
                 </button>
                 <button class="btn-flat btn-custom-solve" onclick="confirmSolveGame()">
@@ -531,6 +571,11 @@
         const settingsDialog = document.getElementById('settings-dialog');
         const newGameDialog = document.getElementById('new-game-dialog');
         const confirmDialog = document.getElementById('confirm-dialog');
+        const bestTimesDialog = document.getElementById('best-times-dialog');
+        const gameClockEl = document.getElementById('game-clock');
+        const gameClockTimeEl = document.getElementById('game-clock-time');
+        const gameClockNoteEl = document.getElementById('game-clock-note');
+        const eraseTile = document.getElementById('pad-erase');
 
         let solutionBoard = [];
         let currentBoard = []; 
@@ -565,6 +610,196 @@
         };
 
         const SAVED_STATE_KEY = 'zenSudokuState';
+        const BEST_TIMES_KEY = 'zenSudokuBestTimes';
+
+        // --- Game timer ---
+        const HINT_PENALTY_MS = 15000;
+
+        // Null means an untimed game: a save from before the timer existed. Starting those at 0
+        // would let a nearly finished puzzle set an unbeatable best time.
+        let elapsedMs = null;
+        let runningSinceMs = null; // performance.now() while the clock runs, null while paused
+        let hasGameFinished = false; // won or solved: the clock never restarts for this game
+        let gameDifficulty = null; // what this puzzle was generated with; the select may have moved on
+
+        function getElapsedMs() {
+            return runningSinceMs === null ? elapsedMs : elapsedMs + (performance.now() - runningSinceMs);
+        }
+
+        function startNewClock() {
+            elapsedMs = 0; runningSinceMs = null; hasGameFinished = false;
+        }
+
+        function freezeClock() {
+            if (runningSinceMs === null) return;
+            elapsedMs += performance.now() - runningSinceMs;
+            runningSinceMs = null;
+        }
+
+        function pauseClock() {
+            if (runningSinceMs === null) return;
+            freezeClock();
+            renderClock();
+            saveGameState();
+        }
+
+        // Only called for explicit player actions, never from a timer or a focus event
+        function resumeClock() {
+            const canRun = elapsedMs !== null && !hasGameFinished && runningSinceMs === null &&
+                document.visibilityState === 'visible' && !isMenuOpen();
+            if (!canRun) return;
+            runningSinceMs = performance.now();
+            renderClock();
+        }
+
+        function addHintPenalty() {
+            if (elapsedMs !== null) elapsedMs += HINT_PENALTY_MS;
+            renderClock();
+        }
+
+        function formatTime(ms) {
+            const totalSeconds = Math.floor(ms / 1000);
+            const seconds = String(totalSeconds % 60).padStart(2, '0');
+            const minutes = Math.floor(totalSeconds / 60) % 60;
+            const hours = Math.floor(totalSeconds / 3600);
+            return hours > 0 ? `${hours}:${String(minutes).padStart(2, '0')}:${seconds}` : `${minutes}:${seconds}`;
+        }
+
+        function renderClock() {
+            const isSolutionRevealed = statusKind === 'autoSolved';
+            gameClockEl.hidden = elapsedMs === null && !isSolutionRevealed;
+            if (gameClockEl.hidden) return;
+
+            const isPaused = runningSinceMs === null && !hasGameFinished && !isSolutionRevealed;
+            gameClockEl.classList.toggle('is-paused', isPaused);
+            gameClockTimeEl.textContent = elapsedMs === null ? '' : formatTime(getElapsedMs());
+            if (isSolutionRevealed) gameClockNoteEl.textContent = 'Solution revealed: no best time';
+            else gameClockNoteEl.textContent = isPaused ? 'Paused: tap to resume' : '';
+        }
+
+        function initClock() {
+            setInterval(renderClock, 250);
+            window.addEventListener('blur', pauseClock);
+            window.addEventListener('pagehide', pauseClock);
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'hidden') pauseClock();
+            });
+            document.querySelector('.game-card').addEventListener('pointerdown', resumeClock);
+            document.addEventListener('keydown', (e) => {
+                if (!e.ctrlKey && !e.metaKey && !e.altKey) resumeClock();
+            });
+        }
+
+        // --- Best times ---
+        // Keyed by '<grid size>:<difficulty>', value is the time in milliseconds.
+        const DIFFICULTY_NAMES = { '30': 'Easy', '40': 'Medium', '55': 'Hard', '65': 'Expert', '75': 'Master' };
+        const GRID_SIZE_NAMES = { 9: '9x9', 5: '5x5', 4: '4x4' };
+        let bestTimesFallback = {}; // only used while storage is blocked or a write failed
+
+        function bestTimeKey(size, difficulty) {
+            return size + ':' + difficulty;
+        }
+
+        // Master is only generated for 9x9
+        function isKnownBestTimeKey(key) {
+            const [size, difficulty] = key.split(':');
+            return GRID_SIZE_NAMES[size] !== undefined && DIFFICULTY_NAMES[difficulty] !== undefined &&
+                !(size !== '9' && difficulty === '75');
+        }
+
+        // The stored object as it is, including entries we can't read; those are left alone on save.
+        function readStoredBestTimes() {
+            try {
+                const stored = JSON.parse(localStorage.getItem(BEST_TIMES_KEY));
+                if (stored && typeof stored === 'object' && !Array.isArray(stored)) return stored;
+            } catch (e) {
+                // Blocked or corrupt storage: fall through to the in-memory copy
+            }
+            return { ...bestTimesFallback };
+        }
+
+        // Every access reads storage again, so a second open tab is never overwritten
+        function getBestTimes() {
+            const stored = readStoredBestTimes();
+            const validTimes = {};
+            Object.keys(stored).forEach(key => {
+                const ms = stored[key];
+                if (isKnownBestTimeKey(key) && Number.isFinite(ms) && ms > 0) validTimes[key] = ms;
+            });
+            return validTimes;
+        }
+
+        function saveBestTime(key, ms) {
+            const stored = readStoredBestTimes();
+            stored[key] = ms;
+            try {
+                localStorage.setItem(BEST_TIMES_KEY, JSON.stringify(stored));
+            } catch (e) {
+                bestTimesFallback = stored;
+            }
+        }
+
+        // Called once, when the puzzle is solved by the player. Returns what the win message needs.
+        function recordWin(timeMs) {
+            const key = bestTimeKey(gridSize, gameDifficulty);
+            if (!isKnownBestTimeKey(key)) return { timeMs, isNewBest: false, bestMs: timeMs };
+            const previousBestMs = getBestTimes()[key];
+            const isNewBest = previousBestMs === undefined || timeMs < previousBestMs;
+            if (isNewBest) saveBestTime(key, timeMs);
+            return { timeMs, isNewBest, bestMs: isNewBest ? timeMs : previousBestMs };
+        }
+
+        // Stops the clock for good. Only a fresh win is recorded; reloading a won game, or
+        // finishing it a second time after erasing a cell in hard mode, never is.
+        function finishTimedGame(isFreshWin) {
+            if (elapsedMs === null) return null;
+            const wasFinished = hasGameFinished;
+            freezeClock();
+            hasGameFinished = true;
+            renderClock();
+            if (wasFinished || !isFreshWin) {
+                const bestMs = getBestTimes()[bestTimeKey(gridSize, gameDifficulty)];
+                return { timeMs: elapsedMs, isNewBest: false, bestMs: bestMs === undefined ? elapsedMs : bestMs };
+            }
+            return recordWin(elapsedMs);
+        }
+
+        function describeWin(result) {
+            if (!result) return '🎉 BRILLIANT! You solved it!';
+            const bestNote = result.isNewBest ? ' New best time!' : ' Best: ' + formatTime(result.bestMs);
+            return `🎉 BRILLIANT! You solved it in ${formatTime(result.timeMs)}.${bestNote}`;
+        }
+
+        function renderBestTimesTable() {
+            const bestTimes = getBestTimes();
+            const table = document.getElementById('best-times-table');
+            table.replaceChildren();
+
+            const headerRow = table.insertRow();
+            ['Size', ...Object.values(DIFFICULTY_NAMES)].forEach(name => {
+                const cell = document.createElement('th');
+                cell.textContent = name;
+                headerRow.appendChild(cell);
+            });
+
+            Object.keys(GRID_SIZE_NAMES).sort((a, b) => b - a).forEach(size => {
+                const row = table.insertRow();
+                const sizeCell = document.createElement('th');
+                sizeCell.textContent = GRID_SIZE_NAMES[size];
+                row.appendChild(sizeCell);
+                Object.keys(DIFFICULTY_NAMES).forEach(difficulty => {
+                    const key = bestTimeKey(size, difficulty);
+                    const cell = row.insertCell();
+                    cell.textContent = bestTimes[key] !== undefined ? formatTime(bestTimes[key]) : '-';
+                    if (!isKnownBestTimeKey(key)) cell.style.opacity = '0.3';
+                });
+            });
+        }
+
+        function showBestTimes() {
+            renderBestTimesTable();
+            openDialog(bestTimesDialog);
+        }
 
         function initPage() {
             initDialogs();
@@ -573,6 +808,7 @@
             difficultySelect.addEventListener('change', saveGameState);
             gridSizeSelect.addEventListener('change', updateMasterAvailability);
             numTiles.forEach(tile => tile.addEventListener('click', handlePadClick));
+            eraseTile.addEventListener('click', eraseSelectedCell);
             document.addEventListener('keydown', handleKeyboardInput);
 
             // Allow interruption of fireworks
@@ -584,6 +820,7 @@
                 });
             });
 
+            initClock();
             initGrid();
             const hasSavedData = loadGameState();
             initColorPickers();
@@ -592,6 +829,7 @@
                 newGame();
             }
             updateQuickToggleIcon();
+            renderClock();
         }
 
         // <input type="color"> only accepts #rrggbb, but saved colours may be #rgb or carry an alpha pair
@@ -619,11 +857,19 @@
 
         // --- Dialogs ---
         function initDialogs() {
-            document.getElementById('btn-settings').addEventListener('click', () => settingsDialog.showModal());
+            document.getElementById('btn-settings').addEventListener('click', () => openDialog(settingsDialog));
             document.getElementById('btn-close-settings').addEventListener('click', () => settingsDialog.close());
-            document.getElementById('btn-new-game').addEventListener('click', () => newGameDialog.showModal());
+            document.getElementById('btn-new-game').addEventListener('click', () => openDialog(newGameDialog));
+            document.getElementById('btn-best-times').addEventListener('click', showBestTimes);
+            document.getElementById('btn-close-best-times').addEventListener('click', () => bestTimesDialog.close());
             document.getElementById('btn-cancel-new-game').addEventListener('click', () => newGameDialog.close());
-            [settingsDialog, newGameDialog, confirmDialog].forEach(closeOnBackdropClick);
+            [settingsDialog, newGameDialog, bestTimesDialog, confirmDialog].forEach(closeOnBackdropClick);
+        }
+
+        // The clock pauses behind every dialog and stays paused until the player acts on the board
+        function openDialog(dialog) {
+            pauseClock();
+            dialog.showModal();
         }
 
         // A click on the backdrop is reported with the dialog itself as target, so tell it apart
@@ -649,7 +895,7 @@
             confirmDialog.returnValue = '';
             return new Promise(resolve => {
                 confirmDialog.addEventListener('close', () => resolve(confirmDialog.returnValue === 'accept'), { once: true });
-                confirmDialog.showModal();
+                openDialog(confirmDialog);
             });
         }
 
@@ -822,6 +1068,14 @@
             }
         }
 
+        function isSelectedCellEditable() {
+            return selectedCell !== null && !selectedCell.classList.contains('locked') && !selectedCell.classList.contains('given');
+        }
+
+        function eraseSelectedCell() {
+            if (!fastFillMode && isSelectedCellEditable()) updateCellValue(selectedCell, 'erase');
+        }
+
         function isTypingInFormField(target) {
             return target.matches('input, select, textarea') && !target.matches('#sudoku-board input');
         }
@@ -831,7 +1085,7 @@
         }
 
         function handleKeyboardInput(e) {
-            if (fastFillMode || !selectedCell || selectedCell.classList.contains('locked') || selectedCell.classList.contains('given')) return;
+            if (fastFillMode || !isSelectedCellEditable()) return;
             if (e.ctrlKey || e.metaKey || e.altKey || isTypingInFormField(e.target) || isMenuOpen()) return;
             const key = e.key;
             const validRegex = new RegExp('^[1-' + gridSize + ']$');
@@ -839,7 +1093,7 @@
                 if (getNumTile(key).classList.contains('complete')) return;
                 updateCellValue(selectedCell, key);
             }
-            else if (key === 'Backspace' || key === 'Delete') updateCellValue(selectedCell, 'erase');
+            else if (key === 'Backspace' || key === 'Delete') eraseSelectedCell();
         }
 
         function getBoardState() {
@@ -1067,7 +1321,10 @@
                     gridSize: gridSize, constraints: constraintsEnabled, autoNotes: autoNotesToggle.checked
                 },
                 customColors: customThemeState,
-                isAutoSolved: statusKind === 'autoSolved'
+                isAutoSolved: statusKind === 'autoSolved',
+                elapsedMs: elapsedMs === null ? undefined : getElapsedMs(),
+                hasGameFinished: hasGameFinished,
+                gameDifficulty: gameDifficulty
             };
             writeSavedState(state);
         }
@@ -1116,7 +1373,10 @@
                 gridSize: size, settings: settings, customColors: customColors,
                 solutionBoard: state.solutionBoard, currentBoard: state.currentBoard, userBoard: state.userBoard,
                 notesBoard: isNotesBoard(state.notesBoard, size) ? state.notesBoard : null,
-                isAutoSolved: state.isAutoSolved === true
+                isAutoSolved: state.isAutoSolved === true,
+                elapsedMs: Number.isFinite(state.elapsedMs) && state.elapsedMs >= 0 ? state.elapsedMs : null,
+                hasGameFinished: state.hasGameFinished === true,
+                gameDifficulty: DIFFICULTY_NAMES[state.gameDifficulty] !== undefined ? String(state.gameDifficulty) : null
             };
         }
 
@@ -1153,6 +1413,9 @@
                 fastFillToggle.checked = settings.fastFill === true;
                 constraintsToggle.checked = settings.constraints === true;
                 autoNotesToggle.checked = settings.autoNotes === true;
+
+                elapsedMs = state.elapsedMs; runningSinceMs = null;
+                hasGameFinished = state.hasGameFinished; gameDifficulty = state.gameDifficulty;
 
                 fastFillMode = settings.fastFill === true;
                 constraintsEnabled = settings.constraints === true;
@@ -1196,7 +1459,7 @@
                 else renderNotes();
 
                 if (state.isAutoSolved) setStatus('Puzzle Solved Automatically.', 'neutral', 'autoSolved');
-                updateNumberPad(); checkWinCondition(false); return true;
+                updateNumberPad(); checkWinCondition(false); renderClock(); return true;
             } catch (e) { return false; }
         }
 
@@ -2179,6 +2442,7 @@
             }
             newGameDialog.close();
             newGame();
+            resumeClock();
         }
 
         function newGame() {
@@ -2194,6 +2458,8 @@
             const puzzle = generatePuzzle(difficultySelect.value);
             solutionBoard = puzzle.solution;
             currentBoard = puzzle.board;
+            gameDifficulty = difficultySelect.value;
+            startNewClock();
 
             notesBoard = Array(gridSize * gridSize).fill().map(() => []);
             renderBoard(true); 
@@ -2201,7 +2467,7 @@
             if (autoNotesToggle.checked) autoFillNotes();
             else renderNotes();
 
-            updateNumberPad(); saveGameState();
+            updateNumberPad(); saveGameState(); renderClock();
         }
 
         function renderBoard(animated = false) {
@@ -2259,6 +2525,7 @@
                 const hintCell = hintCells[Math.floor(Math.random() * hintCells.length)];
                 const [r, c] = getCellPosition(hintCell);
                 revealHintCell(hintCell, solutionBoard[r][c]);
+                addHintPenalty();
                 hintMessage = wrongCells.length > 0 ? 'Corrected a mistake to help you progress!' : '';
             }
             
@@ -2274,6 +2541,7 @@
         function solveGame() {
             let staggerIndex = 0;
             setStatus('Solving...', 'neutral'); stopFireworks(); clearHighlights(); selectCell(null);
+            freezeClock(); hasGameFinished = true;
 
             let board = getBoardState();
             let tempBoard = board.map(row => [...row]);
@@ -2314,7 +2582,7 @@
             if(!animationsEnabled) updateNumberPad();
             runInCurrentGame(() => { 
                 updateErrors();
-                setStatus('Puzzle Solved Automatically.', 'neutral', 'autoSolved'); saveGameState(); 
+                setStatus('Puzzle Solved Automatically.', 'neutral', 'autoSolved'); saveGameState(); renderClock();
             }, (staggerIndex * 15) + 100);
         }
         
@@ -2348,7 +2616,7 @@
 
             if (isComplete) {
                 if (!hasErrors) {
-                    setStatus('🎉 BRILLIANT! You solved it!', 'success');
+                    setStatus(describeWin(finishTimedGame(triggerEffects)), 'success');
                     clearHighlights(); selectCell(null); 
                     if (animationsEnabled && triggerEffects) {
                         triggerWaveAnimation();
