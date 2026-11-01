@@ -279,8 +279,9 @@
         
         .erase-tile { padding: 0; font-family: inherit; }
 
-        /* 9x9 wraps into two rows of five; the small grids (at most six tiles) stay on one row */
-        @media (max-width: 480px) {
+        /* 9x9 wraps into two rows of five once the pad is too narrow for all ten tiles in one row
+           (10 tiles at their 35px minimum plus gaps need 422px); the small grids (at most six tiles) stay on one row */
+        @container (max-width: 424px) {
             .num-tile, .erase-tile { flex: 1 1 calc(18% - 8px); max-width: none; }
             body.is-5x5 .num-tile, body.is-5x5 .erase-tile,
             body.is-4x4 .num-tile, body.is-4x4 .erase-tile { flex-basis: calc(16% - 8px); }
