@@ -1462,7 +1462,6 @@ function readStoredScores() {
     try {
         const stored = localStorage.getItem(SCORES_STORAGE_KEY);
         if (stored === null) {
-            localStorage.setItem(SCORES_STORAGE_KEY, JSON.stringify(DEFAULT_SCORES));
             return copyDefaultScores();
         }
         return sanitizeScoreTable(JSON.parse(stored));
