@@ -3,7 +3,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const dist = process.argv[2];
+const dist = path.resolve(process.argv[2]);
 const isLocal = (ref) => ref && !/^([a-z][a-z0-9+.-]*:|\/\/|#)/i.test(ref);
 const refPattern = /\b(?:src|href)\s*=\s*["']([^"']*)["']|url\(\s*["']?([^"')]*)/gi;
 
@@ -22,7 +22,8 @@ for (const file of htmlFiles(dist)) {
     const ref = match[1] ?? match[2];
     if (!isLocal(ref)) continue;
     const target = path.join(path.dirname(file), ref.split(/[?#]/)[0]);
-    if (!fs.existsSync(target)) {
+    const insideDist = target.startsWith(dist + path.sep);
+    if (!insideDist || !fs.existsSync(target)) {
       console.error(`${path.relative(dist, file)}: missing ${ref}`);
       missing++;
     }

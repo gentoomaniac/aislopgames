@@ -24,9 +24,13 @@ screenshots: setup
 	CHROME_PATH=$(CHROME_PATH) node tools/screenshot.cjs $(OUT)
 
 # Everything the site serves, nothing else (no base.png, tools, docs, ...).
-# Refuses to wipe a DIST that is empty, the repo root or a parent of it.
+# The recipe does rm -rf on DIST, so it refuses anything that doesn't resolve to a
+# folder inside the repo whose top-level name starts with "dist" (dist, dist-test, ...).
 dist:
-	@case "$(DIST)" in ""|.|..|/|"$(CURDIR)") echo "refusing DIST='$(DIST)'"; exit 1;; esac
+	@abs=$$(realpath -m -- "$(DIST)" 2>/dev/null); rel=$${abs#"$(CURDIR)"/}; \
+	if [ -z "$(DIST)" ] || [ "$$rel" = "$$abs" ] || [ "$${rel#dist}" = "$$rel" ]; then \
+		echo "refusing DIST='$(DIST)': must be a dist* folder inside $(CURDIR)"; exit 1; \
+	fi
 	rm -rf "$(DIST)"
 	mkdir -p "$(DIST)/games" "$(DIST)/screenshots"
 	cp index.html logo.png divider.png LICENSE "$(DIST)/"
