@@ -1,0 +1,2415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chomp Maze - AislopGames</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+        :root {
+            --neon-green: #3bff9a;
+            --neon-yellow: #ffe14a;
+            --neon-orange: #ff9a2a;
+            --alert-red: #ff4d4d;
+            --text-main: #f2f2f2;
+            --screen-bg: #01040a;
+            --bezel-padding: clamp(8px, 2.2vw, 18px);
+            /* Height of everything around the screen (marquee, bezel, panel, base, page padding),
+               so the screen can take the rest of the window height */
+            --chrome-height: 240px;
+            --screen-width: max(200px, min(
+                calc(100vw - 2 * var(--bezel-padding) - 24px),
+                calc((100vh - var(--chrome-height)) * 224 / 288),
+                672px));
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+
+        body {
+            background: radial-gradient(ellipse at 50% 25%, #0f3a2a 0%, #04120c 70%) #04120c;
+            color: var(--text-main);
+            font-family: 'Press Start 2P', monospace;
+            min-height: 100vh;
+            padding: 12px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .hidden { display: none !important; }
+
+        /* ---------- Cabinet ---------- */
+
+        .cabinet {
+            width: calc(var(--screen-width) + 2 * var(--bezel-padding));
+            display: flex;
+            flex-direction: column;
+        }
+
+        .marquee {
+            position: relative;
+            padding: 12px 10px 18px;
+            text-align: center;
+            background: linear-gradient(#0f5a3e, #06231a);
+            border: 4px solid #000;
+            border-bottom: 0;
+            border-radius: 14px 14px 0 0;
+            box-shadow: inset 0 0 18px rgba(59, 255, 154, 0.45);
+        }
+
+        /* A row of pellets along the marquee's lower edge, with a chomper heading for them */
+        .marquee::after {
+            content: '';
+            position: absolute;
+            left: 10%; right: 10%; bottom: 6px;
+            height: 6px;
+            background: radial-gradient(circle, #ffe6c4 1.5px, transparent 2px) 0 0 / 12px 6px repeat-x;
+            opacity: 0.85;
+        }
+
+        .marquee-title {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.7em;
+            font-size: clamp(14px, 3.2vw, 24px);
+            font-weight: normal;
+            letter-spacing: 0.15em;
+            color: var(--neon-yellow);
+            text-shadow: 0 0 6px var(--neon-green), 0 0 16px var(--neon-green);
+        }
+        .marquee-chomper {
+            flex: none;
+            width: 1.1em; height: 1.1em;
+            border-radius: 50%;
+            background: conic-gradient(var(--neon-yellow) 0 55deg, transparent 55deg 125deg, var(--neon-yellow) 125deg 360deg);
+            box-shadow: 0 0 8px var(--neon-yellow);
+        }
+
+        .back-link {
+            position: absolute;
+            left: 10px;
+            top: 40%;
+            transform: translateY(-50%);
+            font-size: 8px;
+            color: var(--neon-green);
+            text-decoration: none;
+            padding: 6px 4px;
+        }
+        .back-link:hover, .back-link:focus-visible { color: #fff; }
+
+        .bezel {
+            padding: var(--bezel-padding);
+            background: linear-gradient(#14281f, #0a1510);
+            border-left: 4px solid #000;
+            border-right: 4px solid #000;
+            box-shadow: inset 0 0 24px #000;
+        }
+
+        /* The playfield. Touch gestures are locked here and nowhere else, so pinch zoom still works around it */
+        #screen {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 224 / 288;
+            overflow: hidden;
+            background: var(--screen-bg);
+            border-radius: 5% / 4%;
+            box-shadow: 0 0 0 3px #000, 0 0 26px rgba(59, 255, 154, 0.3);
+            touch-action: none;
+            cursor: default;
+            /* Overlay text scales with the screen (cqw), not the window */
+            container-type: inline-size;
+        }
+
+        canvas { display: block; width: 100%; height: 100%; }
+
+        /* Scanlines and a darkened rim, on top of everything inside the screen */
+        .crt-glass {
+            position: absolute;
+            inset: 0;
+            z-index: 40;
+            pointer-events: none;
+            background:
+                repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0.22) 0, rgba(0, 0, 0, 0.22) 1px, transparent 1px, transparent 3px),
+                radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.55) 100%);
+            box-shadow: inset 0 0 40px rgba(120, 255, 200, 0.1);
+        }
+
+        .control-panel {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 10px 12px;
+            background: linear-gradient(#24533f, #153326);
+            border: 4px solid #000;
+            border-top: 4px solid #3fa078;
+            box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.12);
+        }
+
+        /* Four-way stick: a square gate with a yellow ball */
+        .joystick {
+            position: relative;
+            flex: none;
+            width: 38px;
+            height: 38px;
+            border-radius: 6px;
+            background: #07120d;
+            box-shadow: inset 0 0 0 3px #000;
+        }
+        .joystick::before {
+            content: '';
+            position: absolute;
+            left: 50%; bottom: 50%;
+            width: 4px; height: 16px;
+            transform: translateX(-50%);
+            background: #bbb;
+        }
+        .joystick::after {
+            content: '';
+            position: absolute;
+            left: 50%; top: 2px;
+            width: 18px; height: 18px;
+            transform: translateX(-50%);
+            border-radius: 50%;
+            background: radial-gradient(circle at 35% 30%, #fff3a0, var(--neon-yellow) 60%, #8a6a00);
+        }
+
+        .control-hints {
+            flex: 1;
+            font-size: 7px;
+            line-height: 1.9;
+            color: #a8f0cc;
+        }
+        .hint-touch { display: none; }
+        @media (pointer: coarse) {
+            .hint-keys { display: none; }
+            .hint-touch { display: inline; }
+        }
+
+        .panel-buttons { flex: none; display: flex; gap: 8px; }
+
+        .panel-button {
+            font-family: inherit;
+            font-size: 7px;
+            min-height: 32px;
+            padding: 6px 8px;
+            color: #fff;
+            background: #1d6b4e;
+            border: 2px solid #000;
+            border-radius: 6px;
+            box-shadow: 0 3px 0 #000, inset 0 0 0 2px rgba(255, 255, 255, 0.25);
+            cursor: pointer;
+        }
+        .panel-button:active { transform: translateY(2px); box-shadow: 0 1px 0 #000, inset 0 0 0 2px rgba(255, 255, 255, 0.25); }
+        .panel-button:focus-visible { outline: 2px solid var(--neon-green); outline-offset: 2px; }
+        #pause-btn { background: #b8860b; }
+        #quit-btn { background: #9a1c1c; }
+
+        .cabinet-base {
+            height: 14px;
+            background: linear-gradient(#0e2a1f, #04120c);
+            border: 4px solid #000;
+            border-top: 0;
+            border-radius: 0 0 6px 6px;
+        }
+
+        /* Phones: the cabinet shrinks to what the playfield needs */
+        @media (max-width: 600px) {
+            :root { --chrome-height: 150px; }
+            body { padding: 8px; }
+            .marquee { padding: 8px 6px 14px; }
+            .back-link { font-size: 7px; left: 6px; }
+            .joystick, .control-hints { display: none; }
+            .control-panel { justify-content: center; padding: 8px; }
+            .cabinet-base { height: 8px; }
+        }
+
+        /* Phones in landscape: no marquee, the screen gets the height */
+        @media (max-height: 520px) {
+            :root { --chrome-height: 104px; }
+            body { padding: 6px; }
+            .marquee { display: none; }
+            .bezel { border-top: 4px solid #000; border-radius: 12px 12px 0 0; }
+            .joystick, .control-hints { display: none; }
+            .control-panel { justify-content: center; padding: 6px; }
+            .cabinet-base { height: 6px; }
+        }
+
+        /* ---------- Overlays inside the screen ---------- */
+
+        .overlay {
+            position: absolute;
+            inset: 0;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: safe center;
+            gap: 2.4cqw;
+            padding: 12cqw 4cqw 5cqw;
+            text-align: center;
+            font-size: 3.4cqw;
+            line-height: 1.5;
+            background: rgba(1, 6, 10, 0.86);
+            overflow-y: auto;
+            touch-action: pan-y pinch-zoom;
+            cursor: default;
+        }
+        /* The title screen lets the maze show through, like an attract mode */
+        .overlay-clear { background: rgba(1, 6, 10, 0.62); }
+        #confirm-dialog { z-index: 20; background: rgba(0, 0, 0, 0.78); justify-content: center; }
+
+        .overlay h1, .overlay h2 { font-weight: normal; }
+        .game-title {
+            font-size: 10cqw;
+            color: var(--neon-yellow);
+            text-shadow: 0.7cqw 0.7cqw 0 #1d6b4e, 0 0 3cqw var(--neon-green);
+            letter-spacing: 0.04em;
+        }
+        .screen-heading { font-size: 5cqw; color: var(--neon-green); }
+        .heading-alert { color: var(--alert-red); }
+        .accent { color: var(--neon-yellow); }
+        .dim { color: #7fa592; }
+        .small { font-size: 2.6cqw; }
+
+        .overlay button {
+            font-family: inherit;
+            font-size: 3.4cqw;
+            min-height: 9cqw;
+            padding: 2cqw 4cqw;
+            color: var(--text-main);
+            background: transparent;
+            border: 0.6cqw solid var(--text-main);
+            text-transform: uppercase;
+            cursor: pointer;
+        }
+        .overlay button:hover, .overlay button:focus-visible, .overlay button.is-selected {
+            background: var(--alert-red);
+            border-color: var(--alert-red);
+            color: #fff;
+            outline: none;
+        }
+        .overlay button.is-selected { background: var(--neon-green); border-color: var(--neon-green); color: #000; }
+
+        .start-button { font-size: 4.6cqw !important; color: var(--neon-yellow) !important; border-color: var(--neon-yellow) !important; animation: blink 1s steps(1) infinite; }
+        .start-button:hover, .start-button:focus-visible { color: #000 !important; background: var(--neon-yellow) !important; animation: none; }
+        @keyframes blink { 50% { opacity: 0; } }
+        @media (prefers-reduced-motion: reduce) { .start-button { animation: none; } }
+
+        .button-row { display: flex; gap: 2cqw; justify-content: center; flex-wrap: wrap; }
+
+        .cast-list { list-style: none; display: flex; flex-direction: column; gap: 1.6cqw; text-align: left; }
+        .cast-list li { display: flex; align-items: center; gap: 3cqw; }
+        .cast-icon { width: 7cqw; height: auto; flex: none; image-rendering: pixelated; }
+        .cast-name { min-width: 19cqw; }
+
+        .stat-list { display: grid; grid-template-columns: auto auto; gap: 1.6cqw 4cqw; text-align: left; }
+        .stat-list dd { text-align: right; color: var(--neon-yellow); }
+
+        #player-name {
+            width: 24cqw;
+            padding: 2cqw;
+            font-family: inherit;
+            font-size: 5cqw;
+            text-align: center;
+            text-transform: uppercase;
+            color: #fff;
+            background: #111;
+            border: 0.6cqw solid var(--neon-green);
+        }
+
+        .score-table { border-collapse: collapse; font-size: 3cqw; }
+        .score-table th { color: var(--alert-red); font-weight: normal; padding: 0.8cqw 2.4cqw; }
+        .score-table td { padding: 0.8cqw 2.4cqw; text-align: right; }
+        .score-table td:last-child, .score-table th:last-child { text-align: left; }
+        .score-table tr:nth-child(1) td { color: var(--neon-yellow); }
+        .empty-row td { color: #555; }
+
+        .table-controls { display: flex; align-items: center; justify-content: center; gap: 3cqw; }
+        .table-controls button { min-width: 9cqw; padding: 1cqw 2cqw; }
+        #lb-diff-display { min-width: 22cqw; color: var(--neon-yellow); }
+        #new-game-hint { color: var(--neon-green); animation: blink 1s steps(1) infinite; }
+    </style>
+</head>
+<body>
+
+<main class="cabinet">
+    <header class="marquee">
+        <a class="back-link" href="../index.html">&lt; MENU</a>
+        <h1 class="marquee-title"><span class="marquee-chomper" aria-hidden="true"></span>CHOMP MAZE</h1>
+    </header>
+
+    <div class="bezel">
+        <div id="screen">
+            <canvas id="game-canvas" width="672" height="864" aria-label="Chomp Maze playfield"></canvas>
+
+            <section id="title-screen" class="overlay overlay-clear">
+                <h2 class="game-title">CHOMP<br>MAZE</h2>
+                <p class="accent small">MEET THE GHOSTS</p>
+                <ul class="cast-list">
+                    <li><canvas id="icon-grimm" class="cast-icon" width="16" height="16"></canvas><span class="cast-name">GRIMM</span><span class="dim small">CHASES YOU</span></li>
+                    <li><canvas id="icon-sly" class="cast-icon" width="16" height="16"></canvas><span class="cast-name">SLY</span><span class="dim small">CUTS YOU OFF</span></li>
+                    <li><canvas id="icon-moxie" class="cast-icon" width="16" height="16"></canvas><span class="cast-name">MOXIE</span><span class="dim small">TEAMS UP</span></li>
+                    <li><canvas id="icon-pip" class="cast-icon" width="16" height="16"></canvas><span class="cast-name">PIP</span><span class="dim small">SHY WHEN CLOSE</span></li>
+                </ul>
+                <div class="button-row" id="difficulty-buttons">
+                    <button type="button" data-difficulty="Easy">Easy</button>
+                    <button type="button" data-difficulty="Normal">Normal</button>
+                    <button type="button" data-difficulty="Hard">Hard</button>
+                </div>
+                <div class="button-row">
+                    <button type="button" id="start-btn" class="start-button">Press Start</button>
+                    <button type="button" id="highscores-btn">High Scores</button>
+                </div>
+                <p class="dim small">EAT THE POWER PELLETS TO TURN THE TABLES</p>
+            </section>
+
+            <section id="pause-screen" class="overlay hidden">
+                <h2 class="screen-heading">PAUSED</h2>
+                <button type="button" id="resume-btn">Resume</button>
+                <button type="button" id="pause-quit-btn">Quit</button>
+                <p class="dim small">P OR ENTER TO RESUME</p>
+            </section>
+
+            <section id="game-over-screen" class="overlay hidden">
+                <h2 class="screen-heading heading-alert">GAME OVER</h2>
+                <dl class="stat-list">
+                    <dt>SCORE</dt><dd id="final-score"></dd>
+                    <dt>LEVEL</dt><dd id="final-level"></dd>
+                    <dt>PELLETS EATEN</dt><dd id="final-pellets"></dd>
+                    <dt>GHOSTS EATEN</dt><dd id="final-ghosts"></dd>
+                </dl>
+                <div id="name-entry" class="hidden">
+                    <p class="accent">NEW HIGH SCORE!</p>
+                    <p class="small dim">ENTER YOUR INITIALS</p>
+                    <input type="text" id="player-name" maxlength="3" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Initials">
+                    <div class="button-row" style="margin-top: 2cqw">
+                        <button type="button" id="save-score-btn">Save</button>
+                        <button type="button" id="skip-score-btn">Skip</button>
+                    </div>
+                </div>
+                <button type="button" id="continue-btn">Continue</button>
+            </section>
+
+            <section id="leaderboard-screen" class="overlay hidden">
+                <h2 class="screen-heading">HIGH SCORES</h2>
+                <div class="table-controls">
+                    <button type="button" id="lb-prev" aria-label="Previous difficulty">&lt;</button>
+                    <span id="lb-diff-display"></span>
+                    <button type="button" id="lb-next" aria-label="Next difficulty">&gt;</button>
+                </div>
+                <table class="score-table">
+                    <thead><tr><th>RK</th><th>SCORE</th><th>LVL</th><th>NAME</th></tr></thead>
+                    <tbody id="score-table-body"></tbody>
+                </table>
+                <p id="new-game-hint" class="hidden small">PRESS START FOR A NEW GAME</p>
+                <div class="button-row">
+                    <button type="button" id="lb-start-btn" class="hidden">Start</button>
+                    <button type="button" id="lb-close-btn">Back</button>
+                </div>
+            </section>
+
+            <section id="confirm-dialog" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+                <h2 id="confirm-title" class="screen-heading heading-alert"></h2>
+                <p id="confirm-message"></p>
+                <div class="button-row">
+                    <button type="button" id="confirm-yes">[Y] Yes</button>
+                    <button type="button" id="confirm-no">[N] No</button>
+                </div>
+            </section>
+            <div class="crt-glass"></div>
+        </div>
+    </div>
+
+    <footer class="control-panel">
+        <div class="joystick" aria-hidden="true"></div>
+        <p class="control-hints">
+            <span class="hint-keys">MOVE: ARROWS / WASD<br>PRESS A TURN EARLY, IT HAPPENS AT THE CORNER<br>PAUSE: P - QUIT: ESC - SOUND: M</span>
+            <span class="hint-touch">SWIPE ON THE SCREEN TO TURN.<br>THE TURN HAPPENS AT THE NEXT CORNER.</span>
+        </p>
+        <div class="panel-buttons">
+            <button type="button" id="pause-btn" class="panel-button" tabindex="-1">Pause</button>
+            <button type="button" id="sound-btn" class="panel-button" tabindex="-1"></button>
+            <button type="button" id="quit-btn" class="panel-button" tabindex="-1">Quit</button>
+        </div>
+    </footer>
+    <div class="cabinet-base"></div>
+</main>
+
+<script>
+/**
+ * CHOMP MAZE - a Pac-Man-style maze chase
+ * Fixed 60Hz timestep on a 224x288 playfield (28x31 tiles of 8px below a 24px score bar), drawn at 3x.
+ * Actors move in pixels but only decide where to go at tile centres, like the arcade original.
+ */
+
+// ---------------------------------------------------------------------------
+// Elements
+// ---------------------------------------------------------------------------
+
+const canvas = document.getElementById('game-canvas');
+const ctx = canvas.getContext('2d');
+const screenElement = document.getElementById('screen');
+
+const ui = {
+    titleScreen: document.getElementById('title-screen'),
+    castIcons: ['grimm', 'sly', 'moxie', 'pip'].map(name => document.getElementById('icon-' + name)),
+    difficultyButtons: document.querySelectorAll('#difficulty-buttons button'),
+    startBtn: document.getElementById('start-btn'),
+    highScoresBtn: document.getElementById('highscores-btn'),
+
+    pauseScreen: document.getElementById('pause-screen'),
+    resumeBtn: document.getElementById('resume-btn'),
+    pauseQuitBtn: document.getElementById('pause-quit-btn'),
+
+    gameOverScreen: document.getElementById('game-over-screen'),
+    finalScore: document.getElementById('final-score'),
+    finalLevel: document.getElementById('final-level'),
+    finalPellets: document.getElementById('final-pellets'),
+    finalGhosts: document.getElementById('final-ghosts'),
+    nameEntry: document.getElementById('name-entry'),
+    playerName: document.getElementById('player-name'),
+    saveScoreBtn: document.getElementById('save-score-btn'),
+    skipScoreBtn: document.getElementById('skip-score-btn'),
+    continueBtn: document.getElementById('continue-btn'),
+
+    leaderboardScreen: document.getElementById('leaderboard-screen'),
+    lbPrev: document.getElementById('lb-prev'),
+    lbNext: document.getElementById('lb-next'),
+    lbDiffDisplay: document.getElementById('lb-diff-display'),
+    scoreTableBody: document.getElementById('score-table-body'),
+    newGameHint: document.getElementById('new-game-hint'),
+    lbStartBtn: document.getElementById('lb-start-btn'),
+    lbCloseBtn: document.getElementById('lb-close-btn'),
+
+    confirmDialog: document.getElementById('confirm-dialog'),
+    confirmTitle: document.getElementById('confirm-title'),
+    confirmMessage: document.getElementById('confirm-message'),
+    confirmYes: document.getElementById('confirm-yes'),
+    confirmNo: document.getElementById('confirm-no'),
+
+    pauseBtn: document.getElementById('pause-btn'),
+    soundBtn: document.getElementById('sound-btn'),
+    quitBtn: document.getElementById('quit-btn'),
+};
+
+function show(element) { element.classList.remove('hidden'); }
+function hide(element) { element.classList.add('hidden'); }
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const TILE = 8;
+const MAZE_COLUMNS = 28;
+const MAZE_ROWS = 31;
+const FIELD_WIDTH = 224;
+const FIELD_HEIGHT = 288;
+const MAZE_TOP = 24; // the score bar sits above the maze; actors live in maze coordinates (0 = top of the maze)
+const RENDER_SCALE = 3;
+
+const COLOR_ALERT = '#ff4d4d';
+const COLOR_GREEN = '#3bff9a';
+const COLOR_YELLOW = '#ffe14a';
+const COLOR_TEXT = '#f2f2f2';
+const COLOR_FIELD = '#01040a';
+const COLOR_PELLET = '#ffe6c4';
+const HUD_FONT = '8px "Press Start 2P", monospace';
+const POPUP_FONT = '6px "Press Start 2P", monospace';
+
+const GameState = {
+    MENU: 'MENU',
+    PLAYING: 'PLAYING',
+    PAUSED: 'PAUSED',
+    CONFIRMING: 'CONFIRMING', // a yes/no dialog is open; the state to return to is kept by the dialog's handlers
+    GAMEOVER: 'GAMEOVER', // summary and name entry
+    LEADERBOARD: 'LEADERBOARD',
+};
+
+// What is going on inside a run
+const RoundPhase = {
+    READY: 'READY', // the "READY!" banner, nobody moves yet
+    ACTIVE: 'ACTIVE',
+    EATING_GHOST: 'EATING_GHOST', // everything freezes for a moment while the score is shown
+    DYING: 'DYING', // a short freeze, then the player's death animation
+    GAME_OVER_BANNER: 'GAME_OVER_BANNER',
+    LEVEL_CLEARED: 'LEVEL_CLEARED', // a short freeze, then the maze flashes
+};
+
+const GhostState = {
+    HOUSE: 'HOUSE', // waiting inside the ghost house to be let out
+    LEAVING: 'LEAVING', // walking out through the door
+    ACTIVE: 'ACTIVE', // roaming the maze
+    EYES: 'EYES', // eaten: heading back to the house
+    ENTERING: 'ENTERING', // eyes sinking through the door; the ghost is revived inside
+};
+
+const GhostMode = { SCATTER: 'SCATTER', CHASE: 'CHASE' };
+
+// Fixed timestep: the simulation always advances in 1/60 s ticks, whatever the screen refresh rate
+const FPS = 60;
+const TICK_MS = 1000 / FPS;
+const MAX_FRAME_DELTA_MS = 250; // after a stall (hidden tab, debugger) don't fast-forward through it
+
+// Keys are saved with the settings and the high scores
+const DIFFICULTIES = ['Easy', 'Normal', 'Hard'];
+const DEFAULT_DIFFICULTY = 'Normal';
+
+// Scales apply to the classic per-level numbers below
+const DIFFICULTY_SETTINGS = {
+    Easy:   { ghostSpeedScale: 0.9,  frightDurationScale: 1.5, scatterDurationScale: 1.4,  chaseDurationScale: 0.7 },
+    Normal: { ghostSpeedScale: 1,    frightDurationScale: 1,   scatterDurationScale: 1,    chaseDurationScale: 1 },
+    Hard:   { ghostSpeedScale: 1.05, frightDurationScale: 0.7, scatterDurationScale: 0.75, chaseDurationScale: 1.3 },
+};
+
+// Directions. Order of TURN_PREFERENCE is the classic tie-break between equally good ghost turns.
+const Direction = {
+    NONE:  { name: 'NONE',  dx: 0,  dy: 0 },
+    UP:    { name: 'UP',    dx: 0,  dy: -1 },
+    LEFT:  { name: 'LEFT',  dx: -1, dy: 0 },
+    DOWN:  { name: 'DOWN',  dx: 0,  dy: 1 },
+    RIGHT: { name: 'RIGHT', dx: 1,  dy: 0 },
+};
+Direction.NONE.opposite = Direction.NONE;
+Direction.UP.opposite = Direction.DOWN;
+Direction.DOWN.opposite = Direction.UP;
+Direction.LEFT.opposite = Direction.RIGHT;
+Direction.RIGHT.opposite = Direction.LEFT;
+const TURN_PREFERENCE = [Direction.UP, Direction.LEFT, Direction.DOWN, Direction.RIGHT];
+
+// Movement. Speeds are fractions of FULL_SPEED_PX_PER_TICK (the arcade's "100%").
+const FULL_SPEED_PX_PER_TICK = 1.25;
+const EYES_SPEED_PX_PER_TICK = 2;
+const HOUSE_SPEED_PX_PER_TICK = 0.5;
+const CORNER_SLACK_PX = 3; // a turn pressed this close to a corner (before or after it) still takes the corner
+const INPUT_BUFFER_TICKS = 90; // how long a pressed direction waits for an opening
+const SWIPE_THRESHOLD_PX = 16; // finger travel (CSS px) that counts as a swipe
+const COLLISION_DISTANCE_PX = 6;
+const MOUTH_RADIANS_PER_PX = 0.4; // how fast the mouth flaps while moving
+const DOT_PAUSE_TICKS = 1; // eating costs the player a little time, which is what lets ghosts catch up
+const POWER_PELLET_PAUSE_TICKS = 3;
+
+// The classic per-level numbers, as fractions of full speed
+const SPEEDS_LEVEL_1 = { player: 0.8, ghost: 0.75, tunnel: 0.4, playerFright: 0.9, ghostFright: 0.5 };
+const SPEEDS_LEVELS_2_TO_4 = { player: 0.9, ghost: 0.85, tunnel: 0.45, playerFright: 0.95, ghostFright: 0.55 };
+const SPEEDS_LEVELS_5_TO_20 = { player: 1, ghost: 0.95, tunnel: 0.5, playerFright: 1, ghostFright: 0.6 };
+const SPEEDS_LEVEL_21_PLUS = { player: 0.9, ghost: 0.95, tunnel: 0.5, playerFright: 0.9, ghostFright: 0.6 };
+// Index is the level - 1; levels beyond the table use its last entry. 0 means the ghosts only turn around.
+const FRIGHT_SECONDS_BY_LEVEL = [6, 5, 4, 3, 2, 5, 2, 2, 1, 5, 2, 1, 1, 3, 1, 1, 0, 1, 0, 0, 0];
+const FRIGHT_FLASH_PERIOD_TICKS = 24;
+const FRIGHT_FLASHES = 5;
+
+// Scatter and chase phases, in seconds, alternating and starting with scatter. The last chase never ends.
+const MODE_SCHEDULE_LEVEL_1 = [7, 20, 7, 20, 5, 20, 5, Infinity];
+const MODE_SCHEDULE_LEVELS_2_TO_4 = [7, 20, 7, 20, 5, 1033, 1 / FPS, Infinity];
+const MODE_SCHEDULE_LEVEL_5_PLUS = [5, 20, 5, 20, 5, 1037, 1 / FPS, Infinity];
+
+// Ghost house
+const TUNNEL_ROW = 14;
+const TUNNEL_EDGE_COLUMNS = 6; // the outer 6 tiles of the tunnel row slow ghosts down
+const HOUSE_DOOR_ROW = 12;
+const HOUSE_EXIT_ROW = 11; // the corridor above the door, where ghosts come out
+const HOUSE_MIDDLE_ROW = 14;
+const HOUSE_CENTER_X = FIELD_WIDTH / 2; // the door sits between tiles 13 and 14
+const HOUSE_BOB_PX = 4;
+const HOUSE_ENTRANCE_COLUMNS = [13, 14];
+// Pellets the player must eat before each ghost is let out (Sly, Moxie, Pip), per level
+const PELLET_LIMITS_LEVEL_1 = [0, 30, 60];
+const PELLET_LIMITS_LEVEL_2 = [0, 0, 50];
+const PELLET_LIMITS_LEVEL_3_PLUS = [0, 0, 0];
+// After losing a life the arcade counts all pellets together instead
+const GLOBAL_PELLET_LIMITS = [7, 17, 32];
+const IDLE_RELEASE_SECONDS_EARLY = 4; // a ghost is let out if the player stops eating for this long
+const IDLE_RELEASE_SECONDS_LATE = 3;
+const IDLE_RELEASE_LATE_FROM_LEVEL = 5;
+
+// Scoring
+const PELLET_POINTS = 10;
+const POWER_PELLET_POINTS = 50;
+const FIRST_GHOST_POINTS = 200; // doubles for each ghost eaten on the same power pellet
+const EXTRA_LIFE_SCORE = 10000;
+const STARTING_LIVES = 3; // including the one being played
+
+// Fruit
+const FRUIT_PELLET_COUNTS = [70, 170];
+const FRUIT_ROW = 17;
+const FRUIT_TICKS = 600;
+const FRUIT_POPUP_TICKS = 100;
+
+// Round timing, in ticks
+const READY_TICKS_FIRST = 180;
+const READY_TICKS = 120;
+const EAT_GHOST_FREEZE_TICKS = 50;
+const DEATH_FREEZE_TICKS = 50;
+const DEATH_ANIMATION_TICKS = 90;
+const DEATH_PAUSE_TICKS = 30;
+const GAME_OVER_BANNER_TICKS = 150;
+const CLEAR_FREEZE_TICKS = 45;
+const CLEAR_FLASH_TICKS = 100;
+const CLEAR_FLASH_PERIOD_TICKS = 12;
+
+// Saved data
+const SCORES_STORAGE_KEY = 'aislop_chompmaze_scores_v1';
+const SETTINGS_STORAGE_KEY = 'aislop_chompmaze_settings_v1';
+const SCORES_PER_DIFFICULTY = 10;
+const DEFAULT_PLAYER_NAME = 'AAA';
+const NAME_LENGTH = 3;
+
+// ---------------------------------------------------------------------------
+// Maze
+// ---------------------------------------------------------------------------
+
+// The left half of the maze; the right half is its mirror image.
+//   # wall   . pellet   o power pellet   (space) empty path   h ghost house   = ghost house door
+const MAZE_LEFT_HALF = [
+    '##############',
+    '#......#......',
+    '#.####.#.#####',
+    '#o####.#.#####',
+    '#.####.#.#####',
+    '#.............',
+    '#.####.##.####',
+    '#.####.##.####',
+    '#......##.....',
+    '######.##.####',
+    '######.##.####',
+    '#.............',
+    '#.####.##.###=',
+    '#.####.##.#hhh',
+    ' .    .##.#hhh',
+    '#.####.##.#hhh',
+    '#.####.##.####',
+    '#.........    ',
+    '#.####.#####.#',
+    '#.####.#####.#',
+    '#......##.....',
+    '#.####.##.####',
+    '#.####.##.####',
+    '#o.....##..   ',
+    '#.####.#######',
+    '#.####.#######',
+    '#.####.#######',
+    '#.####.#######',
+    '#.####.#######',
+    '#.............',
+    '##############',
+];
+const MAZE_LAYOUT = MAZE_LEFT_HALF.map(row => row + [...row].reverse().join(''));
+
+const SOLID_TILES = '#h='; // the ghost house is only entered through scripted moves, never by steering
+const IS_OPEN_TILE = MAZE_LAYOUT.map(row => [...row].map(tile => !SOLID_TILES.includes(tile)));
+
+// The tunnel row wraps around, so columns outside the maze count as the other side
+function wrapColumn(col) { return (col + MAZE_COLUMNS) % MAZE_COLUMNS; }
+
+function isOpenTile(col, row) {
+    return row >= 0 && row < MAZE_ROWS && IS_OPEN_TILE[row][wrapColumn(col)];
+}
+
+function tileCenter(index) { return index * TILE + TILE / 2; }
+function tileIndex(pixel) { return Math.floor(pixel / TILE); }
+
+// Where the player starts, and the fruit appears: the middle of the corridor below the house
+const PLAYER_START = { x: HOUSE_CENTER_X, y: tileCenter(23) };
+const FRUIT_POSITION = { x: HOUSE_CENTER_X, y: tileCenter(FRUIT_ROW) };
+const HOUSE_EXIT_Y = tileCenter(HOUSE_EXIT_ROW);
+const HOUSE_MIDDLE_Y = tileCenter(HOUSE_MIDDLE_ROW);
+const HOUSE_ENTRANCE_TILE = { col: HOUSE_ENTRANCE_COLUMNS[0], row: HOUSE_EXIT_ROW };
+
+const WALL_COLORS_BY_LEVEL = ['#3b6bff', '#ff4fd8', '#3bd9ff', '#ffa03b'];
+const WALL_FLASH_COLOR = '#ffffff';
+const WALL_OUTLINE_PX = 1.5;
+const DOOR_COLOR = '#ffb8f0';
+
+// ---------------------------------------------------------------------------
+// Ghosts
+// ---------------------------------------------------------------------------
+
+// Each ghost steers toward a target tile; what makes them different is how that tile is chosen.
+// The scatter corners lie just outside the maze, where nothing can ever be reached.
+const PIP_NERVE_DISTANCE_TILES = 8;
+const GHOST_DEFINITIONS = [
+    {
+        name: 'GRIMM', color: '#b24bff', scatterCorner: { col: 25, row: -3 },
+        startX: HOUSE_CENTER_X, startY: HOUSE_EXIT_Y, startsInHouse: false,
+        // Chases the player's own tile
+        getChaseTarget: () => getPlayerTile(),
+    },
+    {
+        name: 'SLY', color: '#8cff3b', scatterCorner: { col: 2, row: -3 },
+        startX: HOUSE_CENTER_X, startY: HOUSE_MIDDLE_Y, startsInHouse: true,
+        // Aims 4 tiles ahead of the player, to cut them off
+        getChaseTarget: () => getTileAheadOfPlayer(4),
+    },
+    {
+        name: 'MOXIE', color: '#ff5a3b', scatterCorner: { col: 27, row: MAZE_ROWS + 1 },
+        startX: HOUSE_CENTER_X - 12, startY: HOUSE_MIDDLE_Y, startsInHouse: true,
+        // Takes the point 2 tiles ahead of the player and mirrors Grimm's tile through it, so Moxie and Grimm pincer the player
+        getChaseTarget: () => {
+            const pivot = getTileAheadOfPlayer(2);
+            const grimm = getGhostTile(ghosts[0]);
+            return { col: 2 * pivot.col - grimm.col, row: 2 * pivot.row - grimm.row };
+        },
+    },
+    {
+        name: 'PIP', color: '#c8c8dc', scatterCorner: { col: 0, row: MAZE_ROWS + 1 },
+        startX: HOUSE_CENTER_X + 12, startY: HOUSE_MIDDLE_Y, startsInHouse: true,
+        // Chases like Grimm, but loses its nerve within 8 tiles of the player and retreats to its corner
+        getChaseTarget: ghost => {
+            const player = getPlayerTile();
+            const own = getGhostTile(ghost);
+            const distanceSquared = (player.col - own.col) ** 2 + (player.row - own.row) ** 2;
+            return distanceSquared >= PIP_NERVE_DISTANCE_TILES ** 2 ? player : ghost.definition.scatterCorner;
+        },
+    },
+];
+const GHOST_PELLET_LIMIT_INDEX = { SLY: 0, MOXIE: 1, PIP: 2 }; // Grimm never waits in the house
+const FRIGHTENED_BODY_COLOR = '#2424d8';
+const FRIGHTENED_FACE_COLOR = '#ffd9c4';
+
+// ---------------------------------------------------------------------------
+// Fruit (original pixel art)
+// ---------------------------------------------------------------------------
+
+const SPRITE_PALETTE = {
+    r: '#ff3b3b', R: '#a81830', g: '#4cd964', G: '#1e8a3a', y: '#ffd23b', Y: '#c8941a',
+    o: '#ff9a2a', O: '#c9601a', p: '#b45cff', P: '#6a2bb0', w: '#ffffff', b: '#9a6a38',
+    s: '#9ad0ff', S: '#5a8ad0',
+};
+
+const FRUIT_ROWS = {
+    cherry: [
+        '......GGG...',
+        '.....G..GG..',
+        '....G....G..',
+        '...G.....G..',
+        '..rrr...rrr.',
+        '.rwrrr.rwrrr',
+        '.rrrrr.rrrrr',
+        '.rrrrR.rrrrR',
+        '..rrR...rrR.',
+        '............',
+        '............',
+        '............',
+    ],
+    strawberry: [
+        '....gggg....',
+        '...gGggGg...',
+        '..rrrGGrrr..',
+        '.rrrrrrrrrr.',
+        '.rrYrrrYrrr.',
+        '.rrrrrrrrrr.',
+        '..rryrrrrr..',
+        '..rrrrYrrr..',
+        '...rrrrrr...',
+        '....rYrr....',
+        '.....rr.....',
+        '............',
+    ],
+    orange: [
+        '......bG....',
+        '.....GGG....',
+        '...oooooo...',
+        '..oowooooo..',
+        '.oooooooooo.',
+        '.oooooooooo.',
+        '.ooooooooOO.',
+        '.oooooooOOO.',
+        '..ooooOOOO..',
+        '...OOOOOO...',
+        '............',
+        '............',
+    ],
+    apple: [
+        '.....bG.....',
+        '..rrrbrrrr..',
+        '.rrrrrrrrrr.',
+        '.rwrrrrrrrr.',
+        '.rwrrrrrrrr.',
+        '.rrrrrrrrrr.',
+        '.rrrrrrrrrR.',
+        '..rrrrrrrR..',
+        '..rrrrrrRR..',
+        '...rrr.rR...',
+        '............',
+        '............',
+    ],
+    grapes: [
+        '......bG....',
+        '.....bGG....',
+        '.ppp.ppp.ppp',
+        '.pwp.pwp.pwp',
+        '.ppP.ppP.ppP',
+        '..ppp.ppp...',
+        '..pwp.pwp...',
+        '..ppP.ppP...',
+        '....ppp.....',
+        '....pwp.....',
+        '....ppP.....',
+        '............',
+    ],
+    star: [
+        '.....yy.....',
+        '.....yy.....',
+        '....yyyy....',
+        'yyyyyyyyyyyy',
+        '.yyyywyyyyY.',
+        '..yyyyyyyY..',
+        '...yyyyyY...',
+        '...yyyyyY...',
+        '..yyyyyyYY..',
+        '..yyy..yYY..',
+        '.yyy....YYY.',
+        '.yy......YY.',
+    ],
+    bell: [
+        '.....yy.....',
+        '....yyyy....',
+        '...yyyyyy...',
+        '...ywyyyy...',
+        '..ywyyyyyY..',
+        '..yyyyyyyY..',
+        '..yyyyyyyY..',
+        '.yyyyyyyyyY.',
+        '.yyyyyyyyyY.',
+        'yyyyyyyyyyYY',
+        'YYYYYYYYYYYY',
+        '.....bb.....',
+    ],
+    key: [
+        '..ssss......',
+        '.ss..ss.....',
+        '.s....s.....',
+        '.ss..ss.....',
+        '..ssss......',
+        '...ss.......',
+        '...ss.......',
+        '...ssss.....',
+        '...ss.......',
+        '...ssSS.....',
+        '...ss.......',
+        '............',
+    ],
+};
+const FRUIT_SPRITE_SIZE = 12;
+
+// The item for each level, and what it is worth; the last entry stays for every later level
+const FRUIT_BY_LEVEL = [
+    { sprite: 'cherry', points: 100 },
+    { sprite: 'strawberry', points: 300 },
+    { sprite: 'orange', points: 500 },
+    { sprite: 'orange', points: 500 },
+    { sprite: 'apple', points: 700 },
+    { sprite: 'apple', points: 700 },
+    { sprite: 'grapes', points: 1000 },
+    { sprite: 'grapes', points: 1000 },
+    { sprite: 'star', points: 2000 },
+    { sprite: 'star', points: 2000 },
+    { sprite: 'bell', points: 3000 },
+    { sprite: 'bell', points: 3000 },
+    { sprite: 'key', points: 5000 },
+];
+const FRUITS_SHOWN_IN_HUD = 7;
+
+function getFruitForLevel(levelNumber) {
+    return FRUIT_BY_LEVEL[Math.min(levelNumber, FRUIT_BY_LEVEL.length) - 1];
+}
+
+function buildSprite(rows) {
+    const sprite = document.createElement('canvas');
+    sprite.width = rows[0].length;
+    sprite.height = rows.length;
+    const spriteCtx = sprite.getContext('2d');
+    rows.forEach((row, y) => {
+        [...row].forEach((letter, x) => {
+            if (letter === '.') return;
+            spriteCtx.fillStyle = SPRITE_PALETTE[letter];
+            spriteCtx.fillRect(x, y, 1, 1);
+        });
+    });
+    return sprite;
+}
+
+const fruitSprites = {};
+Object.keys(FRUIT_ROWS).forEach(name => { fruitSprites[name] = buildSprite(FRUIT_ROWS[name]); });
+
+// ---------------------------------------------------------------------------
+// Math helpers
+// ---------------------------------------------------------------------------
+
+function positiveModulo(value, divisor) { return ((value % divisor) + divisor) % divisor; }
+
+// ---------------------------------------------------------------------------
+// Saved data: settings and high scores
+// ---------------------------------------------------------------------------
+
+// Used when localStorage is unusable (blocked, full, ...) so the game keeps working for the session
+let inMemorySettings = null;
+let inMemoryScores = null;
+
+function sanitizeSettings(stored) {
+    const settings = { muted: false, difficulty: DEFAULT_DIFFICULTY };
+    if (stored === null || typeof stored !== 'object') return settings;
+    settings.muted = stored.muted === true;
+    if (DIFFICULTIES.includes(stored.difficulty)) settings.difficulty = stored.difficulty;
+    return settings;
+}
+
+function getSettings() {
+    if (inMemorySettings) return inMemorySettings;
+    try {
+        return sanitizeSettings(JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY)));
+    } catch (e) {
+        return sanitizeSettings(null);
+    }
+}
+
+function saveSettings(changes) {
+    const settings = { ...getSettings(), ...changes };
+    try {
+        localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+    } catch (e) {
+        inMemorySettings = settings;
+    }
+}
+
+const DEFAULT_SCORES = {
+    Easy: [
+        { name: 'MAX', score: 9000, level: 3 },
+        { name: 'POP', score: 7000, level: 3 },
+        { name: 'GUS', score: 5500, level: 2 },
+        { name: 'ZED', score: 4200, level: 2 },
+        { name: 'LUX', score: 3200, level: 2 },
+        { name: 'BIT', score: 2400, level: 1 },
+        { name: 'OAK', score: 1700, level: 1 },
+        { name: 'FIG', score: 1100, level: 1 },
+        { name: 'ELM', score: 700, level: 1 },
+        { name: 'JAY', score: 400, level: 1 },
+    ],
+    Normal: [
+        { name: 'MAX', score: 14000, level: 4 },
+        { name: 'POP', score: 10000, level: 3 },
+        { name: 'GUS', score: 7500, level: 3 },
+        { name: 'ZED', score: 5500, level: 2 },
+        { name: 'LUX', score: 4000, level: 2 },
+        { name: 'BIT', score: 3000, level: 2 },
+        { name: 'OAK', score: 2200, level: 1 },
+        { name: 'FIG', score: 1500, level: 1 },
+        { name: 'ELM', score: 900, level: 1 },
+        { name: 'JAY', score: 500, level: 1 },
+    ],
+    Hard: [
+        { name: 'MAX', score: 18000, level: 5 },
+        { name: 'POP', score: 13000, level: 4 },
+        { name: 'GUS', score: 9500, level: 3 },
+        { name: 'ZED', score: 7000, level: 3 },
+        { name: 'LUX', score: 5000, level: 2 },
+        { name: 'BIT', score: 3600, level: 2 },
+        { name: 'OAK', score: 2600, level: 2 },
+        { name: 'FIG', score: 1800, level: 1 },
+        { name: 'ELM', score: 1100, level: 1 },
+        { name: 'JAY', score: 600, level: 1 },
+    ],
+};
+
+function copyDefaultScores() { return JSON.parse(JSON.stringify(DEFAULT_SCORES)); }
+
+function isValidScoreRow(row) {
+    return row !== null && typeof row === 'object'
+        && typeof row.name === 'string' && Number.isFinite(row.score) && row.score >= 0 && Number.isFinite(row.level);
+}
+
+function compareScoreRows(a, b) { return b.score - a.score || b.level - a.level; }
+
+// Keeps whatever rows of a stored table are usable; returns null if it is not a table at all
+function sanitizeScoreTable(table) {
+    if (table === null || typeof table !== 'object' || Array.isArray(table)) return null;
+    const defaults = copyDefaultScores();
+    const clean = {};
+    DIFFICULTIES.forEach(difficulty => {
+        clean[difficulty] = Array.isArray(table[difficulty])
+            ? table[difficulty].filter(isValidScoreRow).sort(compareScoreRows)
+            : defaults[difficulty];
+    });
+    return clean;
+}
+
+function readStoredScores() {
+    try {
+        const stored = localStorage.getItem(SCORES_STORAGE_KEY);
+        if (stored === null) return copyDefaultScores();
+        return sanitizeScoreTable(JSON.parse(stored));
+    } catch (e) {
+        return null;
+    }
+}
+
+function getHighScores() {
+    if (inMemoryScores) return inMemoryScores;
+    return readStoredScores() || copyDefaultScores();
+}
+
+function checkIsHighScore(candidateScore, difficulty) {
+    const rows = getHighScores()[difficulty];
+    if (rows.length < SCORES_PER_DIFFICULTY) return true;
+    return candidateScore > rows[rows.length - 1].score;
+}
+
+function saveHighScore(playerName, finalScore, levelReached, difficulty) {
+    const allScores = getHighScores();
+    allScores[difficulty].push({ name: playerName, score: finalScore, level: levelReached });
+    allScores[difficulty].sort(compareScoreRows);
+    allScores[difficulty] = allScores[difficulty].slice(0, SCORES_PER_DIFFICULTY);
+    try {
+        localStorage.setItem(SCORES_STORAGE_KEY, JSON.stringify(allScores));
+    } catch (e) {
+        inMemoryScores = allScores;
+    }
+}
+
+function getBestScore(difficulty) {
+    const rows = getHighScores()[difficulty];
+    return rows.length ? rows[0].score : 0;
+}
+
+// ---------------------------------------------------------------------------
+// Sound (WebAudio synthesis; the context is only created inside a user gesture)
+// ---------------------------------------------------------------------------
+
+let audioContext = null;
+let noiseBuffer = null;
+
+function unlockAudio() {
+    if (!audioContext) {
+        try {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        } catch (e) {
+            return;
+        }
+    }
+    if (audioContext.state === 'suspended') audioContext.resume();
+}
+
+function isMuted() { return getSettings().muted; }
+
+function playTone({ startHz, endHz = startHz, durationSec, type = 'square', volume = 0.05, delaySec = 0 }) {
+    const startTime = audioContext.currentTime + delaySec;
+    const oscillator = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    oscillator.type = type;
+    oscillator.frequency.setValueAtTime(startHz, startTime);
+    oscillator.frequency.exponentialRampToValueAtTime(endHz, startTime + durationSec);
+    gain.gain.setValueAtTime(volume, startTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startTime + durationSec);
+    oscillator.connect(gain).connect(audioContext.destination);
+    oscillator.start(startTime);
+    oscillator.stop(startTime + durationSec);
+}
+
+function playNoise({ durationSec, volume = 0.1, lowpassHz = 2500 }) {
+    if (!noiseBuffer) {
+        noiseBuffer = audioContext.createBuffer(1, audioContext.sampleRate, audioContext.sampleRate);
+        const samples = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < samples.length; i++) samples[i] = Math.random() * 2 - 1;
+    }
+    const startTime = audioContext.currentTime;
+    const source = audioContext.createBufferSource();
+    const filter = audioContext.createBiquadFilter();
+    const gain = audioContext.createGain();
+    source.buffer = noiseBuffer;
+    filter.type = 'lowpass';
+    filter.frequency.value = lowpassHz;
+    gain.gain.setValueAtTime(volume, startTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startTime + durationSec);
+    source.connect(filter).connect(gain).connect(audioContext.destination);
+    source.start(startTime);
+    source.stop(startTime + durationSec);
+}
+
+function playMelody(notesHz, noteSec, type = 'square', volume = 0.05) {
+    notesHz.forEach((hz, i) => playTone({ startHz: hz, durationSec: noteSec * 1.2, type, volume, delaySec: i * noteSec }));
+}
+
+const SOUNDS = {
+    // The two waka notes alternate, one per pellet
+    wakaHigh() { playTone({ startHz: 300, endHz: 600, durationSec: 0.07, type: 'triangle', volume: 0.08 }); },
+    wakaLow() { playTone({ startHz: 600, endHz: 300, durationSec: 0.07, type: 'triangle', volume: 0.08 }); },
+    powerPellet() { playTone({ startHz: 150, endHz: 700, durationSec: 0.25, type: 'sawtooth', volume: 0.05 }); },
+    ghostEaten() { playTone({ startHz: 200, endHz: 1500, durationSec: 0.25, type: 'square', volume: 0.05 }); },
+    fruit() { playMelody([660, 880, 1320], 0.07, 'triangle', 0.07); },
+    extraLife() { playMelody([784, 988, 1175, 1568], 0.08, 'triangle', 0.06); },
+    ready() { playMelody([392, 523, 659, 784, 659, 523], 0.1, 'square', 0.04); },
+    death() {
+        for (let i = 0; i < 8; i++) {
+            playTone({ startHz: 900 - i * 90, endHz: 700 - i * 90, durationSec: 0.16, type: 'triangle', volume: 0.07, delaySec: i * 0.13 });
+        }
+        playNoise({ durationSec: 0.2, volume: 0.08, lowpassHz: 1200 });
+    },
+    levelClear() { playMelody([523, 659, 784, 1047, 784, 1047, 1319], 0.1, 'square', 0.04); },
+    gameOver() { playMelody([392, 330, 262, 196], 0.22, 'sawtooth', 0.05); },
+    unmute() { playTone({ startHz: 660, endHz: 880, durationSec: 0.08 }); },
+    // Background hums while the round is on; `pelletsLeftFraction` makes the normal one rise as the maze empties
+    siren(pelletsLeftFraction) {
+        const baseHz = 330 + (1 - pelletsLeftFraction) * 220;
+        playTone({ startHz: baseHz, endHz: baseHz * 1.4, durationSec: 0.2, type: 'sine', volume: 0.035 });
+    },
+    frightenedHum() { playTone({ startHz: 180, endHz: 260, durationSec: 0.1, type: 'sawtooth', volume: 0.02 }); },
+    eyesHum() { playTone({ startHz: 900, endHz: 1300, durationSec: 0.07, type: 'square', volume: 0.02 }); },
+};
+
+function playSound(name, ...args) {
+    if (!audioContext || isMuted()) return;
+    SOUNDS[name](...args);
+}
+
+function updateSoundButton() {
+    ui.soundBtn.textContent = isMuted() ? 'Sound off' : 'Sound on';
+}
+
+function toggleMute() {
+    unlockAudio();
+    saveSettings({ muted: !isMuted() });
+    updateSoundButton();
+    playSound('unmute');
+}
+
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+
+let gameState = GameState.MENU;
+let isRunActive = false; // a game is in progress (playing, paused, or asking to quit)
+let difficultyName = DEFAULT_DIFFICULTY;
+let leaderboardDifficultyIndex = 0;
+
+let score = 0;
+let hudHighScore = 0; // cached, so the HUD doesn't read storage on every frame
+let livesLeft = 0; // including the one being played
+let nextExtraLifeScore = EXTRA_LIFE_SCORE;
+let totalPelletsEaten = 0;
+let totalGhostsEaten = 0;
+
+let levelNumber = 1;
+let levelTuning = null;
+let roundPhase = RoundPhase.READY;
+let roundPhaseTicks = 0; // ticks spent in the current phase
+let roundPhaseDurationTicks = 0; // for the phases that end by themselves
+let pellets = []; // rows of '.', 'o' or ' ', what is left to eat
+let pelletsLeft = 0;
+let pelletsEatenInLevel = 0;
+let wallImages = null; // the maze walls, pre-drawn once per level: { normal, flash }
+let levelRandom = Math.random; // reseeded for every round, so ghost behaviour repeats
+
+let ghostMode = GhostMode.SCATTER;
+let modeIndex = 0;
+let modeTicksLeft = 0;
+let frightTicksLeft = 0;
+let ghostsEatenOnThisPower = 0;
+let eatenGhost = null; // the ghost whose score is on screen during EATING_GHOST
+let usesGlobalPelletCounter = false;
+let pelletCountersByGhost = []; // per ghost: pellets eaten while it was first in line to leave the house
+let globalPelletCounter = 0;
+let ticksSinceLastPellet = 0;
+let sirenTicks = 0;
+let isNextWakaHigh = true;
+
+let player = null;
+let ghosts = [];
+let fruit = null;
+let popups = [];
+let recentFruits = []; // sprite names for the HUD, one per level reached
+
+let animationTicks = 0; // drives blinking; frozen while paused
+let lastTime = 0;
+let accumulatorMs = 0;
+
+// Input
+const pointer = { activeId: null, anchorX: 0, anchorY: 0 };
+
+// ---------------------------------------------------------------------------
+// Level tuning
+// ---------------------------------------------------------------------------
+
+const TOTAL_PELLETS_IN_MAZE = MAZE_LAYOUT.join('').split('').filter(tile => tile === '.' || tile === 'o').length;
+
+function getLevelTuning(level) {
+    const speeds = level === 1 ? SPEEDS_LEVEL_1
+        : level <= 4 ? SPEEDS_LEVELS_2_TO_4
+        : level <= 20 ? SPEEDS_LEVELS_5_TO_20
+        : SPEEDS_LEVEL_21_PLUS;
+    const modeSchedule = level === 1 ? MODE_SCHEDULE_LEVEL_1
+        : level <= 4 ? MODE_SCHEDULE_LEVELS_2_TO_4
+        : MODE_SCHEDULE_LEVEL_5_PLUS;
+    const pelletLimits = level === 1 ? PELLET_LIMITS_LEVEL_1
+        : level === 2 ? PELLET_LIMITS_LEVEL_2
+        : PELLET_LIMITS_LEVEL_3_PLUS;
+    const difficulty = DIFFICULTY_SETTINGS[difficultyName];
+    const frightSeconds = FRIGHT_SECONDS_BY_LEVEL[Math.min(level, FRIGHT_SECONDS_BY_LEVEL.length) - 1] * difficulty.frightDurationScale;
+    const idleReleaseSeconds = level >= IDLE_RELEASE_LATE_FROM_LEVEL ? IDLE_RELEASE_SECONDS_LATE : IDLE_RELEASE_SECONDS_EARLY;
+    const ghostPxPerTick = FULL_SPEED_PX_PER_TICK * difficulty.ghostSpeedScale;
+    return {
+        playerSpeedPx: speeds.player * FULL_SPEED_PX_PER_TICK,
+        playerFrightSpeedPx: speeds.playerFright * FULL_SPEED_PX_PER_TICK,
+        ghostSpeedPx: speeds.ghost * ghostPxPerTick,
+        ghostTunnelSpeedPx: speeds.tunnel * ghostPxPerTick,
+        ghostFrightSpeedPx: speeds.ghostFright * ghostPxPerTick,
+        frightTicks: Math.round(frightSeconds * FPS),
+        modeSchedule,
+        pelletLimits,
+        idleReleaseTicks: idleReleaseSeconds * FPS,
+    };
+}
+
+function getModeDurationTicks(index) {
+    const difficulty = DIFFICULTY_SETTINGS[difficultyName];
+    const scale = index % 2 === 0 ? difficulty.scatterDurationScale : difficulty.chaseDurationScale;
+    return Math.max(1, Math.round(levelTuning.modeSchedule[index] * FPS * scale));
+}
+
+// ---------------------------------------------------------------------------
+// Run, level and round setup
+// ---------------------------------------------------------------------------
+
+// Mulberry32: a tiny seeded generator, so frightened ghosts turn the same way every time a round is replayed
+function createSeededRandom(seed) {
+    let state = seed >>> 0;
+    return () => {
+        state = (state + 0x6D2B79F5) >>> 0;
+        let t = state;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+}
+
+function createFreshPellets() {
+    return MAZE_LAYOUT.map(row => [...row].map(tile => (tile === '.' || tile === 'o' ? tile : ' ')));
+}
+
+function startGame() {
+    unlockAudio();
+    difficultyName = getSettings().difficulty;
+    hudHighScore = getBestScore(difficultyName);
+    isRunActive = true;
+    score = 0;
+    livesLeft = STARTING_LIVES;
+    nextExtraLifeScore = EXTRA_LIFE_SCORE;
+    totalPelletsEaten = 0;
+    totalGhostsEaten = 0;
+    recentFruits = [];
+    clearInput();
+    [ui.titleScreen, ui.pauseScreen, ui.gameOverScreen, ui.leaderboardScreen].forEach(hide);
+    if (document.activeElement) document.activeElement.blur();
+    beginLevel(1);
+    gameState = GameState.PLAYING;
+}
+
+function beginLevel(number) {
+    levelNumber = number;
+    levelTuning = getLevelTuning(number);
+    pellets = createFreshPellets();
+    pelletsLeft = TOTAL_PELLETS_IN_MAZE;
+    pelletsEatenInLevel = 0;
+    wallImages = buildWallImages(number);
+    recentFruits.push(getFruitForLevel(number).sprite);
+    recentFruits = recentFruits.slice(-FRUITS_SHOWN_IN_HUD);
+    pelletCountersByGhost = GHOST_DEFINITIONS.map(() => 0);
+    usesGlobalPelletCounter = false;
+    startRound(number === 1 ? READY_TICKS_FIRST : READY_TICKS);
+    playSound('ready');
+}
+
+// A round is one life: it starts again from the start positions after a death, with the pellets as they were
+function startRound(readyTicks) {
+    levelRandom = createSeededRandom(levelNumber * 7919 + 13);
+    player = createPlayer();
+    ghosts = GHOST_DEFINITIONS.map(createGhost);
+    ghostMode = GhostMode.SCATTER;
+    modeIndex = 0;
+    modeTicksLeft = getModeDurationTicks(0);
+    frightTicksLeft = 0;
+    ghostsEatenOnThisPower = 0;
+    eatenGhost = null;
+    globalPelletCounter = 0;
+    ticksSinceLastPellet = 0;
+    sirenTicks = 0;
+    fruit = null;
+    popups = [];
+    setPhase(RoundPhase.READY, readyTicks);
+}
+
+function setPhase(phase, durationTicks = 0) {
+    roundPhase = phase;
+    roundPhaseTicks = 0;
+    roundPhaseDurationTicks = durationTicks;
+}
+
+function createPlayer() {
+    return {
+        x: PLAYER_START.x, y: PLAYER_START.y,
+        dir: Direction.LEFT, facing: Direction.LEFT,
+        queuedDir: Direction.NONE, queuedTicksLeft: 0, // a turn pressed early, waiting for an opening
+        pauseTicks: 0, // the short hitch after eating
+        mouthPhase: 0,
+    };
+}
+
+function createGhost(definition, index) {
+    return {
+        definition, index,
+        x: definition.startX, y: definition.startY,
+        dir: definition.startsInHouse ? Direction.UP : Direction.LEFT,
+        state: definition.startsInHouse ? GhostState.HOUSE : GhostState.ACTIVE,
+        isFrightened: false,
+        mustReverse: false, // set when the mode changes; takes effect at the next tile centre
+    };
+}
+
+// ---------------------------------------------------------------------------
+// Main update
+// ---------------------------------------------------------------------------
+
+function tick() {
+    if (gameState === GameState.PAUSED || gameState === GameState.CONFIRMING) return;
+    animationTicks++;
+    if (gameState === GameState.PLAYING) updateGame();
+}
+
+function updateGame() {
+    roundPhaseTicks++;
+    updatePopups();
+    switch (roundPhase) {
+        case RoundPhase.READY:
+            if (roundPhaseTicks >= roundPhaseDurationTicks) setPhase(RoundPhase.ACTIVE);
+            break;
+        case RoundPhase.ACTIVE:
+            updateActiveRound();
+            break;
+        case RoundPhase.EATING_GHOST:
+            if (roundPhaseTicks >= roundPhaseDurationTicks) {
+                eatenGhost = null;
+                setPhase(RoundPhase.ACTIVE);
+            }
+            break;
+        case RoundPhase.DYING:
+            updateDying();
+            break;
+        case RoundPhase.GAME_OVER_BANNER:
+            if (roundPhaseTicks >= roundPhaseDurationTicks) endGame();
+            break;
+        case RoundPhase.LEVEL_CLEARED:
+            if (roundPhaseTicks >= roundPhaseDurationTicks) beginLevel(levelNumber + 1);
+            break;
+    }
+}
+
+function updateActiveRound() {
+    updateModeTimer();
+    updateFrightTimer();
+    updatePlayer();
+    if (roundPhase !== RoundPhase.ACTIVE) return; // the last pellet was eaten
+    ghosts.forEach(updateGhost);
+    handleGhostCollisions();
+    if (roundPhase !== RoundPhase.ACTIVE) return;
+    updateGhostHouse();
+    updateFruit();
+    updateSiren();
+}
+
+function updatePopups() {
+    popups.forEach(popup => popup.ticksLeft--);
+    popups = popups.filter(popup => popup.ticksLeft > 0);
+}
+
+// The scatter/chase clock stands still while the ghosts are frightened
+function updateModeTimer() {
+    if (frightTicksLeft > 0) return;
+    modeTicksLeft--;
+    if (modeTicksLeft > 0) return;
+    modeIndex++;
+    ghostMode = modeIndex % 2 === 0 ? GhostMode.SCATTER : GhostMode.CHASE;
+    modeTicksLeft = getModeDurationTicks(modeIndex);
+    ghosts.forEach(ghost => { if (ghost.state === GhostState.ACTIVE) ghost.mustReverse = true; });
+}
+
+function updateFrightTimer() {
+    if (frightTicksLeft === 0) return;
+    frightTicksLeft--;
+    if (frightTicksLeft === 0) ghosts.forEach(ghost => { ghost.isFrightened = false; });
+}
+
+function addScore(points) {
+    score += points;
+    if (score >= nextExtraLifeScore) {
+        livesLeft++;
+        nextExtraLifeScore = Infinity; // the bonus life is given once
+        playSound('extraLife');
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Movement shared by the player and the ghosts
+// ---------------------------------------------------------------------------
+
+function getPlayerTile() { return { col: wrapColumn(tileIndex(player.x)), row: tileIndex(player.y) }; }
+function getGhostTile(ghost) { return { col: wrapColumn(tileIndex(ghost.x)), row: tileIndex(ghost.y) }; }
+
+// Pixels from the actor to the tile centre it is heading for; a full tile if it stands on one
+function distanceToNextCenter(actor) {
+    const isHorizontal = actor.dir.dx !== 0;
+    const position = isHorizontal ? actor.x : actor.y;
+    const sign = isHorizontal ? actor.dir.dx : actor.dir.dy;
+    const pixelsPastCenter = positiveModulo(position - TILE / 2, TILE);
+    const distance = sign > 0 ? TILE - pixelsPastCenter : pixelsPastCenter;
+    return distance === 0 ? TILE : distance;
+}
+
+function stepActor(actor, distancePx) {
+    actor.x += actor.dir.dx * distancePx;
+    actor.y += actor.dir.dy * distancePx;
+    // Leaving the tunnel on one side comes out on the other
+    if (actor.x < -TILE / 2) actor.x += FIELD_WIDTH;
+    else if (actor.x > FIELD_WIDTH + TILE / 2) actor.x -= FIELD_WIDTH;
+}
+
+function snapToTileCenter(actor) {
+    actor.x = tileCenter(Math.round((actor.x - TILE / 2) / TILE));
+    actor.y = tileCenter(Math.round((actor.y - TILE / 2) / TILE));
+}
+
+// Moves along the actor's direction. Every tile centre on the way is a decision point: onTileCenter may
+// change actor.dir (or set it to NONE to stop), and the rest of the distance is walked in the new direction.
+function moveActor(actor, distancePx, onTileCenter) {
+    let remainingPx = distancePx;
+    while (remainingPx > 0 && actor.dir !== Direction.NONE) {
+        const toCenterPx = distanceToNextCenter(actor);
+        if (toCenterPx > remainingPx) {
+            stepActor(actor, remainingPx);
+            return;
+        }
+        stepActor(actor, toCenterPx);
+        snapToTileCenter(actor);
+        remainingPx -= toCenterPx;
+        onTileCenter(actor);
+    }
+}
+
+// Moves toward a point along one axis at a time; returns true once there. For the scripted house moves.
+function approach(actor, targetX, targetY, stepPx) {
+    const moveAxis = (value, target) => (Math.abs(target - value) <= stepPx ? target : value + Math.sign(target - value) * stepPx);
+    const dx = targetX - actor.x;
+    const dy = targetY - actor.y;
+    if (dx !== 0) actor.dir = dx > 0 ? Direction.RIGHT : Direction.LEFT;
+    else if (dy !== 0) actor.dir = dy > 0 ? Direction.DOWN : Direction.UP;
+    actor.x = moveAxis(actor.x, targetX);
+    actor.y = moveAxis(actor.y, targetY);
+    return actor.x === targetX && actor.y === targetY;
+}
+
+// ---------------------------------------------------------------------------
+// Player
+// ---------------------------------------------------------------------------
+
+function queueDirection(direction) {
+    if (!player) return;
+    player.queuedDir = direction;
+    player.queuedTicksLeft = INPUT_BUFFER_TICKS;
+}
+
+// The queued turn is taken as soon as the player is within CORNER_SLACK_PX of a tile centre with an opening in
+// that direction, before or after the centre, so a turn pressed a hair early or late still makes the corner.
+// Reversing is always allowed at once.
+function applyQueuedTurn(p) {
+    const wanted = p.queuedDir;
+    if (wanted === Direction.NONE) return;
+    if (wanted === p.dir) { p.queuedDir = Direction.NONE; return; }
+    if (wanted === p.dir.opposite) { p.dir = wanted; p.queuedDir = Direction.NONE; return; }
+
+    const col = Math.round((p.x - TILE / 2) / TILE);
+    const row = Math.round((p.y - TILE / 2) / TILE);
+    const offCenterX = Math.abs(p.x - tileCenter(col));
+    const offCenterY = Math.abs(p.y - tileCenter(row));
+    const isTravellingHorizontally = p.dir.dx !== 0;
+    const pixelsAlongLane = isTravellingHorizontally ? offCenterX : offCenterY;
+    const pixelsOffLane = isTravellingHorizontally ? offCenterY : offCenterX;
+    if (p.dir !== Direction.NONE && (pixelsOffLane > 0.01 || pixelsAlongLane > CORNER_SLACK_PX)) return;
+    if (!isOpenTile(col + wanted.dx, row + wanted.dy)) return;
+
+    p.x = tileCenter(col);
+    p.y = tileCenter(row);
+    p.dir = wanted;
+    p.queuedDir = Direction.NONE;
+}
+
+function onPlayerReachesTileCenter(p) {
+    applyQueuedTurn(p);
+    const { col, row } = getPlayerTile();
+    if (!isOpenTile(col + p.dir.dx, row + p.dir.dy)) p.dir = Direction.NONE;
+}
+
+function updatePlayer() {
+    const p = player;
+    if (p.queuedTicksLeft > 0) {
+        p.queuedTicksLeft--;
+        if (p.queuedTicksLeft === 0) p.queuedDir = Direction.NONE;
+    }
+    if (p.pauseTicks > 0) { p.pauseTicks--; return; }
+
+    applyQueuedTurn(p);
+    if (p.dir === Direction.NONE) return;
+    p.facing = p.dir;
+    const speedPx = frightTicksLeft > 0 ? levelTuning.playerFrightSpeedPx : levelTuning.playerSpeedPx;
+    moveActor(p, speedPx, onPlayerReachesTileCenter);
+    p.mouthPhase += speedPx * MOUTH_RADIANS_PER_PX;
+    eatPelletUnderPlayer();
+}
+
+function eatPelletUnderPlayer() {
+    const { col, row } = getPlayerTile();
+    const tile = pellets[row][col];
+    if (tile === ' ') return;
+
+    pellets[row][col] = ' ';
+    const isPower = tile === 'o';
+    pelletsLeft--;
+    pelletsEatenInLevel++;
+    totalPelletsEaten++;
+    ticksSinceLastPellet = 0;
+    addScore(isPower ? POWER_PELLET_POINTS : PELLET_POINTS);
+    player.pauseTicks = isPower ? POWER_PELLET_PAUSE_TICKS : DOT_PAUSE_TICKS;
+    countPelletForGhostHouse();
+    playSound(isNextWakaHigh ? 'wakaHigh' : 'wakaLow');
+    isNextWakaHigh = !isNextWakaHigh;
+
+    if (isPower) frightenGhosts();
+    if (FRUIT_PELLET_COUNTS.includes(pelletsEatenInLevel)) spawnFruit();
+    if (pelletsLeft === 0) startLevelClear();
+}
+
+function frightenGhosts() {
+    playSound('powerPellet');
+    ghostsEatenOnThisPower = 0;
+    frightTicksLeft = levelTuning.frightTicks;
+    ghosts.forEach(ghost => {
+        if (ghost.state === GhostState.EYES || ghost.state === GhostState.ENTERING) return;
+        if (frightTicksLeft > 0) ghost.isFrightened = true;
+        // Later levels give no fright time at all, but the ghosts still turn around
+        if (ghost.state === GhostState.ACTIVE) ghost.mustReverse = true;
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Ghosts
+// ---------------------------------------------------------------------------
+
+function getTileAheadOfPlayer(tiles) {
+    const { col, row } = getPlayerTile();
+    return { col: col + player.facing.dx * tiles, row: row + player.facing.dy * tiles };
+}
+
+function getGhostTarget(ghost) {
+    if (ghost.state === GhostState.EYES) return HOUSE_ENTRANCE_TILE;
+    if (ghostMode === GhostMode.SCATTER) return ghost.definition.scatterCorner;
+    return ghost.definition.getChaseTarget(ghost);
+}
+
+function isGhostInTunnel(ghost) {
+    const col = tileIndex(ghost.x);
+    return tileIndex(ghost.y) === TUNNEL_ROW && (col < TUNNEL_EDGE_COLUMNS || col >= MAZE_COLUMNS - TUNNEL_EDGE_COLUMNS);
+}
+
+function getGhostSpeedPx(ghost) {
+    if (ghost.state === GhostState.EYES) return EYES_SPEED_PX_PER_TICK;
+    if (isGhostInTunnel(ghost)) return levelTuning.ghostTunnelSpeedPx;
+    return ghost.isFrightened ? levelTuning.ghostFrightSpeedPx : levelTuning.ghostSpeedPx;
+}
+
+function updateGhost(ghost) {
+    switch (ghost.state) {
+        case GhostState.HOUSE: bobInHouse(ghost); break;
+        case GhostState.LEAVING: updateLeavingGhost(ghost); break;
+        case GhostState.ENTERING: updateEnteringGhost(ghost); break;
+        default: moveActor(ghost, getGhostSpeedPx(ghost), chooseGhostDirection); // roaming, or eyes on their way home
+    }
+}
+
+function bobInHouse(ghost) {
+    ghost.y += ghost.dir.dy * HOUSE_SPEED_PX_PER_TICK;
+    if (ghost.y <= HOUSE_MIDDLE_Y - HOUSE_BOB_PX) ghost.dir = Direction.DOWN;
+    else if (ghost.y >= HOUSE_MIDDLE_Y + HOUSE_BOB_PX) ghost.dir = Direction.UP;
+}
+
+// Out of the house: sideways along the middle row to the door, then up and out
+function updateLeavingGhost(ghost) {
+    if (ghost.x !== HOUSE_CENTER_X) {
+        if (approach(ghost, ghost.x, HOUSE_MIDDLE_Y, HOUSE_SPEED_PX_PER_TICK)) approach(ghost, HOUSE_CENTER_X, HOUSE_MIDDLE_Y, HOUSE_SPEED_PX_PER_TICK);
+        return;
+    }
+    if (!approach(ghost, HOUSE_CENTER_X, HOUSE_EXIT_Y, HOUSE_SPEED_PX_PER_TICK)) return;
+    ghost.state = GhostState.ACTIVE;
+    ghost.dir = Direction.LEFT;
+    ghost.mustReverse = false;
+}
+
+// Eyes line up with the door and sink through it; the revived ghost walks straight back out
+function updateEnteringGhost(ghost) {
+    if (ghost.x !== HOUSE_CENTER_X) {
+        approach(ghost, HOUSE_CENTER_X, ghost.y, EYES_SPEED_PX_PER_TICK);
+        return;
+    }
+    if (approach(ghost, HOUSE_CENTER_X, HOUSE_MIDDLE_Y, EYES_SPEED_PX_PER_TICK)) ghost.state = GhostState.LEAVING;
+}
+
+// Called at every tile centre. Like the arcade ghosts: never turn back on yourself, and of the remaining
+// exits take the one whose next tile is closest (as the crow flies) to the target, preferring up, left, down, right.
+function chooseGhostDirection(ghost) {
+    const { col, row } = getGhostTile(ghost);
+    if (ghost.state === GhostState.EYES && row === HOUSE_EXIT_ROW && HOUSE_ENTRANCE_COLUMNS.includes(col)) {
+        ghost.state = GhostState.ENTERING;
+        ghost.dir = Direction.NONE;
+        return;
+    }
+    const opposite = ghost.dir.opposite;
+    if (ghost.mustReverse) {
+        ghost.mustReverse = false;
+        ghost.dir = opposite;
+        return;
+    }
+    const exits = TURN_PREFERENCE.filter(direction => direction !== opposite && isOpenTile(col + direction.dx, row + direction.dy));
+    if (exits.length === 0) {
+        ghost.dir = opposite;
+    } else if (ghost.isFrightened) {
+        ghost.dir = exits[Math.floor(levelRandom() * exits.length)];
+    } else {
+        ghost.dir = pickExitClosestToTarget(exits, col, row, getGhostTarget(ghost));
+    }
+}
+
+function pickExitClosestToTarget(exits, col, row, target) {
+    let best = exits[0];
+    let bestDistanceSquared = Infinity;
+    exits.forEach(direction => {
+        const distanceSquared = (col + direction.dx - target.col) ** 2 + (row + direction.dy - target.row) ** 2;
+        if (distanceSquared < bestDistanceSquared) {
+            best = direction;
+            bestDistanceSquared = distanceSquared;
+        }
+    });
+    return best;
+}
+
+function handleGhostCollisions() {
+    for (const ghost of ghosts) {
+        if (ghost.state !== GhostState.ACTIVE) continue;
+        if (Math.hypot(ghost.x - player.x, ghost.y - player.y) >= COLLISION_DISTANCE_PX) continue;
+        if (ghost.isFrightened) eatGhost(ghost);
+        else setPhase(RoundPhase.DYING, DEATH_FREEZE_TICKS + DEATH_ANIMATION_TICKS + DEATH_PAUSE_TICKS);
+        return; // one thing at a time; a second ghost on the same spot is handled next tick
+    }
+}
+
+function eatGhost(ghost) {
+    ghostsEatenOnThisPower++;
+    totalGhostsEaten++;
+    const points = FIRST_GHOST_POINTS * 2 ** (ghostsEatenOnThisPower - 1);
+    addScore(points);
+    ghost.state = GhostState.EYES;
+    ghost.isFrightened = false;
+    ghost.mustReverse = false;
+    eatenGhost = ghost;
+    popups.push({ text: String(points), x: ghost.x, y: ghost.y, ticksLeft: EAT_GHOST_FREEZE_TICKS });
+    setPhase(RoundPhase.EATING_GHOST, EAT_GHOST_FREEZE_TICKS);
+    playSound('ghostEaten');
+}
+
+// ---------------------------------------------------------------------------
+// Ghost house: who is let out when
+// ---------------------------------------------------------------------------
+
+// Only the ghost first in line counts pellets toward its own release
+function countPelletForGhostHouse() {
+    if (usesGlobalPelletCounter) {
+        globalPelletCounter++;
+        return;
+    }
+    const waitingGhost = ghosts.find(ghost => ghost.state === GhostState.HOUSE);
+    if (waitingGhost) pelletCountersByGhost[waitingGhost.index]++;
+}
+
+function isReadyToLeaveHouse(ghost) {
+    const limitIndex = GHOST_PELLET_LIMIT_INDEX[ghost.definition.name];
+    if (usesGlobalPelletCounter) return globalPelletCounter >= GLOBAL_PELLET_LIMITS[limitIndex];
+    return pelletCountersByGhost[ghost.index] >= levelTuning.pelletLimits[limitIndex];
+}
+
+// One ghost at a time, so they never pile up in the doorway
+function updateGhostHouse() {
+    ticksSinceLastPellet++;
+    if (ghosts.some(ghost => ghost.state === GhostState.LEAVING)) return;
+    const waitingGhost = ghosts.find(ghost => ghost.state === GhostState.HOUSE);
+    if (!waitingGhost) return;
+    if (!isReadyToLeaveHouse(waitingGhost) && ticksSinceLastPellet < levelTuning.idleReleaseTicks) return;
+
+    waitingGhost.state = GhostState.LEAVING;
+    ticksSinceLastPellet = 0;
+    // Once the last ghost is out, the per-ghost counters take over again
+    if (waitingGhost.definition.name === 'PIP') usesGlobalPelletCounter = false;
+}
+
+// ---------------------------------------------------------------------------
+// Fruit
+// ---------------------------------------------------------------------------
+
+function spawnFruit() {
+    fruit = { ...getFruitForLevel(levelNumber), x: FRUIT_POSITION.x, y: FRUIT_POSITION.y, ticksLeft: FRUIT_TICKS };
+}
+
+function updateFruit() {
+    if (!fruit) return;
+    fruit.ticksLeft--;
+    if (fruit.ticksLeft <= 0) {
+        fruit = null;
+    } else if (Math.hypot(fruit.x - player.x, fruit.y - player.y) < COLLISION_DISTANCE_PX) {
+        addScore(fruit.points);
+        popups.push({ text: String(fruit.points), x: fruit.x, y: fruit.y, ticksLeft: FRUIT_POPUP_TICKS });
+        fruit = null;
+        playSound('fruit');
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Sound while playing
+// ---------------------------------------------------------------------------
+
+const SIREN_PERIOD_TICKS = 26;
+const FRIGHTENED_HUM_PERIOD_TICKS = 12;
+const EYES_HUM_PERIOD_TICKS = 8;
+
+// Eyes on their way home are the most urgent sound, then fright, then the ordinary siren
+function updateSiren() {
+    sirenTicks++;
+    if (ghosts.some(ghost => ghost.state === GhostState.EYES)) {
+        if (sirenTicks % EYES_HUM_PERIOD_TICKS === 0) playSound('eyesHum');
+    } else if (frightTicksLeft > 0) {
+        if (sirenTicks % FRIGHTENED_HUM_PERIOD_TICKS === 0) playSound('frightenedHum');
+    } else if (sirenTicks % SIREN_PERIOD_TICKS === 0) {
+        playSound('siren', pelletsLeft / TOTAL_PELLETS_IN_MAZE);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Dying, game over and level clear
+// ---------------------------------------------------------------------------
+
+function updateDying() {
+    if (roundPhaseTicks === DEATH_FREEZE_TICKS) playSound('death');
+    if (roundPhaseTicks < roundPhaseDurationTicks) return;
+    livesLeft--;
+    if (livesLeft <= 0) {
+        setPhase(RoundPhase.GAME_OVER_BANNER, GAME_OVER_BANNER_TICKS);
+        return;
+    }
+    // Per-ghost pellet counters stay as they were, but the shared counter decides the releases for this round
+    startRound(READY_TICKS);
+    usesGlobalPelletCounter = true;
+}
+
+function startLevelClear() {
+    fruit = null;
+    frightTicksLeft = 0;
+    setPhase(RoundPhase.LEVEL_CLEARED, CLEAR_FREEZE_TICKS + CLEAR_FLASH_TICKS);
+    playSound('levelClear');
+}
+
+// ---------------------------------------------------------------------------
+// Rendering
+// ---------------------------------------------------------------------------
+
+function isWallTile(col, row) {
+    // Beyond the edge counts as wall, so no outline runs along the border of the screen
+    if (col < 0 || col >= MAZE_COLUMNS || row < 0 || row >= MAZE_ROWS) return true;
+    return MAZE_LAYOUT[row][col] === '#';
+}
+
+// Neon walls: every wall tile is filled with a glow, then its inside is carved out again, leaving an outline
+// along the edges that face a corridor. Drawn once per level and colour, not every frame.
+function buildWallImage(color) {
+    const image = document.createElement('canvas');
+    image.width = FIELD_WIDTH * RENDER_SCALE;
+    image.height = MAZE_ROWS * TILE * RENDER_SCALE;
+    const wallCtx = image.getContext('2d');
+    wallCtx.scale(RENDER_SCALE, RENDER_SCALE);
+    const wallTiles = [];
+    for (let row = 0; row < MAZE_ROWS; row++) {
+        for (let col = 0; col < MAZE_COLUMNS; col++) {
+            if (isWallTile(col, row)) wallTiles.push({ col, row });
+        }
+    }
+
+    wallCtx.fillStyle = color;
+    wallCtx.shadowColor = color;
+    wallCtx.shadowBlur = 8;
+    wallTiles.forEach(({ col, row }) => wallCtx.fillRect(col * TILE, row * TILE, TILE, TILE));
+    wallCtx.shadowBlur = 0;
+
+    wallCtx.globalCompositeOperation = 'destination-out';
+    wallTiles.forEach(({ col, row }) => {
+        const left = isWallTile(col - 1, row) ? 0 : WALL_OUTLINE_PX;
+        const right = isWallTile(col + 1, row) ? 0 : WALL_OUTLINE_PX;
+        const top = isWallTile(col, row - 1) ? 0 : WALL_OUTLINE_PX;
+        const bottom = isWallTile(col, row + 1) ? 0 : WALL_OUTLINE_PX;
+        wallCtx.fillRect(col * TILE + left, row * TILE + top, TILE - left - right, TILE - top - bottom);
+    });
+
+    // Where a corridor bends around a corner of the wall, the carving above also removed the outline's corner
+    wallCtx.globalCompositeOperation = 'source-over';
+    wallTiles.forEach(({ col, row }) => {
+        [-1, 1].forEach(stepX => [-1, 1].forEach(stepY => {
+            if (!isWallTile(col + stepX, row) || !isWallTile(col, row + stepY) || isWallTile(col + stepX, row + stepY)) return;
+            const x = stepX < 0 ? col * TILE : (col + 1) * TILE - WALL_OUTLINE_PX;
+            const y = stepY < 0 ? row * TILE : (row + 1) * TILE - WALL_OUTLINE_PX;
+            wallCtx.fillRect(x, y, WALL_OUTLINE_PX, WALL_OUTLINE_PX);
+        }));
+    });
+    return image;
+}
+
+function buildWallImages(level) {
+    const color = WALL_COLORS_BY_LEVEL[(level - 1) % WALL_COLORS_BY_LEVEL.length];
+    return { normal: buildWallImage(color), flash: buildWallImage(WALL_FLASH_COLOR) };
+}
+
+function render() {
+    ctx.setTransform(RENDER_SCALE, 0, 0, RENDER_SCALE, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.fillStyle = COLOR_FIELD;
+    ctx.fillRect(0, 0, FIELD_WIDTH, FIELD_HEIGHT);
+
+    drawTopHud();
+    ctx.save();
+    ctx.translate(0, MAZE_TOP);
+    drawMaze();
+    drawPellets();
+    if (isRunActive) drawActors();
+    ctx.restore();
+    if (isRunActive) {
+        drawBanner();
+        drawBottomHud();
+    }
+}
+
+function drawText(text, x, y, color, align = 'left', font = HUD_FONT) {
+    ctx.font = font;
+    ctx.textBaseline = 'top';
+    ctx.textAlign = align;
+    ctx.fillStyle = color;
+    ctx.fillText(text, x, y);
+}
+
+function isMazeFlashing() {
+    if (roundPhase !== RoundPhase.LEVEL_CLEARED || roundPhaseTicks < CLEAR_FREEZE_TICKS) return false;
+    return Math.floor((roundPhaseTicks - CLEAR_FREEZE_TICKS) / CLEAR_FLASH_PERIOD_TICKS) % 2 === 0;
+}
+
+function drawMaze() {
+    const image = isRunActive && isMazeFlashing() ? wallImages.flash : wallImages.normal;
+    ctx.drawImage(image, 0, 0, FIELD_WIDTH, MAZE_ROWS * TILE);
+    ctx.fillStyle = DOOR_COLOR;
+    ctx.fillRect(HOUSE_CENTER_X - TILE, HOUSE_DOOR_ROW * TILE + 3, 2 * TILE, 2);
+}
+
+function drawPellets() {
+    const isPowerPelletVisible = ((animationTicks >> 4) & 1) === 0;
+    ctx.fillStyle = COLOR_PELLET;
+    for (let row = 0; row < MAZE_ROWS; row++) {
+        for (let col = 0; col < MAZE_COLUMNS; col++) {
+            const tile = pellets[row][col];
+            if (tile === '.') {
+                ctx.fillRect(col * TILE + 3, row * TILE + 3, 2, 2);
+            } else if (tile === 'o' && isPowerPelletVisible) {
+                ctx.beginPath();
+                ctx.arc(tileCenter(col), tileCenter(row), 3.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+    }
+}
+
+// Who is on screen depends on what the round is doing: the player disappears while a ghost's score is shown,
+// the ghosts disappear while the player dies or the maze flashes
+function drawActors() {
+    const isFrozenPhase = (roundPhase === RoundPhase.DYING && roundPhaseTicks < DEATH_FREEZE_TICKS)
+        || (roundPhase === RoundPhase.LEVEL_CLEARED && roundPhaseTicks < CLEAR_FREEZE_TICKS);
+    const areGhostsVisible = isFrozenPhase
+        || [RoundPhase.READY, RoundPhase.ACTIVE, RoundPhase.EATING_GHOST, RoundPhase.GAME_OVER_BANNER].includes(roundPhase);
+    const isPlayerVisible = isFrozenPhase || roundPhase === RoundPhase.READY || roundPhase === RoundPhase.ACTIVE;
+
+    if (fruit) ctx.drawImage(fruitSprites[fruit.sprite], Math.round(fruit.x - FRUIT_SPRITE_SIZE / 2), Math.round(fruit.y - FRUIT_SPRITE_SIZE / 2));
+    if (isPlayerVisible) drawPlayer(ctx, player.x, player.y, player.facing, 0.08 + 0.55 * Math.abs(Math.sin(player.mouthPhase)));
+    if (roundPhase === RoundPhase.DYING && roundPhaseTicks >= DEATH_FREEZE_TICKS) drawDyingPlayer();
+    if (areGhostsVisible) {
+        ghosts.forEach(ghost => {
+            if (ghost !== eatenGhost) drawGhost(ctx, ghost.x, ghost.y, getGhostLook(ghost));
+        });
+    }
+    popups.forEach(popup => drawText(popup.text, popup.x, popup.y - 3, COLOR_GREEN, 'center', POPUP_FONT));
+}
+
+// mouthHalfAngle is how far the mouth opens above and below the facing direction
+function drawPlayer(target, x, y, facing, mouthHalfAngle) {
+    const rotation = { RIGHT: 0, DOWN: Math.PI / 2, LEFT: Math.PI, UP: -Math.PI / 2, NONE: 0 }[facing.name];
+    target.save();
+    target.translate(Math.round(x), Math.round(y));
+    target.fillStyle = COLOR_YELLOW;
+    target.beginPath();
+    target.moveTo(0, 0);
+    target.arc(0, 0, 6.5, rotation + mouthHalfAngle, rotation + Math.PI * 2 - mouthHalfAngle);
+    target.closePath();
+    target.fill();
+    target.fillStyle = '#1a1000';
+    target.fillRect(0, -4, 1.5, 1.5);
+    target.restore();
+}
+
+function drawDyingPlayer() {
+    const progress = (roundPhaseTicks - DEATH_FREEZE_TICKS) / DEATH_ANIMATION_TICKS;
+    if (progress >= 1) return;
+    // Faces up and the mouth opens until nothing is left
+    drawPlayer(ctx, player.x, player.y, Direction.UP, 0.2 + progress * (Math.PI - 0.2));
+}
+
+function isFrightFlashOn() {
+    const flashWindowTicks = Math.min(levelTuning.frightTicks, FRIGHT_FLASHES * FRIGHT_FLASH_PERIOD_TICKS);
+    return frightTicksLeft <= flashWindowTicks && Math.floor(frightTicksLeft / (FRIGHT_FLASH_PERIOD_TICKS / 2)) % 2 === 0;
+}
+
+function getGhostLook(ghost) {
+    return {
+        color: ghost.definition.color,
+        dir: ghost.dir,
+        isFrightened: ghost.isFrightened,
+        isFlashing: ghost.isFrightened && isFrightFlashOn(),
+        isEyesOnly: ghost.state === GhostState.EYES || ghost.state === GhostState.ENTERING,
+        footFrame: (animationTicks >> 3) & 1,
+    };
+}
+
+// A ghost is 14px wide, centred on (x, y). Also used for the icons on the title screen.
+function drawGhost(target, x, y, { color, dir = Direction.LEFT, isFrightened = false, isFlashing = false, isEyesOnly = false, footFrame = 0 }) {
+    x = Math.round(x);
+    y = Math.round(y);
+    if (!isEyesOnly) {
+        target.fillStyle = isFlashing ? COLOR_TEXT : isFrightened ? FRIGHTENED_BODY_COLOR : color;
+        target.beginPath();
+        target.moveTo(x - 7, y + 7);
+        target.lineTo(x - 7, y - 1);
+        target.arc(x, y - 1, 7, Math.PI, 0);
+        target.lineTo(x + 7, y + 7);
+        const feetCount = 6;
+        for (let i = 1; i <= feetCount; i++) {
+            const isNotch = (i + footFrame) % 2 === 1;
+            target.lineTo(x + 7 - i * 14 / feetCount, y + 7 - (isNotch ? 3 : 0));
+        }
+        target.closePath();
+        target.fill();
+    }
+
+    if (isFrightened && !isEyesOnly) {
+        // A scared face: two dots and a wobbly mouth
+        target.fillStyle = isFlashing ? COLOR_ALERT : FRIGHTENED_FACE_COLOR;
+        target.fillRect(x - 4, y - 3, 2, 2);
+        target.fillRect(x + 2, y - 3, 2, 2);
+        for (let i = 0; i < 6; i++) target.fillRect(x - 5 + i * 2, y + 2 + (i % 2), 2, 1);
+        return;
+    }
+    [-3, 3].forEach(offsetX => {
+        target.fillStyle = '#ffffff';
+        target.beginPath();
+        target.ellipse(x + offsetX, y - 2, 2.4, 3, 0, 0, Math.PI * 2);
+        target.fill();
+        target.fillStyle = '#1a2cff';
+        target.fillRect(Math.round(x + offsetX + dir.dx * 1.2 - 1), Math.round(y - 2 + dir.dy * 1.5 - 1), 2, 2);
+    });
+}
+
+function drawBanner() {
+    const textTopY = MAZE_TOP + FRUIT_ROW * TILE;
+    if (roundPhase === RoundPhase.READY) drawText('READY!', FIELD_WIDTH / 2, textTopY, COLOR_YELLOW, 'center');
+    else if (roundPhase === RoundPhase.GAME_OVER_BANNER) drawText('GAME OVER', FIELD_WIDTH / 2, textTopY, COLOR_ALERT, 'center');
+}
+
+function drawTopHud() {
+    const isBlinkOn = ((animationTicks >> 4) & 1) === 0;
+    if (isBlinkOn || !isRunActive) drawText('1UP', 24, 6, COLOR_ALERT);
+    drawText(String(score), 72, 17, COLOR_TEXT, 'right');
+    drawText('HIGH SCORE', FIELD_WIDTH / 2, 6, COLOR_ALERT, 'center');
+    drawText(String(Math.max(hudHighScore, score)), FIELD_WIDTH / 2, 17, COLOR_TEXT, 'center');
+    if (isRunActive) {
+        drawText('LEVEL', FIELD_WIDTH - 8, 6, COLOR_GREEN, 'right');
+        drawText(String(levelNumber), FIELD_WIDTH - 8, 17, COLOR_TEXT, 'right');
+    }
+}
+
+// Spare lives on the left, the fruits of the last levels on the right
+function drawBottomHud() {
+    const centerY = MAZE_TOP + MAZE_ROWS * TILE + 8;
+    for (let i = 0; i < livesLeft - 1; i++) drawPlayer(ctx, 16 + i * 16, centerY, Direction.LEFT, 0.6);
+    recentFruits.forEach((spriteName, i) => {
+        const x = FIELD_WIDTH - 8 - (recentFruits.length - i) * (FRUIT_SPRITE_SIZE + 2);
+        ctx.drawImage(fruitSprites[spriteName], x, centerY - FRUIT_SPRITE_SIZE / 2);
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Game loop
+// ---------------------------------------------------------------------------
+
+function gameLoop(now) {
+    requestAnimationFrame(gameLoop);
+    accumulatorMs += Math.min(now - lastTime, MAX_FRAME_DELTA_MS);
+    lastTime = now;
+    while (accumulatorMs >= TICK_MS) {
+        tick();
+        accumulatorMs -= TICK_MS;
+    }
+    render();
+}
+
+// ---------------------------------------------------------------------------
+// Input
+// ---------------------------------------------------------------------------
+
+function clearInput() {
+    pointer.activeId = null;
+    if (player) player.queuedDir = Direction.NONE;
+}
+
+const DIRECTION_BY_KEY = {
+    arrowup: Direction.UP, w: Direction.UP, up: Direction.UP,
+    arrowdown: Direction.DOWN, s: Direction.DOWN, down: Direction.DOWN,
+    arrowleft: Direction.LEFT, a: Direction.LEFT, left: Direction.LEFT,
+    arrowright: Direction.RIGHT, d: Direction.RIGHT, right: Direction.RIGHT,
+};
+const KEYS_THAT_SCROLL_THE_PAGE = ['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '];
+
+document.addEventListener('keydown', (e) => {
+    unlockAudio();
+    // Leave browser shortcuts (Ctrl+P, Alt+E, ...) alone
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (confirmHandlers) { handleConfirmKey(e); return; }
+    if (e.target === ui.playerName) { handleNameEntryKey(e); return; }
+
+    const key = e.key.toLowerCase();
+    // Holding a toggle key would flip the state on every auto-repeat
+    if (e.repeat && ['p', 'e', 'escape', 'm', 'enter'].includes(key)) return;
+    const isButtonFocused = document.activeElement instanceof HTMLButtonElement;
+
+    if (key === 'm') { toggleMute(); return; }
+    const isRunning = gameState === GameState.PLAYING || gameState === GameState.PAUSED;
+    if (isRunning && (key === 'e' || key === 'escape')) { confirmQuit(); return; }
+    if (isRunning && key === 'p') { togglePause(); return; }
+
+    if (gameState === GameState.PLAYING) {
+        // Auto-repeat is welcome here: holding a key keeps the turn wanted
+        if (DIRECTION_BY_KEY[key]) queueDirection(DIRECTION_BY_KEY[key]);
+        if (KEYS_THAT_SCROLL_THE_PAGE.includes(key)) e.preventDefault();
+    } else if (gameState === GameState.PAUSED) {
+        if (key === 'enter' && !isButtonFocused) togglePause();
+    } else if (gameState === GameState.MENU) {
+        if ((key === 'enter' || key === ' ') && !isButtonFocused) { e.preventDefault(); startGame(); }
+    } else if (gameState === GameState.LEADERBOARD) {
+        handleLeaderboardKey(e, key, isButtonFocused);
+    } else if (gameState === GameState.GAMEOVER) {
+        if ((key === 'enter' || key === ' ') && !isButtonFocused && ui.nameEntry.classList.contains('hidden')) { e.preventDefault(); leaveGameOverScreen(); }
+        if (key === 'escape' || key === 'e') requestSkipScore();
+    }
+});
+
+function handleNameEntryKey(e) {
+    if (e.key === 'Enter') { e.preventDefault(); commitScore(); }
+    else if (e.key === 'Escape') { e.preventDefault(); requestSkipScore(); }
+}
+
+function handleLeaderboardKey(e, key, isButtonFocused) {
+    const isNewGameOffered = !ui.newGameHint.classList.contains('hidden');
+    if (key === 'arrowright') ui.lbNext.click();
+    else if (key === 'arrowleft') ui.lbPrev.click();
+    else if (key === 'escape') ui.lbCloseBtn.click();
+    else if ((key === 'enter' || key === ' ' || key === 'n') && isNewGameOffered && !isButtonFocused) { e.preventDefault(); startGame(); }
+}
+
+// Never resumes by itself: the player comes back to the pause screen and resumes on purpose
+function pauseIfPlaying() {
+    if (gameState === GameState.PLAYING) togglePause();
+    else if (gameState === GameState.CONFIRMING) wasFocusLostWhileAsking = true;
+}
+window.addEventListener('blur', () => { clearInput(); pauseIfPlaying(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) pauseIfPlaying(); });
+
+// Swipes: a drag of SWIPE_THRESHOLD_PX in any direction wants that turn, then the drag starts over from where
+// it is, so one long gesture can keep steering. The turn is buffered, so the swipe may come well before the corner.
+screenElement.addEventListener('pointerdown', (e) => {
+    unlockAudio();
+    if (gameState !== GameState.PLAYING) return;
+    pointer.activeId = e.pointerId;
+    pointer.anchorX = e.clientX;
+    pointer.anchorY = e.clientY;
+    screenElement.setPointerCapture(e.pointerId);
+});
+
+screenElement.addEventListener('pointermove', (e) => {
+    if (gameState !== GameState.PLAYING || e.pointerId !== pointer.activeId) return;
+    const dx = e.clientX - pointer.anchorX;
+    const dy = e.clientY - pointer.anchorY;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < SWIPE_THRESHOLD_PX) return;
+    if (Math.abs(dx) > Math.abs(dy)) queueDirection(dx > 0 ? Direction.RIGHT : Direction.LEFT);
+    else queueDirection(dy > 0 ? Direction.DOWN : Direction.UP);
+    pointer.anchorX = e.clientX;
+    pointer.anchorY = e.clientY;
+});
+
+function releasePointer(e) {
+    if (e.pointerId === pointer.activeId) pointer.activeId = null;
+}
+screenElement.addEventListener('pointerup', releasePointer);
+screenElement.addEventListener('pointercancel', releasePointer);
+
+// ---------------------------------------------------------------------------
+// Confirm dialog, pause and quit
+// ---------------------------------------------------------------------------
+
+// One dialog for everything that needs a yes/no. While it is open it owns the keyboard (see the keydown handler).
+let confirmHandlers = null;
+let wasFocusLostWhileAsking = false; // focus was lost or the tab hidden while the dialog was open
+
+function showConfirm(title, message, onYes, onNo) {
+    clearInput();
+    // A focused element (e.g. the name input) must not swallow the answer keys
+    if (document.activeElement) document.activeElement.blur();
+    confirmHandlers = { onYes, onNo };
+    wasFocusLostWhileAsking = false;
+    ui.confirmTitle.textContent = title;
+    ui.confirmMessage.textContent = message;
+    show(ui.confirmDialog);
+}
+
+function answerConfirm(isYes) {
+    const handlers = confirmHandlers;
+    confirmHandlers = null;
+    hide(ui.confirmDialog);
+    if (handlers) (isYes ? handlers.onYes : handlers.onNo)();
+}
+
+// Enter/Y answer yes, Escape/N answer no; every other key is ignored while the dialog is open
+function handleConfirmKey(e) {
+    const key = e.key.toLowerCase();
+    if (['enter', 'y', 'escape', 'n', ' '].includes(key)) e.preventDefault();
+    if (e.repeat) return;
+    if (key === 'enter' || key === 'y') answerConfirm(true);
+    else if (key === 'escape' || key === 'n') answerConfirm(false);
+}
+
+function togglePause() {
+    clearInput();
+    if (gameState === GameState.PLAYING) {
+        gameState = GameState.PAUSED;
+        show(ui.pauseScreen);
+    } else if (gameState === GameState.PAUSED) {
+        hide(ui.pauseScreen);
+        gameState = GameState.PLAYING;
+    }
+}
+
+// The simulation is stopped while asking, so the game cannot move under the dialog; NO restores the state it was in
+function confirmQuit() {
+    const stateBeforeAsking = gameState;
+    gameState = GameState.CONFIRMING;
+    showConfirm('QUIT GAME?', 'YOUR RUN ENDS AND ITS SCORE IS LOST.', exitToMenu, () => {
+        gameState = stateBeforeAsking;
+        // Like any blur during play: come back paused, never straight into the action
+        if (wasFocusLostWhileAsking && stateBeforeAsking === GameState.PLAYING) togglePause();
+    });
+}
+
+function exitToMenu() {
+    clearInput();
+    isRunActive = false;
+    gameState = GameState.MENU;
+    score = 0;
+    [ui.pauseScreen, ui.gameOverScreen, ui.leaderboardScreen].forEach(hide);
+    showTitleScreen();
+}
+
+// Behind the title screen the full level-1 maze waits, like an attract mode
+function showTitleScreen() {
+    hudHighScore = getBestScore(getSettings().difficulty);
+    pellets = createFreshPellets();
+    wallImages = buildWallImages(1);
+    renderDifficultyButtons();
+    show(ui.titleScreen);
+}
+
+// ---------------------------------------------------------------------------
+// Game over, name entry and high scores
+// ---------------------------------------------------------------------------
+
+// On a phone, focusing would pop up the keyboard over the summary
+function focusNameInputOnDesktop() {
+    if (window.matchMedia('(pointer: fine)').matches) ui.playerName.focus();
+}
+
+function endGame() {
+    clearInput();
+    isRunActive = false;
+    gameState = GameState.GAMEOVER;
+    ui.finalScore.textContent = score;
+    ui.finalLevel.textContent = levelNumber;
+    ui.finalPellets.textContent = totalPelletsEaten;
+    ui.finalGhosts.textContent = totalGhostsEaten;
+
+    const isHighScore = score > 0 && checkIsHighScore(score, difficultyName);
+    if (isHighScore) {
+        show(ui.nameEntry);
+        hide(ui.continueBtn);
+        ui.playerName.value = '';
+    } else {
+        hide(ui.nameEntry);
+        show(ui.continueBtn);
+    }
+    show(ui.gameOverScreen);
+    if (isHighScore) focusNameInputOnDesktop();
+    playSound('gameOver');
+}
+
+function commitScore() {
+    const playerName = ui.playerName.value.trim().toUpperCase().slice(0, NAME_LENGTH) || DEFAULT_PLAYER_NAME;
+    saveHighScore(playerName, score, levelNumber, difficultyName);
+    hudHighScore = getBestScore(difficultyName);
+    showLeaderboard({ offerNewGame: true, difficulty: difficultyName });
+}
+
+// Leaving the name entry throws the score away, so it asks first
+function requestSkipScore() {
+    if (ui.nameEntry.classList.contains('hidden')) { leaveGameOverScreen(); return; }
+    gameState = GameState.CONFIRMING;
+    showConfirm('SKIP HIGH SCORE?', 'YOUR SCORE WILL NOT BE SAVED.',
+        () => showLeaderboard({ offerNewGame: true, difficulty: difficultyName }),
+        () => {
+            gameState = GameState.GAMEOVER;
+            focusNameInputOnDesktop();
+        });
+}
+
+function leaveGameOverScreen() {
+    showLeaderboard({ offerNewGame: true, difficulty: difficultyName });
+}
+
+function createScoreRow(rank, row) {
+    const tr = document.createElement('tr');
+    const cells = row
+        ? [rank, Number(row.score), Number(row.level), row.name.toUpperCase().slice(0, NAME_LENGTH)]
+        : [rank, 0, '-', '---'];
+    if (!row) tr.className = 'empty-row';
+    cells.forEach(text => {
+        const td = document.createElement('td');
+        td.textContent = text;
+        tr.appendChild(td);
+    });
+    return tr;
+}
+
+function renderLeaderboard() {
+    const difficulty = DIFFICULTIES[leaderboardDifficultyIndex];
+    ui.lbDiffDisplay.textContent = difficulty.toUpperCase();
+    ui.scoreTableBody.innerHTML = '';
+    const rows = getHighScores()[difficulty];
+    for (let i = 0; i < SCORES_PER_DIFFICULTY; i++) ui.scoreTableBody.appendChild(createScoreRow(i + 1, rows[i]));
+}
+
+// From the title (just looking) or after a game, where START begins a new one
+function showLeaderboard({ offerNewGame, difficulty }) {
+    gameState = GameState.LEADERBOARD;
+    leaderboardDifficultyIndex = DIFFICULTIES.indexOf(difficulty);
+    // The name input is about to be hidden; a hidden focused element would keep swallowing keys
+    if (document.activeElement) document.activeElement.blur();
+    [ui.gameOverScreen, ui.titleScreen].forEach(hide);
+    show(ui.leaderboardScreen);
+    if (offerNewGame) { show(ui.newGameHint); show(ui.lbStartBtn); } else { hide(ui.newGameHint); hide(ui.lbStartBtn); }
+    renderLeaderboard();
+}
+
+// ---------------------------------------------------------------------------
+// Buttons
+// ---------------------------------------------------------------------------
+
+function renderDifficultyButtons() {
+    const selected = getSettings().difficulty;
+    ui.difficultyButtons.forEach(button => button.classList.toggle('is-selected', button.dataset.difficulty === selected));
+}
+
+ui.difficultyButtons.forEach(button => {
+    button.addEventListener('click', () => {
+        saveSettings({ difficulty: button.dataset.difficulty });
+        renderDifficultyButtons();
+        hudHighScore = getBestScore(button.dataset.difficulty);
+    });
+});
+
+ui.startBtn.addEventListener('click', startGame);
+ui.lbStartBtn.addEventListener('click', startGame);
+ui.highScoresBtn.addEventListener('click', () => showLeaderboard({ offerNewGame: false, difficulty: getSettings().difficulty }));
+ui.lbCloseBtn.addEventListener('click', () => {
+    gameState = GameState.MENU;
+    hide(ui.leaderboardScreen);
+    showTitleScreen();
+});
+ui.lbPrev.addEventListener('click', () => {
+    leaderboardDifficultyIndex = (leaderboardDifficultyIndex - 1 + DIFFICULTIES.length) % DIFFICULTIES.length;
+    renderLeaderboard();
+});
+ui.lbNext.addEventListener('click', () => {
+    leaderboardDifficultyIndex = (leaderboardDifficultyIndex + 1) % DIFFICULTIES.length;
+    renderLeaderboard();
+});
+
+ui.resumeBtn.addEventListener('click', togglePause);
+ui.pauseQuitBtn.addEventListener('click', confirmQuit);
+ui.confirmYes.addEventListener('click', () => answerConfirm(true));
+ui.confirmNo.addEventListener('click', () => answerConfirm(false));
+
+ui.saveScoreBtn.addEventListener('click', commitScore);
+ui.skipScoreBtn.addEventListener('click', requestSkipScore);
+ui.continueBtn.addEventListener('click', leaveGameOverScreen);
+
+// The panel buttons let go of focus afterwards, otherwise the next Space would press them again
+function onPanelButton(button, action) {
+    button.addEventListener('click', () => {
+        button.blur();
+        action();
+    });
+}
+onPanelButton(ui.pauseBtn, togglePause);
+onPanelButton(ui.soundBtn, toggleMute);
+onPanelButton(ui.quitBtn, () => {
+    if (gameState === GameState.PLAYING || gameState === GameState.PAUSED) confirmQuit();
+});
+
+// ---------------------------------------------------------------------------
+// Start
+// ---------------------------------------------------------------------------
+
+GHOST_DEFINITIONS.forEach((definition, i) => {
+    drawGhost(ui.castIcons[i].getContext('2d'), 8, 8, { color: definition.color });
+});
+
+updateSoundButton();
+showTitleScreen();
+if (document.fonts) document.fonts.load(HUD_FONT);
+requestAnimationFrame(now => {
+    lastTime = now;
+    gameLoop(now);
+});
+</script>
+</body>
+</html>

@@ -23,6 +23,7 @@ const SETTLE_MS = 1500;
 // anchor:   with cover, which part of the element the crop starts at: 'top' or 'center'.
 const GAMES = [
     { name: 'breakout', viewport: { width: 900, height: 700 }, focus: '#gameCanvas', paddingPx: 0, cover: true, anchor: 'top', playsBreakout: true },
+    { name: 'chomp-maze', viewport: { width: 700, height: 900 }, focus: '#screen', paddingPx: 0, cover: true, anchor: 'center', playsChompMaze: true },
     { name: 'minesweeper', viewport: { width: 700, height: 900 }, focus: '.window', paddingPx: 30, cover: true, anchor: 'top' },
     { name: 'snake', viewport: { width: 700, height: 900 }, focus: '.lcd', paddingPx: 90, cover: true, anchor: 'center' },
     { name: 'star-swarm', viewport: { width: 700, height: 900 }, focus: '#screen', paddingPx: 0, cover: true, anchor: 'top', playsStarSwarm: true },
@@ -74,6 +75,29 @@ async function playStarSwarm(page) {
     await wait(300);
 }
 
+// Chomp Maze: start a run and stage a scene a few seconds into a round: the lower half of the maze eaten,
+// all four ghosts out, a cherry waiting. A bot that survives long enough would need to be much smarter.
+async function playChompMaze(page) {
+    await page.click('#start-btn');
+    await page.evaluate(() => {
+        for (let i = 0; i < READY_TICKS_FIRST + 1; i++) tick();
+        for (let row = 17; row < MAZE_ROWS; row++) {
+            for (let col = 0; col < MAZE_COLUMNS; col++) {
+                if (pellets[row][col] === '.') { pellets[row][col] = ' '; pelletsLeft--; }
+            }
+        }
+        const placements = [[2, 11, Direction.RIGHT], [22, 11, Direction.LEFT], [19, 5, Direction.DOWN], [24, 8, Direction.LEFT]];
+        ghosts.forEach((ghost, i) => {
+            const [col, row, dir] = placements[i];
+            Object.assign(ghost, { state: GhostState.ACTIVE, x: tileCenter(col), y: tileCenter(row), dir });
+        });
+        Object.assign(player, { x: tileCenter(6), y: tileCenter(11), dir: Direction.RIGHT, facing: Direction.RIGHT });
+        spawnFruit();
+        for (let i = 0; i < 6; i++) tick();
+    });
+    await wait(300);
+}
+
 async function main() {
     const outDir = path.resolve(process.argv[2] || path.join(REPO_ROOT, 'screenshots'));
     fs.mkdirSync(outDir, { recursive: true });
@@ -87,6 +111,7 @@ async function main() {
         await wait(SETTLE_MS);
         if (game.playsBreakout) await playBreakout(page);
         if (game.playsStarSwarm) await playStarSwarm(page);
+        if (game.playsChompMaze) await playChompMaze(page);
 
         const file = path.join(outDir, game.name + '.png');
         await page.screenshot({ path: file, clip: await cardClip(page, game) });
