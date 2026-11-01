@@ -581,22 +581,87 @@ const SWAY_SPEED = 0.02;
 const BREATH_AMPLITUDE = 0.12;
 const BREATH_SPEED = 0.03;
 
-// Entry routes are "turtle" paths: fly straight or turn at a fixed rate. The mirrored copy starts on the other side.
+// Entry routes are "turtle" paths: fly straight or turn at a fixed rate (positive turns bend left, heading 90 is down).
+// The mirrored copy is the reflection, so a route is written for the left (or the middle) of the screen.
 const ENTRY_SPEED = 2.6;
 const CHALLENGE_SPEED = 3;
 const HOMING_TURN_DEG = 6;
 const HOMING_SNAP_DISTANCE = 25; // inside the turning circle, steering directly avoids orbiting the slot
-const ENTRY_SPAWN_SPACING_TICKS = 8;
-const ROUTES = {
+
+// Entry route library. Tier 1 is gentle, tier 3 is the showiest; later stages unlock the higher tiers.
+// Normal-stage routes stay in the upper part of the screen (or start off its low edges) so nothing
+// enters the player's row without warning; after the last command the enemy homes in on its slot.
+const ENTRY_ROUTES = {
     topLoop: {
-        startX: 150, startY: -10, startHeadingDeg: 90,
+        tier: 1, startX: 150, startY: -10, startHeadingDeg: 90,
         commands: [{ ticks: 50, turnDegPerTick: 0 }, { ticks: 90, turnDegPerTick: 4 }],
     },
     sideSweep: {
-        startX: -10, startY: 150, startHeadingDeg: 0,
+        tier: 1, startX: -10, startY: 150, startHeadingDeg: 0,
         commands: [{ ticks: 30, turnDegPerTick: 0 }, { ticks: 90, turnDegPerTick: -3 }],
     },
+    zigZag: {
+        tier: 1, startX: -10, startY: 30, startHeadingDeg: 35,
+        commands: [
+            { ticks: 10, turnDegPerTick: 0 }, { ticks: 14, turnDegPerTick: -5 },
+            { ticks: 10, turnDegPerTick: 0 }, { ticks: 14, turnDegPerTick: 5 },
+            { ticks: 10, turnDegPerTick: 0 }, { ticks: 14, turnDegPerTick: -5 },
+            { ticks: 10, turnDegPerTick: 0 },
+        ],
+    },
+    wideArc: {
+        tier: 1, startX: -10, startY: 100, startHeadingDeg: 30,
+        commands: [{ ticks: 30, turnDegPerTick: 0 }, { ticks: 70, turnDegPerTick: -1.5 }],
+    },
+    figureEight: {
+        tier: 2, startX: 140, startY: -10, startHeadingDeg: 90,
+        commands: [{ ticks: 30, turnDegPerTick: 0 }, { ticks: 60, turnDegPerTick: 6 }, { ticks: 60, turnDegPerTick: -6 }],
+    },
+    cornerRise: {
+        tier: 2, startX: -12, startY: 200, startHeadingDeg: -30,
+        commands: [{ ticks: 40, turnDegPerTick: 0 }, { ticks: 70, turnDegPerTick: -3 }],
+    },
+    corkscrew: {
+        tier: 3, startX: 70, startY: -10, startHeadingDeg: 90,
+        commands: [
+            { ticks: 20, turnDegPerTick: 0 }, { ticks: 45, turnDegPerTick: 3 },
+            { ticks: 40, turnDegPerTick: 5 }, { ticks: 35, turnDegPerTick: 8 },
+        ],
+    },
 };
+
+// Challenging stages: the enemies fly through and leave the screen, so every route ends heading out
+const CHALLENGE_ROUTES = {
+    ribbon: {
+        startX: 60, startY: -10, startHeadingDeg: 90,
+        commands: [
+            { ticks: 15, turnDegPerTick: 0 }, { ticks: 20, turnDegPerTick: -3 }, { ticks: 40, turnDegPerTick: 3 },
+            { ticks: 40, turnDegPerTick: -3 }, { ticks: 20, turnDegPerTick: 3 },
+        ],
+    },
+    loopOver: {
+        startX: -10, startY: 110, startHeadingDeg: 0,
+        commands: [{ ticks: 30, turnDegPerTick: 0 }, { ticks: 120, turnDegPerTick: -3 }],
+    },
+    rainbow: {
+        startX: -12, startY: 230, startHeadingDeg: -45,
+        commands: [{ ticks: 50, turnDegPerTick: 0 }, { ticks: 50, turnDegPerTick: 3 }],
+    },
+    corkscrew: {
+        startX: 150, startY: -10, startHeadingDeg: 90,
+        commands: [{ ticks: 20, turnDegPerTick: 0 }, { ticks: 100, turnDegPerTick: 4 }],
+    },
+    cross: {
+        startX: -10, startY: 20, startHeadingDeg: 35,
+        commands: [{ ticks: 35, turnDegPerTick: 0 }, { ticks: 50, turnDegPerTick: -3 }, { ticks: 30, turnDegPerTick: 0 }],
+    },
+};
+
+// Which enemies arrive in which wave: a lineup puts all 40 formation slots into five groups of eight
+const FORMATION_COLUMN_RANGES_BY_ROW = [[3, 6], [1, 8], [1, 8], [0, 9], [0, 9]];
+const ENEMIES_PER_WAVE = 8;
+const WAVE_COUNT = 5;
+const LEFT_HALF_COLUMNS = FORMATION_COLUMNS / 2;
 
 function cellsInRows(rows, columns) {
     const cells = [];
@@ -604,13 +669,102 @@ function cellsInRows(rows, columns) {
     return cells;
 }
 
-// Five waves of eight; together they fill all 40 formation slots
-const WAVES = [
-    { route: ROUTES.topLoop,   isMirrored: false, delayTicks: 0,   cells: cellsInRows([0, 1], [3, 4, 5, 6]) },
-    { route: ROUTES.sideSweep, isMirrored: false, delayTicks: 120, cells: cellsInRows([1, 2], [1, 2, 7, 8]) },
-    { route: ROUTES.sideSweep, isMirrored: true,  delayTicks: 120, cells: cellsInRows([2, 3], [3, 4, 5, 6]) },
-    { route: ROUTES.topLoop,   isMirrored: true,  delayTicks: 260, cells: [...cellsInRows([3], [0, 1, 2, 7, 8, 9]), ...cellsInRows([4], [4, 5])] },
-    { route: ROUTES.topLoop,   isMirrored: false, delayTicks: 380, cells: cellsInRows([4], [0, 1, 2, 3, 6, 7, 8, 9]) },
+function listFormationCells() {
+    const cells = [];
+    FORMATION_COLUMN_RANGES_BY_ROW.forEach(([firstCol, lastCol], row) => {
+        for (let col = firstCol; col <= lastCol; col++) cells.push({ row, col });
+    });
+    return cells;
+}
+
+function distanceFromCenterColumn(cell) { return Math.abs(cell.col - (FORMATION_COLUMNS - 1) / 2); }
+
+function groupsInOrder(compareCells) {
+    const sorted = listFormationCells().sort(compareCells);
+    return Array.from({ length: WAVE_COUNT }, (_, i) => sorted.slice(i * ENEMIES_PER_WAVE, (i + 1) * ENEMIES_PER_WAVE));
+}
+
+const LINEUPS = {
+    classic: {
+        tier: 1,
+        groups: [
+            cellsInRows([0, 1], [3, 4, 5, 6]),
+            cellsInRows([1, 2], [1, 2, 7, 8]),
+            cellsInRows([2, 3], [3, 4, 5, 6]),
+            [...cellsInRows([3], [0, 1, 2, 7, 8, 9]), ...cellsInRows([4], [4, 5])],
+            cellsInRows([4], [0, 1, 2, 3, 6, 7, 8, 9]),
+        ],
+    },
+    topDown: { tier: 1, groups: groupsInOrder((a, b) => a.row - b.row || distanceFromCenterColumn(a) - distanceFromCenterColumn(b) || a.col - b.col) },
+    centerOut: { tier: 2, groups: groupsInOrder((a, b) => distanceFromCenterColumn(a) - distanceFromCenterColumn(b) || a.row - b.row || a.col - b.col) },
+    outsideIn: { tier: 2, groups: groupsInOrder((a, b) => distanceFromCenterColumn(b) - distanceFromCenterColumn(a) || a.row - b.row || a.col - b.col) },
+    bottomUp: { tier: 3, groups: groupsInOrder((a, b) => b.row - a.row || distanceFromCenterColumn(a) - distanceFromCenterColumn(b) || a.col - b.col) },
+};
+
+// Start tick of each of the five waves. Waves sharing a tick enter together, from opposite sides.
+// The last enemy settles about 12 s after the stage starts, whichever timetable is used.
+const ENTRY_TIMETABLES = [
+    [0, 120, 120, 260, 380],
+    [0, 100, 200, 300, 400],
+    [0, 0, 150, 300, 300],
+    [0, 110, 230, 230, 370],
+];
+const ENTRY_SPACING_CHOICES_TICKS = [6, 8, 10]; // between two enemies of one wave
+const STAGES_PER_TIER = 3;
+const MAX_ENTRY_TIER = 3;
+
+// An entry plan is a lineup, five waves {route, side, delayTicks} and the spacing within a wave.
+// A wave's side is where it enters from; 'both' splits it into a left half and a mirrored right half.
+const CLASSIC_ENTRY_PLAN = {
+    lineup: LINEUPS.classic,
+    spacingTicks: 8,
+    waves: [
+        { route: ENTRY_ROUTES.topLoop,   side: 'left',  delayTicks: 0 },
+        { route: ENTRY_ROUTES.sideSweep, side: 'left',  delayTicks: 120 },
+        { route: ENTRY_ROUTES.sideSweep, side: 'right', delayTicks: 120 },
+        { route: ENTRY_ROUTES.topLoop,   side: 'right', delayTicks: 260 },
+        { route: ENTRY_ROUTES.topLoop,   side: 'left',  delayTicks: 380 },
+    ],
+};
+
+// Each challenging stage has its own show, in turn; after the last one they start over
+const CHALLENGE_ENTRY_PLANS = [
+    {
+        lineup: LINEUPS.classic, spacingTicks: 8, waves: [
+            { route: CHALLENGE_ROUTES.ribbon,   side: 'both',  delayTicks: 0 },
+            { route: CHALLENGE_ROUTES.ribbon,   side: 'both',  delayTicks: 110 },
+            { route: CHALLENGE_ROUTES.loopOver, side: 'left',  delayTicks: 220 },
+            { route: CHALLENGE_ROUTES.loopOver, side: 'right', delayTicks: 290 },
+            { route: CHALLENGE_ROUTES.ribbon,   side: 'both',  delayTicks: 380 },
+        ],
+    },
+    {
+        lineup: LINEUPS.topDown, spacingTicks: 9, waves: [
+            { route: CHALLENGE_ROUTES.rainbow,   side: 'both',  delayTicks: 0 },
+            { route: CHALLENGE_ROUTES.corkscrew, side: 'left',  delayTicks: 110 },
+            { route: CHALLENGE_ROUTES.corkscrew, side: 'right', delayTicks: 110 },
+            { route: CHALLENGE_ROUTES.rainbow,   side: 'both',  delayTicks: 260 },
+            { route: CHALLENGE_ROUTES.cross,     side: 'both',  delayTicks: 380 },
+        ],
+    },
+    {
+        lineup: LINEUPS.centerOut, spacingTicks: 8, waves: [
+            { route: CHALLENGE_ROUTES.corkscrew, side: 'right', delayTicks: 0 },
+            { route: CHALLENGE_ROUTES.corkscrew, side: 'left',  delayTicks: 100 },
+            { route: CHALLENGE_ROUTES.loopOver,  side: 'left',  delayTicks: 200 },
+            { route: CHALLENGE_ROUTES.loopOver,  side: 'right', delayTicks: 200 },
+            { route: CHALLENGE_ROUTES.rainbow,   side: 'both',  delayTicks: 340 },
+        ],
+    },
+    {
+        lineup: LINEUPS.bottomUp, spacingTicks: 7, waves: [
+            { route: CHALLENGE_ROUTES.cross,     side: 'left',  delayTicks: 0 },
+            { route: CHALLENGE_ROUTES.cross,     side: 'right', delayTicks: 0 },
+            { route: CHALLENGE_ROUTES.ribbon,    side: 'both',  delayTicks: 140 },
+            { route: CHALLENGE_ROUTES.rainbow,   side: 'both',  delayTicks: 260 },
+            { route: CHALLENGE_ROUTES.corkscrew, side: 'both',  delayTicks: 380 },
+        ],
+    },
 ];
 
 // Dive attacks
@@ -1057,6 +1211,7 @@ let challengeHits = 0;
 let challengeResult = null;
 let formationTicks = 0;
 let breathTicks = 0;
+let stageEnemyCount = 0; // set when the enemies spawn
 let isEntryFinished = false;
 let attackCountdownTicks = 0;
 
@@ -1159,18 +1314,60 @@ function beginStage(number) {
     playSound(isChallengeStage ? 'challengeStart' : 'stageStart');
 }
 
-function createEnemy(row, col, wave, delayTicks) {
+// Mulberry32: a tiny seeded generator, so a stage always gets the same pseudo-random choices
+function createSeededRandom(seed) {
+    let state = seed >>> 0;
+    return () => {
+        state = (state + 0x6D2B79F5) >>> 0;
+        let mixed = Math.imul(state ^ (state >>> 15), state | 1);
+        mixed ^= mixed + Math.imul(mixed ^ (mixed >>> 7), mixed | 61);
+        return ((mixed ^ (mixed >>> 14)) >>> 0) / 4294967296;
+    };
+}
+
+function pickFrom(list, random) { return list[Math.floor(random() * list.length)]; }
+
+// The entry choreography is a fixed function of the stage number (no Math.random), so players can
+// learn it like in the arcade original. Stage 1 stays classic; higher stages unlock wilder routes.
+function getEntryPlan(number) {
+    if (isChallengeStageNumber(number)) {
+        const challengeIndex = (number - FIRST_CHALLENGE_STAGE) / CHALLENGE_STAGE_INTERVAL;
+        return CHALLENGE_ENTRY_PLANS[challengeIndex % CHALLENGE_ENTRY_PLANS.length];
+    }
+    if (number === 1) return CLASSIC_ENTRY_PLAN;
+
+    const random = createSeededRandom(number);
+    const tier = Math.min(MAX_ENTRY_TIER, 1 + Math.floor((number - 1) / STAGES_PER_TIER));
+    const routes = Object.values(ENTRY_ROUTES).filter(route => route.tier <= tier);
+    const lineups = Object.values(LINEUPS).filter(lineup => lineup.tier <= tier);
+    const sides = tier >= 2 ? ['left', 'right', 'both'] : ['left', 'right'];
+
+    const waves = [];
+    pickFrom(ENTRY_TIMETABLES, random).forEach((delayTicks, waveIndex) => {
+        const previous = waves[waveIndex - 1];
+        const isEnteringWithPrevious = previous && previous.delayTicks === delayTicks && previous.side !== 'both';
+        const side = isEnteringWithPrevious ? (previous.side === 'left' ? 'right' : 'left') : pickFrom(sides, random);
+        waves.push({ route: routes[(number + waveIndex) % routes.length], side, delayTicks });
+    });
+    return {
+        lineup: lineups[number % lineups.length],
+        spacingTicks: pickFrom(ENTRY_SPACING_CHOICES_TICKS, random),
+        waves,
+    };
+}
+
+function createEnemy(row, col, route, isMirrored, delayTicks) {
     const type = ENEMY_TYPE_BY_ROW[row];
     return {
         type, row, col,
         x: 0, y: 0, heading: 90, // degrees; 90 is "moving down", which draws the sprite upright
         state: EnemyState.WAITING,
         delayTicks,
-        route: wave.route,
-        isMirrored: wave.isMirrored,
+        route,
+        isMirrored,
         routeCommandIndex: 0,
-        routeTicksLeft: wave.route.commands[0].ticks,
-        routeHeadingDeg: wave.route.startHeadingDeg,
+        routeTicksLeft: route.commands[0].ticks,
+        routeHeadingDeg: route.startHeadingDeg,
         hitsLeft: ENEMY_TYPES[type].hits,
         hasCapturedFighter: false,
         dive: null,
@@ -1178,13 +1375,28 @@ function createEnemy(row, col, wave, delayTicks) {
     };
 }
 
+// Splits a wave into the groups that fly in, each from one side
+function getWaveHalves(side, cells) {
+    if (side === 'left') return [{ cells, isMirrored: false }];
+    if (side === 'right') return [{ cells, isMirrored: true }];
+    return [
+        { cells: cells.filter(cell => cell.col < LEFT_HALF_COLUMNS), isMirrored: false },
+        { cells: cells.filter(cell => cell.col >= LEFT_HALF_COLUMNS), isMirrored: true },
+    ];
+}
+
 function spawnWaves() {
+    const plan = getEntryPlan(stageNumber);
     enemies = [];
-    WAVES.forEach(wave => {
-        wave.cells.forEach((cell, i) => {
-            enemies.push(createEnemy(cell.row, cell.col, wave, wave.delayTicks + i * ENTRY_SPAWN_SPACING_TICKS));
+    plan.waves.forEach((wave, waveIndex) => {
+        getWaveHalves(wave.side, plan.lineup.groups[waveIndex]).forEach(half => {
+            half.cells.forEach((cell, i) => {
+                const delayTicks = wave.delayTicks + i * plan.spacingTicks;
+                enemies.push(createEnemy(cell.row, cell.col, wave.route, half.isMirrored, delayTicks));
+            });
         });
     });
+    stageEnemyCount = enemies.length;
 }
 
 // ---------------------------------------------------------------------------
@@ -1258,8 +1470,7 @@ function clearStage() {
     enemyBullets = [];
     if (!isChallengeStage) return;
 
-    const totalEnemies = WAVES.reduce((sum, wave) => sum + wave.cells.length, 0);
-    const isPerfect = challengeHits === totalEnemies;
+    const isPerfect = challengeHits === stageEnemyCount;
     const bonus = isPerfect ? CHALLENGE_PERFECT_BONUS : challengeHits * CHALLENGE_HIT_POINTS;
     challengeResult = { hits: challengeHits, bonus, isPerfect };
     addScore(bonus);
@@ -1572,7 +1783,7 @@ function hasFinishedRoute(enemy) { return enemy.routeCommandIndex >= enemy.route
 function updateEnteringEnemy(enemy) {
     if (isChallengeStage) {
         stepRoute(enemy, CHALLENGE_SPEED);
-        const isOffScreen = enemy.y > FIELD_HEIGHT + 16 || enemy.x < -24 || enemy.x > FIELD_WIDTH + 24;
+        const isOffScreen = enemy.y > FIELD_HEIGHT + 16 || enemy.y < -24 || enemy.x < -24 || enemy.x > FIELD_WIDTH + 24;
         if (hasFinishedRoute(enemy) && isOffScreen) enemy.isGone = true;
     } else if (!hasFinishedRoute(enemy)) {
         stepRoute(enemy, ENTRY_SPEED);
