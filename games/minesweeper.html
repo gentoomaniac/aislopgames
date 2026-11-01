@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Win95 Minesweeper - Final Stable</title>
     
     <style>
@@ -30,9 +30,7 @@
             font-size: 1rem; line-height: 1.5; color: #212529;
             -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent;
             overscroll-behavior: none;
-            /* Panning is allowed so big boards can scroll on phones; pinch and double-tap zoom stay off */
-            touch-action: pan-x pan-y;
-            
+
             /* Crucial for mobile: Disables system text selection and iOS long-press popups */
             -webkit-touch-callout: none;
             -webkit-user-select: none;
@@ -42,7 +40,7 @@
         .outset { border: 2px solid; border-color: var(--win-white) var(--win-shadow) var(--win-shadow) var(--win-white); }
         .inset { border: 2px solid; border-color: var(--win-shadow) var(--win-white) var(--win-white) var(--win-shadow); }
 
-        .window { background-color: var(--win-gray); padding: 3px; display: inline-block; max-width: 100%; box-sizing: border-box; box-shadow: 2px 2px 0px black; }
+        .window { background-color: var(--win-gray); padding: 3px; display: inline-block; max-width: 100%; box-sizing: border-box; box-shadow: 2px 2px 0px black; touch-action: manipulation; }
         
         .title-bar { 
             background: linear-gradient(90deg, var(--win-blue), #1084d0); 
@@ -82,8 +80,10 @@
         .digit-display.paused { animation: paused-blink 1s steps(1) infinite; }
         @keyframes paused-blink { 50% { color: #550000; } }
 
+        /* The play area locks pinch and double-tap zoom (they'd fight long-press and double-tap chording) but still
+           pans, so big boards scroll sideways. The rest of the page can be pinch-zoomed. */
+        #minefield-scroll { overflow-x: auto; touch-action: pan-x pan-y; }
         /* Phones: shrink cells to fit the screen, down to --cell-min; wider boards scroll sideways */
-        #minefield-scroll { overflow-x: auto; }
         #minefield { --cell: clamp(var(--cell-min), calc((100vw - var(--board-chrome)) / var(--cols)), var(--cell-max)); display: grid; border: 3px solid; border-color: var(--win-shadow) var(--win-white) var(--win-white) var(--win-shadow); }
         
         .cell { 
@@ -128,6 +128,7 @@
         .dialog-input {
             display: block; width: 100%; margin-bottom: 4px; padding: 4px 6px; background: var(--win-white); color: black;
             font-family: inherit; font-size: 16px; /* 16px keeps mobile browsers from zooming in on focus */
+            -webkit-user-select: text; user-select: text; /* Safari won't type into a field inside user-select: none */
         }
         .dialog-buttons { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
         .dialog-button {
