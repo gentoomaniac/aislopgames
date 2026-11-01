@@ -231,12 +231,25 @@ const contentBox = document.getElementById('content-box');
 const scoreDisplay = document.getElementById('score-board');
 const keypadArea = document.getElementById('keypad-area');
 
-const GRID = 12; 
+const GRID = 12;
 const TILE_COUNT = canvas.width / GRID;
+const START_CELL = {x: 10, y: 10};
+const LCD_BACKGROUND = '#94af13';
+const LCD_INK = 'black';
 
 const DIFFICULTIES = ['EASY', 'MEDIUM', 'HARD', 'PROGRESSIVE'];
-let diffIdx = 1; 
-let currentSpeed = 140;
+const START_TICK_MS = {EASY: 200, MEDIUM: 140, HARD: 85, PROGRESSIVE: 180};
+const PROGRESSIVE_MIN_TICK_MS = 40;
+const PROGRESSIVE_SPEEDUP_MS = 3;
+let diffIdx = 1;
+let tickMs = START_TICK_MS.MEDIUM;
+
+const FOOD_POINTS = 10;
+const BONUS_EVERY_N_FOOD = 5;
+const BONUS_LIFETIME_MS = 4000;
+const BONUS_POINTS = 20;
+const RARE_BONUS_POINTS = 50;
+const RARE_BONUS_CHANCE = 0.3;
 
 const DIRECTION_VECTORS = {
     U: {dx: 0, dy: -1},
@@ -250,8 +263,8 @@ let snake, food, bonus, dx, dy, score, gameTimeout;
 // Turns pressed since the last tick, applied one per tick, so a quick Up+Left
 // makes both turns instead of one of them reversing the snake into itself.
 let queuedTurns = [];
-let gameState = 'MENU'; 
-let currentView = 'MAIN'; 
+let gameState = 'MENU';
+let currentView = 'MAIN';
 let menuIdx = 0;
 let foodEatenCount = 0;
 let bonusTimer = 0;
@@ -341,32 +354,33 @@ function getScores() {
     return highScores;
 }
 
-const saveScore = (n, s, difficulty) => {
+function saveScore(name, newScore, difficulty) {
     const allScores = getScores();
-    allScores[difficulty].push({name: sanitizeName(n.toUpperCase()), score: s});
-    allScores[difficulty] = allScores[difficulty].sort((a,b) => b.score - a.score).slice(0, MAX_SCORES_PER_DIFFICULTY);
+    allScores[difficulty].push({name: sanitizeName(name.toUpperCase()), score: newScore});
+    allScores[difficulty] = allScores[difficulty].sort((a, b) => b.score - a.score).slice(0, MAX_SCORES_PER_DIFFICULTY);
     highScores = allScores;
     if (!writeStorage(CURRENT_VERSION_KEY, JSON.stringify(allScores))) isStorageOutOfSync = true;
-};
+}
 
 function init() {
-    snake = [{x: 10, y: 10}];
+    snake = [{...START_CELL}];
     dx = 1; dy = 0; score = 0; foodEatenCount = 0;
     queuedTurns = [];
     bonus = null;
-    
-    let diff = DIFFICULTIES[diffIdx];
-    if (diff === 'EASY') currentSpeed = 200;       
-    if (diff === 'MEDIUM') currentSpeed = 140;     
-    if (diff === 'HARD') currentSpeed = 85;        
-    if (diff === 'PROGRESSIVE') currentSpeed = 180; 
+    tickMs = START_TICK_MS[DIFFICULTIES[diffIdx]];
 
     genFood();
     gameState = 'PLAYING';
     currentView = 'GAME';
     overlay.style.display = 'none';
-    if(gameTimeout) clearTimeout(gameTimeout);
-    loop(); 
+    clearTimeout(gameTimeout);
+    loop();
+}
+
+function speedUpIfProgressive() {
+    if (DIFFICULTIES[diffIdx] === 'PROGRESSIVE') {
+        tickMs = Math.max(PROGRESSIVE_MIN_TICK_MS, tickMs - PROGRESSIVE_SPEEDUP_MS);
+    }
 }
 
 function loop() {
@@ -383,32 +397,26 @@ function loop() {
     // leaves is free to enter.
     const blockingBody = isEatingFood || isEatingBonus ? snake : snake.slice(0, -1);
 
-    if (head.x < 0 || head.x >= TILE_COUNT || head.y < 0 || head.y >= TILE_COUNT || 
+    if (head.x < 0 || head.x >= TILE_COUNT || head.y < 0 || head.y >= TILE_COUNT ||
         blockingBody.some(p => p.x === head.x && p.y === head.y)) return end();
 
     snake.unshift(head);
 
     if (isEatingFood) {
-        score += 10;
+        score += FOOD_POINTS;
         foodEatenCount++;
         genFood();
         if (!food) {
             draw();
             return end(true);
         }
-        
-        if (foodEatenCount % 5 === 0) genBonus();
 
-        if (DIFFICULTIES[diffIdx] === 'PROGRESSIVE') {
-            currentSpeed = Math.max(40, currentSpeed - 3); 
-        }
+        if (foodEatenCount % BONUS_EVERY_N_FOOD === 0) genBonus();
+        speedUpIfProgressive();
     } else if (isEatingBonus) {
         score += bonus.value;
         bonus = null;
-        
-        if (DIFFICULTIES[diffIdx] === 'PROGRESSIVE') {
-            currentSpeed = Math.max(40, currentSpeed - 3); 
-        }
+        speedUpIfProgressive();
     } else {
         snake.pop();
     }
@@ -419,7 +427,7 @@ function loop() {
     }
 
     draw();
-    gameTimeout = setTimeout(loop, currentSpeed);
+    gameTimeout = setTimeout(loop, tickMs);
 }
 
 // Picks among the free cells instead of retrying at random, so it also
@@ -442,8 +450,8 @@ function genBonus() {
     const cell = pickFreeCell([...snake, food]);
     if (!cell) return;
 
-    bonus = {...cell, value: Math.random() > 0.7 ? 50 : 20};
-    bonusTimer = Math.floor(4000 / currentSpeed); 
+    bonus = {...cell, value: Math.random() > 1 - RARE_BONUS_CHANCE ? RARE_BONUS_POINTS : BONUS_POINTS};
+    bonusTimer = Math.floor(BONUS_LIFETIME_MS / tickMs);
 }
 
 function drawPixel(x, y) {
@@ -451,45 +459,37 @@ function drawPixel(x, y) {
 }
 
 function drawFruit(x, y) {
-    ctx.fillStyle = 'black';
+    ctx.fillStyle = LCD_INK;
     ctx.fillRect(x * GRID + 4, y * GRID + 4, GRID - 8, GRID - 8);
 }
 
+// Blinks by showing only on every other pair of ticks.
 function drawBonus(x, y, flicker) {
-    if (flicker % 4 > 1) { 
-        ctx.fillStyle = 'black';
+    if (flicker % 4 > 1) {
+        ctx.fillStyle = LCD_INK;
         ctx.fillRect(x * GRID + 3, y * GRID + 3, GRID - 6, GRID - 6);
     }
 }
 
 function draw() {
-    ctx.fillStyle = '#94af13';
-    ctx.fillRect(0,0,240,240);
+    ctx.fillStyle = LCD_BACKGROUND;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
     scoreDisplay.innerText = score.toString().padStart(4, '0');
 
-    ctx.fillStyle = 'black';
+    ctx.fillStyle = LCD_INK;
     snake.forEach(p => drawPixel(p.x, p.y));
 
     if (food) drawFruit(food.x, food.y);
-
-    if (bonus) {
-        drawBonus(bonus.x, bonus.y, bonusTimer);
-    }
+    if (bonus) drawBonus(bonus.x, bonus.y, bonusTimer);
 }
 
 function end(isWin = false) {
     clearTimeout(gameTimeout);
     
     const currDiff = DIFFICULTIES[diffIdx];
-    const allScores = getScores();
-    const s = allScores[currDiff] || [];
-    
-    let isHighScore = false;
-    if (s.length < 3) {
-        isHighScore = true;
-    } else if (score > s[s.length - 1].score) {
-        isHighScore = true;
-    }
+    const topScores = getScores()[currDiff] || [];
+    const isHighScore = topScores.length < MAX_SCORES_PER_DIFFICULTY
+        || score > topScores[topScores.length - 1].score;
 
     gameState = 'INPUT';
     overlay.style.display = 'flex';
@@ -502,12 +502,12 @@ function end(isWin = false) {
             ${isWin ? '<div>HIGH SCORE!</div>' : ''}
             <div style="font-size:1.2rem">${currDiff}</div>
             <div>SCORE: ${score}</div>
-            <input type="text" id="pName" maxlength="8" placeholder="YOUR NAME" autofocus>
+            <input type="text" id="pName" maxlength="${MAX_NAME_LENGTH}" placeholder="YOUR NAME" autofocus>
             <div class="menu-item active" style="margin-top:10px" data-action="submit">SAVE</div>
         `;
         setTimeout(() => {
-            let inp = document.getElementById('pName');
-            if(inp) inp.focus();
+            const nameInput = document.getElementById('pName');
+            if (nameInput) nameInput.focus();
         }, 10);
     } else {
         currentView = 'CRASHED';
@@ -538,14 +538,13 @@ function showMenu() {
 function showHighScores() {
     gameState = 'MENU';
     currentView = 'SCORES';
-    const allScores = getScores();
     const currDiff = DIFFICULTIES[diffIdx];
-    const s = allScores[currDiff] || [];
-    
+    const topScores = getScores()[currDiff] || [];
+
     contentBox.innerHTML = `<h1>TOP 3</h1>
         <div style="font-size:1.2rem; margin-bottom: 5px;">&lt; ${currDiff} &gt;</div>`;
     // Names come from storage, so they are rendered as text, never as HTML.
-    s.forEach(entry => {
+    topScores.forEach(entry => {
         const row = document.createElement('div');
         row.style.fontSize = '1.2rem';
         row.textContent = `${entry.name}: ${entry.score}`;
@@ -553,7 +552,7 @@ function showHighScores() {
     });
     contentBox.insertAdjacentHTML('beforeend',
         `<div class="menu-item active" data-action="main" style="margin-top:10px">BACK</div>`);
-    menuIdx = 0; 
+    menuIdx = 0;
 }
 
 // --- Dialogs: a pause screen or a question shown over the LCD ---
@@ -628,9 +627,9 @@ function doAction(act) {
     if (act === 'start') init();
     if (act === 'scores') showHighScores();
     if (act === 'main') showMenu();
-    // Intentionally removed "diff" from OK activation so it only cycles on left/right
+    // "diff" is deliberately not activated by OK: it only cycles on left/right.
     if (act === 'submit') {
-        let pNameInput = document.getElementById('pName');
+        const pNameInput = document.getElementById('pName');
         saveScore(pNameInput ? pNameInput.value : ANON_NAME, score, DIFFICULTIES[diffIdx]);
         showMenu();
     }
@@ -669,7 +668,7 @@ function queueTurn(dir) {
 }
 
 function resumeGame() {
-    gameTimeout = setTimeout(loop, currentSpeed);
+    gameTimeout = setTimeout(loop, tickMs);
 }
 
 // The game is paused by stopping its tick timer, so speed and the tick-based
@@ -736,8 +735,8 @@ function handleInput(dir) {
         if (dir === 'OK') showPause();
         else queueTurn(dir);
         return;
-    } 
-    
+    }
+
     if (currentView === 'SCORES') {
         if (dir === 'L') { changeDifficulty(-1); showHighScores(); }
         if (dir === 'R') { changeDifficulty(1); showHighScores(); }
@@ -750,7 +749,7 @@ function handleInput(dir) {
 
     if (dir === 'U') menuIdx = (menuIdx - 1 + items.length) % items.length;
     if (dir === 'D') menuIdx = (menuIdx + 1) % items.length;
-    
+
     // Left/Right handle difficulty toggles safely
     if (currentView === 'MAIN' && (dir === 'L' || dir === 'R')) {
         const currentAction = items[menuIdx].getAttribute('data-action');
@@ -760,7 +759,7 @@ function handleInput(dir) {
     }
 
     highlightMenuItem(items);
-    
+
     if (dir === 'OK') {
         doAction(items[menuIdx]?.getAttribute('data-action'));
     }
@@ -769,8 +768,8 @@ function handleInput(dir) {
 function triggerKeypadEvent(e) {
     const btn = e.target.closest('.key');
     if (!btn) return;
-    e.preventDefault(); 
-    
+    e.preventDefault();
+
     if (btn.classList.contains('dir-btn')) {
         const dir = btn.getAttribute('data-dir');
         if (dir) handleInput(dir);
@@ -794,15 +793,15 @@ window.onkeydown = e => {
     // A held pause key would flip between paused and running.
     if (e.repeat && (key === 'p' || key === '5' || key === 'enter')) return;
     const isTyping = document.activeElement && document.activeElement.id === 'pName';
-    
+
     // Always allow Escape to trigger 'C' and exit safely
     if (key === 'escape') {
         if (isTyping) document.activeElement.blur();
         handleInput('C');
         return;
     }
-    
-    if (!isTyping) { 
+
+    if (!isTyping) {
         if (key === 'arrowup' || key === 'w' || key === '2') handleInput('U');
         if (key === 'arrowdown' || key === 's' || key === '8') handleInput('D');
         if (key === 'arrowleft' || key === 'a' || key === '4') handleInput('L');
@@ -813,9 +812,9 @@ window.onkeydown = e => {
         // Stops the browser from scrolling the page while steering
         if (gameState === 'PLAYING' && key.startsWith('arrow')) e.preventDefault();
     }
-    
+
     if (key === 'enter' || (!isTyping && key === '5')) {
-        if (isTyping) document.activeElement.blur(); 
+        if (isTyping) document.activeElement.blur();
         handleInput('OK');
     }
 };
@@ -823,6 +822,7 @@ window.onkeydown = e => {
 // Where the current touch began, or null if it didn't begin as a single finger
 // outside the keypad, so keypad presses and pinch-zooms never count as a swipe or tap.
 let swipeStart = null;
+const TAP_MAX_MOVE_PX = 15;
 window.addEventListener('touchstart', e => {
     const isSingleFingerOffKeypad = e.touches.length === 1 && !e.target.closest('#keypad-area');
     swipeStart = isSingleFingerOffKeypad
@@ -843,11 +843,16 @@ window.addEventListener('touchend', e => {
     if (!start) return;
     if (e.target.classList.contains('menu-item') || e.target.id === 'pName') return;
 
-    let diffX = e.changedTouches[0].clientX - start.x, diffY = e.changedTouches[0].clientY - start.y;
-    if (Math.abs(diffX) < 15 && Math.abs(diffY) < 15) {
+    const moveX = e.changedTouches[0].clientX - start.x;
+    const moveY = e.changedTouches[0].clientY - start.y;
+    const isTap = Math.abs(moveX) < TAP_MAX_MOVE_PX && Math.abs(moveY) < TAP_MAX_MOVE_PX;
+    if (isTap) {
         if (isTapActionSafe()) handleInput('OK');
+    } else if (Math.abs(moveX) > Math.abs(moveY)) {
+        handleInput(moveX > 0 ? 'R' : 'L');
+    } else {
+        handleInput(moveY > 0 ? 'D' : 'U');
     }
-    else Math.abs(diffX) > Math.abs(diffY) ? handleInput(diffX > 0 ? 'R' : 'L') : handleInput(diffY > 0 ? 'D' : 'U');
 });
 
 // Shrinks the whole phone to fit small screens (320x568, landscape phones);
