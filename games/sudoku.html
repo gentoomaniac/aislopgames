@@ -556,11 +556,16 @@
     </main>
 
     <script>
+
+        // --- DOM references ---
         const boardEl = document.getElementById('sudoku-board');
         const messageEl = document.getElementById('message');
         const difficultySelect = document.getElementById('difficulty');
         const gridSizeSelect = document.getElementById('grid-size-select');
         const themeSelect = document.getElementById('theme-select');
+        const presetSelect = document.getElementById('preset-select');
+        const customThemePanel = document.getElementById('custom-theme-panel');
+        const quickThemeIcon = document.getElementById('quick-theme-icon');
         const animationsToggle = document.getElementById('toggle-animations');
         const hardModeToggle = document.getElementById('toggle-hard-mode');
         const highlightToggle = document.getElementById('toggle-highlight');
@@ -568,36 +573,49 @@
         const autoNotesToggle = document.getElementById('toggle-auto-notes');
         const fastFillToggle = document.getElementById('toggle-fast-fill');
         const fireworkCanvas = document.getElementById('firework-canvas');
+        const gameCardEl = document.querySelector('.game-card');
+        const numberPadEl = document.getElementById('number-pad');
         const numTiles = document.querySelectorAll('.num-tile');
+        const numTileByValue = Object.fromEntries([...numTiles].map(tile => [tile.dataset.val, tile]));
+        const eraseTile = document.getElementById('pad-erase');
+        const noteModeButton = document.getElementById('btn-note-mode');
         const settingsDialog = document.getElementById('settings-dialog');
         const newGameDialog = document.getElementById('new-game-dialog');
         const confirmDialog = document.getElementById('confirm-dialog');
+        const confirmTitleEl = document.getElementById('confirm-title');
+        const confirmMessageEl = document.getElementById('confirm-message');
+        const confirmAcceptButton = document.getElementById('confirm-accept');
         const bestTimesDialog = document.getElementById('best-times-dialog');
+        const bestTimesTable = document.getElementById('best-times-table');
         const gameClockEl = document.getElementById('game-clock');
         const gameClockTimeEl = document.getElementById('game-clock-time');
         const gameClockNoteEl = document.getElementById('game-clock-note');
-        const eraseTile = document.getElementById('pad-erase');
 
-        let solutionBoard = [];
-        let currentBoard = []; 
-        let notesBoard = [];
-        
-        let animationsEnabled = true;
-        let hardModeEnabled = false;
-        let highlightEnabled = true;
-        let constraintsEnabled = false;
-        let currentHighlightVal = '';
+        // --- Constants ---
+        const SAVED_STATE_KEY = 'zenSudokuState';
+        const BEST_TIMES_KEY = 'zenSudokuBestTimes';
 
-        let fastFillMode = false;
-        let noteMode = false;
-        let selectedCell = null; 
-        let selectedPadNum = null; 
-        
-        let canInterruptFireworks = false;
+        // Keys are the values of the difficulty select
+        const DIFFICULTY_NAMES = { '30': 'Easy', '40': 'Medium', '55': 'Hard', '65': 'Expert', '75': 'Master' };
+        const DEFAULT_DIFFICULTY = '40';
+        const EXPERT_DIFFICULTY = '65';
+        const MASTER_DIFFICULTY = '75';
+        const GRID_SIZE_NAMES = { 9: '9x9', 5: '5x5', 4: '4x4' };
+        // Width of a box in each grid; 5x5 has none (it behaves as a Latin square)
+        const SUB_GRID_SIZE_BY_GRID_SIZE = { 4: 2, 5: 1, 9: 3 };
+        const SUPPORTED_GRID_SIZES = Object.keys(SUB_GRID_SIZE_BY_GRID_SIZE).map(Number);
+        const HEX_COLOR_PATTERN = /^#[0-9a-f]{3,8}$/i;
 
-        // Core Dynamic Grid Resizing
-        let gridSize = 9;
-        let subGridSize = 3;
+        const CELL_POP_MS = 350;
+        const HINT_POP_MS = 400;
+        const HINT_HIGHLIGHT_MS = 1200;
+        const NEW_BOARD_POP_MS = 500;
+        const NEW_BOARD_STAGGER_MS_PER_CELL = 3;
+        const SOLVE_REVEAL_STAGGER_MS_PER_CELL = 15;
+        const SOLVE_FINISH_DELAY_MS = 100;
+        const WAVE_STAGGER_MS_PER_DIAGONAL = 50;
+        const WAVE_MS = 600;
+        const MISTAKE_VIBRATION_PATTERN_MS = [50, 50, 50];
 
         const themePresets = {
             light: { bg: '#e3e8ee', fg: '#ffffff', grid: '#9e9e9e', tile: '#ffffff', tileHl: '#e8eaf6', hinted: '#fff9c4', text: '#212121', userText: '#3949ab', hintedText: '#212121', link: '#3949ab', btn: '#3949ab', btnText: '#ffffff' },
@@ -605,16 +623,41 @@
             dracula: { bg: '#282a36', fg: '#282a36', grid: '#44475a', tile: '#282a36', tileHl: '#44475a', hinted: '#5c623b', text: '#f8f8f2', userText: '#ff79c6', hintedText: '#f8f8f2', link: '#ff79c6', btn: '#bd93f9', btnText: '#282a36' }
         };
 
+        // --- State ---
+        let solutionBoard = [];
+        let currentBoard = [];
+        let notesBoard = [];
+        let cellInputs = []; // the board's inputs in reading order, rebuilt by initGrid
+
+        let gridSize = 9;
+        let subGridSize = 3;
+
+        let animationsEnabled = true;
+        let hardModeEnabled = false;
+        let highlightEnabled = true;
+        let constraintsEnabled = false;
+        let fastFillMode = false;
+        let noteMode = false;
+
+        let highlightedDigit = '';
+        let selectedCell = null;
+        let selectedPadDigit = null;
+
         let customThemeState = {
             bg: '#4A154B', fg: '#FFFFFF', grid: '#D1D2D3', tile: '#FFFFFF', tileHl: '#E8EAF6',
             hinted: '#FFC800', text: '#1D1C1D', userText: '#1164A3', hintedText: '#000000', link: '#1164A3', btn: '#1164A3', btnText: '#FFFFFF'
         };
 
-        const SAVED_STATE_KEY = 'zenSudokuState';
-        const BEST_TIMES_KEY = 'zenSudokuBestTimes';
+        // 'autoSolved' outlives board checks (and is saved); every other message is
+        // re-evaluated or cleared on the next board action.
+        let statusKind = 'none';
+
+        // Bumped by every new game; delayed callbacks from an earlier game check it and give up.
+        let gameGeneration = 0;
 
         // --- Game timer ---
         const HINT_PENALTY_MS = 15000;
+        const CLOCK_REFRESH_MS = 250;
 
         // Null means an untimed game: a save from before the timer existed. Starting those at 0
         // would let a nearly finished puzzle set an unbeatable best time.
@@ -679,13 +722,13 @@
         }
 
         function initClock() {
-            setInterval(renderClock, 250);
+            setInterval(renderClock, CLOCK_REFRESH_MS);
             window.addEventListener('blur', pauseClock);
             window.addEventListener('pagehide', pauseClock);
             document.addEventListener('visibilitychange', () => {
                 if (document.visibilityState === 'hidden') pauseClock();
             });
-            document.querySelector('.game-card').addEventListener('pointerdown', resumeClock);
+            gameCardEl.addEventListener('pointerdown', resumeClock);
             document.addEventListener('keydown', (e) => {
                 if (!e.ctrlKey && !e.metaKey && !e.altKey) resumeClock();
             });
@@ -693,8 +736,6 @@
 
         // --- Best times ---
         // Keyed by '<grid size>:<difficulty>', value is the time in milliseconds.
-        const DIFFICULTY_NAMES = { '30': 'Easy', '40': 'Medium', '55': 'Hard', '65': 'Expert', '75': 'Master' };
-        const GRID_SIZE_NAMES = { 9: '9x9', 5: '5x5', 4: '4x4' };
         let bestTimesFallback = {}; // only filled while storage is blocked or a write failed
 
         function bestTimeKey(size, difficulty) {
@@ -705,7 +746,7 @@
         function isKnownBestTimeKey(key) {
             const [size, difficulty] = key.split(':');
             return Object.hasOwn(GRID_SIZE_NAMES, size) && Object.hasOwn(DIFFICULTY_NAMES, difficulty) &&
-                !(size !== '9' && difficulty === '75');
+                !(size !== '9' && difficulty === MASTER_DIFFICULTY);
         }
 
         function isValidBestTime(ms) {
@@ -784,10 +825,9 @@
 
         function renderBestTimesTable() {
             const bestTimes = getBestTimes();
-            const table = document.getElementById('best-times-table');
-            table.replaceChildren();
+            bestTimesTable.replaceChildren();
 
-            const headerRow = table.insertRow();
+            const headerRow = bestTimesTable.insertRow();
             ['Size', ...Object.values(DIFFICULTY_NAMES)].forEach(name => {
                 const cell = document.createElement('th');
                 cell.textContent = name;
@@ -795,7 +835,7 @@
             });
 
             Object.keys(GRID_SIZE_NAMES).sort((a, b) => b - a).forEach(size => {
-                const row = table.insertRow();
+                const row = bestTimesTable.insertRow();
                 const sizeCell = document.createElement('th');
                 sizeCell.textContent = GRID_SIZE_NAMES[size];
                 row.appendChild(sizeCell);
@@ -811,60 +851,6 @@
         function showBestTimes() {
             renderBestTimesTable();
             openDialog(bestTimesDialog);
-        }
-
-        function initPage() {
-            initDialogs();
-
-            // Attached first so input keeps working whatever happens while loading or generating
-            difficultySelect.addEventListener('change', saveGameState);
-            gridSizeSelect.addEventListener('change', updateMasterAvailability);
-            numTiles.forEach(tile => tile.addEventListener('click', handlePadClick));
-            eraseTile.addEventListener('click', eraseSelectedCell);
-            document.addEventListener('keydown', handleKeyboardInput);
-
-            // Allow interruption of fireworks
-            ['mousedown', 'touchstart', 'keydown'].forEach(eventName => {
-                document.addEventListener(eventName, () => {
-                    if (canInterruptFireworks && fireworkCanvas.classList.contains('visible')) {
-                        stopFireworks();
-                    }
-                });
-            });
-
-            initClock();
-            initGrid();
-            const hasSavedData = loadGameState();
-            initColorPickers();
-
-            if (!hasSavedData) {
-                newGame();
-            }
-            updateQuickToggleIcon();
-            renderClock();
-        }
-
-        // <input type="color"> only accepts #rrggbb, but saved colours may be #rgb or carry an alpha pair
-        function toColorInputValue(color) {
-            let hex = color.slice(1);
-            if (hex.length <= 4) hex = [...hex].map(digit => digit + digit).join('');
-            return '#' + hex.slice(0, 6).toLowerCase();
-        }
-
-        function setColorInput(key, color) {
-            document.getElementById(`picker-${key}`).value = toColorInputValue(color);
-        }
-
-        function initColorPickers() {
-            Object.keys(customThemeState).forEach(key => {
-                const colorInput = document.getElementById(`picker-${key}`);
-                setColorInput(key, customThemeState[key]);
-                colorInput.addEventListener('input', () => {
-                    customThemeState[key] = colorInput.value; applyCustomTheme(true);
-                });
-                // 'change' fires when the player is done choosing, not on every step of a drag
-                colorInput.addEventListener('change', saveGameState);
-            });
         }
 
         // --- Dialogs ---
@@ -900,9 +886,9 @@
         // Resolves to true if the player confirms, false on cancel, Escape or a click outside.
         function confirmAction({ title, message, confirmLabel }) {
             if (confirmDialog.open) return Promise.resolve(false);
-            document.getElementById('confirm-title').textContent = title;
-            document.getElementById('confirm-message').textContent = message;
-            document.getElementById('confirm-accept').textContent = confirmLabel;
+            confirmTitleEl.textContent = title;
+            confirmMessageEl.textContent = message;
+            confirmAcceptButton.textContent = confirmLabel;
             // Escape and backdrop clicks close the dialog without setting a return value
             confirmDialog.returnValue = '';
             return new Promise(resolve => {
@@ -911,8 +897,50 @@
             });
         }
 
+        function isMenuOpen() {
+            return document.querySelector('dialog[open]') !== null;
+        }
+
+        // --- Theme and settings ---
+        const DEFAULT_THEME = 'theme-light';
+        const THEME_CLASSES = ['theme-light', 'theme-dark', 'theme-dracula', 'theme-custom'];
+
+        // The CSS variables a custom theme overrides on <body>, from the colours the player picked
+        function getCustomThemeVariables() {
+            const colors = customThemeState;
+            return {
+                '--bg-color': colors.bg, '--card-bg': colors.fg, '--controls-bg': colors.fg,
+                '--grid-bg': colors.grid, '--grid-border': colors.grid,
+                '--cell-bg': colors.tile, '--cell-given-bg': colors.tile,
+                '--highlight-bg': colors.tileHl, '--cell-focus-bg': colors.tileHl,
+                '--hint-bg': colors.hinted, '--btn-hint-bg': colors.hinted,
+                '--text-main': colors.text, '--text-muted': colors.text, '--cell-given-text': colors.text,
+                '--cell-input-text': colors.userText,
+                '--hint-text': colors.hintedText, '--btn-hint-text': colors.hintedText,
+                '--link-color': colors.link, '--cell-focus-shadow': colors.link,
+                '--nav-bg': colors.btn, '--btn-primary-bg': colors.btn,
+                '--nav-text': colors.btnText, '--btn-primary-text': colors.btnText,
+                '--pad-text': colors.text
+            };
+        }
+
+        function changeTheme(skipSave = false) {
+            const newTheme = themeSelect.value;
+            document.body.classList.remove(...THEME_CLASSES);
+            document.body.classList.add(newTheme);
+            customThemePanel.hidden = newTheme !== 'theme-custom';
+            if (newTheme === 'theme-custom') applyCustomTheme(true);
+            else Object.keys(getCustomThemeVariables()).forEach(name => document.body.style.removeProperty(name));
+            updateQuickToggleIcon(); if (!skipSave) saveGameState();
+        }
+
+        function applyCustomTheme(skipSave = false) {
+            if (themeSelect.value !== 'theme-custom') return;
+            Object.entries(getCustomThemeVariables()).forEach(([name, value]) => document.body.style.setProperty(name, value));
+            if (!skipSave) saveGameState();
+        }
+
         async function resetCustomTheme() {
-            const presetSelect = document.getElementById('preset-select');
             const presetKey = presetSelect.value;
             if (!presetKey) return;
             const presetName = presetSelect.selectedOptions[0].textContent;
@@ -921,14 +949,14 @@
                 message: `Your custom colors will be replaced with the ${presetName} preset.`,
                 confirmLabel: 'Overwrite'
             });
-            if (isConfirmed) {
-                const colors = themePresets[presetKey];
-                Object.keys(colors).forEach(key => {
-                    customThemeState[key] = colors[key];
-                    setColorInput(key, colors[key]);
-                });
-                applyCustomTheme(); saveGameState(); presetSelect.value = '';
-            }
+            if (!isConfirmed) return;
+
+            const presetColors = themePresets[presetKey];
+            Object.keys(presetColors).forEach(key => {
+                customThemeState[key] = presetColors[key];
+                setColorInput(key, presetColors[key]);
+            });
+            applyCustomTheme(); saveGameState(); presetSelect.value = '';
         }
 
         function quickToggleTheme() {
@@ -937,55 +965,78 @@
         }
 
         function updateQuickToggleIcon() {
-            document.getElementById('quick-theme-icon').textContent = themeSelect.value === 'theme-light' ? 'brightness_4' : 'brightness_7';
+            quickThemeIcon.textContent = themeSelect.value === 'theme-light' ? 'brightness_4' : 'brightness_7';
         }
 
-        // --- Grid Core Resizing ---
-        function setGridSize(size) {
-            gridSize = size;
-            
-            boardEl.classList.remove('grid-9x9', 'grid-5x5', 'grid-4x4');
-            document.body.classList.remove('is-9x9', 'is-5x5', 'is-4x4');
+        // <input type="color"> only accepts #rrggbb, but saved colours may be #rgb or carry an alpha pair
+        function toColorInputValue(color) {
+            let hex = color.slice(1);
+            if (hex.length <= 4) hex = [...hex].map(digit => digit + digit).join('');
+            return '#' + hex.slice(0, 6).toLowerCase();
+        }
 
-            boardEl.classList.add('grid-' + size + 'x' + size);
-            document.body.classList.add('is-' + size + 'x' + size);
+        function setColorInput(key, color) {
+            document.getElementById(`picker-${key}`).value = toColorInputValue(color);
+        }
 
-            if (size === 4) {
-                subGridSize = 2;
-            } else if (size === 5) {
-                subGridSize = 1; // 5x5 behaves as a Latin Square (no square subgrids)
-            } else {
-                subGridSize = 3;
+        function initColorPickers() {
+            Object.keys(customThemeState).forEach(key => {
+                const colorInput = document.getElementById(`picker-${key}`);
+                setColorInput(key, customThemeState[key]);
+                colorInput.addEventListener('input', () => {
+                    customThemeState[key] = colorInput.value; applyCustomTheme(true);
+                });
+                // 'change' fires when the player is done choosing, not on every step of a drag
+                colorInput.addEventListener('change', saveGameState);
+            });
+        }
+
+        function toggleHighlightSetting() {
+            highlightEnabled = highlightToggle.checked;
+            if (!highlightEnabled) clearHighlights();
+            else if (highlightedDigit !== '') highlightMatches(highlightedDigit);
+            saveGameState();
+        }
+
+        function toggleAnimationSetting() {
+            animationsEnabled = !animationsToggle.checked;
+            document.body.classList.toggle('animations-disabled', !animationsEnabled);
+            if (!animationsEnabled) {
+                stopFireworks();
+                cellInputs.forEach(input => {
+                    input.classList.remove('anim-pop', 'anim-shake', 'anim-wave');
+                    input.style.animationDelay = '0ms';
+                });
             }
+            saveGameState();
         }
 
-        function getCellInputs() {
-            return boardEl.querySelectorAll('input');
+        function toggleHardMode() {
+            hardModeEnabled = hardModeToggle.checked;
+            if (hardModeEnabled) {
+                cellInputs.forEach(input => input.classList.remove('locked', 'error-cell', 'anim-shake'));
+            } else {
+                cellInputs.forEach(input => {
+                    if (isCorrectPlayerEntry(input)) {
+                        input.classList.add('locked');
+                        input.classList.remove('error-cell', 'anim-shake');
+                    }
+                });
+            }
+            updateErrors();
+            checkWinCondition(); saveGameState();
         }
 
-        function getCellPosition(input) {
-            return [parseInt(input.dataset.row), parseInt(input.dataset.col)];
-        }
-
-        function getNumTile(val) {
-            return document.querySelector(`.num-tile[data-val='${val}']`);
-        }
-
-        function clearSelectedPadTiles() {
-            numTiles.forEach(tile => tile.classList.remove('selected-num'));
+        function toggleConstraints() {
+            constraintsEnabled = constraintsToggle.checked;
+            if (highlightedDigit !== '') highlightMatches(highlightedDigit);
+            saveGameState();
         }
 
         function toggleFastFill() {
             fastFillMode = fastFillToggle.checked;
-            selectCell(null); selectedPadNum = null; clearSelectedPadTiles();
+            selectCell(null); selectedPadDigit = null; clearSelectedPadTiles();
             highlightMatches(''); saveGameState();
-        }
-
-        function toggleNoteMode() {
-            noteMode = !noteMode;
-            document.getElementById('btn-note-mode').classList.toggle('active', noteMode);
-            document.getElementById('number-pad').classList.toggle('note-mode-active', noteMode);
-            updateNumberPad();
         }
 
         async function toggleAutoNotes() {
@@ -1003,17 +1054,292 @@
                         return;
                     }
                 }
-                notesBoard = Array(gridSize * gridSize).fill().map(() => []);
+                notesBoard = createEmptyNotes();
                 renderNotes();
             }
             saveGameState();
             updateNumberPad();
         }
 
-        function toggleConstraints() {
-            constraintsEnabled = constraintsToggle.checked;
-            if (currentHighlightVal !== '') highlightMatches(currentHighlightVal);
-            saveGameState();
+        // Small grids need no technique beyond singles, so Master cannot be generated there.
+        function updateMasterAvailability() {
+            const masterOption = difficultySelect.querySelector(`option[value="${MASTER_DIFFICULTY}"]`);
+            const isAvailable = parseInt(gridSizeSelect.value) >= 9;
+            if (!isAvailable && difficultySelect.value === MASTER_DIFFICULTY) difficultySelect.value = EXPERT_DIFFICULTY;
+            masterOption.disabled = !isAvailable;
+        }
+
+        function setSelectValue(select, value, fallback) {
+            const isKnownOption = Array.from(select.options).some(option => option.value === String(value));
+            select.value = isKnownOption ? value : fallback;
+        }
+
+        // --- Board model and rendering ---
+        function setGridSize(size) {
+            gridSize = size;
+            subGridSize = SUB_GRID_SIZE_BY_GRID_SIZE[size];
+            SUPPORTED_GRID_SIZES.forEach(supportedSize => {
+                boardEl.classList.toggle(`grid-${supportedSize}x${supportedSize}`, supportedSize === size);
+                document.body.classList.toggle(`is-${supportedSize}x${supportedSize}`, supportedSize === size);
+            });
+        }
+
+        function createEmptyNotes() {
+            return Array.from({ length: gridSize * gridSize }, () => []);
+        }
+
+        function getCellPosition(input) {
+            return [parseInt(input.dataset.row), parseInt(input.dataset.col)];
+        }
+
+        function getCellIndex(input) {
+            const [row, col] = getCellPosition(input);
+            return row * gridSize + col;
+        }
+
+        function getPositionOfIndex(index) {
+            return [Math.floor(index / gridSize), index % gridSize];
+        }
+
+        function getBoxIndex(row, col) {
+            return Math.floor(row / subGridSize) * subGridSize + Math.floor(col / subGridSize);
+        }
+
+        function isEditableCell(input) {
+            return !input.classList.contains('given') && !input.classList.contains('locked');
+        }
+
+        // A digit the player entered that matches the solution
+        function isCorrectPlayerEntry(input) {
+            if (input.value === '' || input.classList.contains('given')) return false;
+            const [row, col] = getCellPosition(input);
+            return parseInt(input.value) === solutionBoard[row][col];
+        }
+
+        function initGrid() {
+            boardEl.replaceChildren();
+            notesBoard = createEmptyNotes();
+            for (let i = 0; i < gridSize * gridSize; i++) {
+                const [row, col] = getPositionOfIndex(i);
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                const input = document.createElement('input');
+                input.type = 'text'; input.inputMode = 'none'; input.readOnly = true;
+                input.dataset.row = row; input.dataset.col = col;
+                input.addEventListener('click', handleCellClick);
+                const notesTop = document.createElement('div');
+                notesTop.className = 'notes-display notes-top';
+                const notesBottom = document.createElement('div');
+                notesBottom.className = 'notes-display notes-bottom';
+                cell.append(input, notesTop, notesBottom); boardEl.append(cell);
+            }
+            cellInputs = Array.from(boardEl.querySelectorAll('input'));
+        }
+
+        function getBoardState() {
+            const board = Array.from({ length: gridSize }, () => Array(gridSize).fill(0));
+            cellInputs.forEach(input => {
+                const [row, col] = getCellPosition(input);
+                if (input.value !== '') board[row][col] = parseInt(input.value);
+            });
+            return board;
+        }
+
+        // True if another cell in the row, column or box of (row, col) holds `digit`
+        function hasDigitInPeers(board, row, col, digit) {
+            for (let i = 0; i < gridSize; i++) {
+                if (i !== col && board[row][i] === digit) return true;
+                if (i !== row && board[i][col] === digit) return true;
+            }
+            if (subGridSize > 1) {
+                const boxTop = row - (row % subGridSize);
+                const boxLeft = col - (col % subGridSize);
+                for (let r = boxTop; r < boxTop + subGridSize; r++) {
+                    for (let c = boxLeft; c < boxLeft + subGridSize; c++) {
+                        if ((r !== row || c !== col) && board[r][c] === digit) return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        // Whether `digit` may go into (row, col): neither the cell nor its peers hold it already
+        function canPlace(board, row, col, digit) {
+            return board[row][col] !== digit && !hasDigitInPeers(board, row, col, digit);
+        }
+
+        function hasConflict(board, row, col) {
+            const digit = board[row][col];
+            return digit !== 0 && hasDigitInPeers(board, row, col, digit);
+        }
+
+        function updateErrors() {
+            if (hardModeEnabled) {
+                cellInputs.forEach(input => input.classList.remove('error-cell', 'anim-shake'));
+                return;
+            }
+            const board = getBoardState();
+            cellInputs.forEach(input => {
+                const [row, col] = getCellPosition(input);
+                if (!hasConflict(board, row, col)) input.classList.remove('error-cell', 'anim-shake');
+                else if (isEditableCell(input)) input.classList.add('error-cell');
+            });
+        }
+
+        function hasNotes() {
+            return notesBoard.some(cellNotes => cellNotes.length > 0);
+        }
+
+        // Notes are shown in two lines per cell: the low digits on top, the high ones below
+        function renderNotes() {
+            boardEl.querySelectorAll('.notes-display').forEach(display => { display.textContent = ''; });
+            const topLineMaxDigit = Math.ceil(gridSize / 2);
+            cellInputs.forEach((input, index) => {
+                if (input.value !== '' || notesBoard[index].length === 0) return;
+                const notes = [...notesBoard[index]].sort((a, b) => a - b);
+                const cell = input.parentElement;
+                cell.querySelector('.notes-top').textContent = notes.filter(n => n <= topLineMaxDigit).join('');
+                cell.querySelector('.notes-bottom').textContent = notes.filter(n => n > topLineMaxDigit).join('');
+            });
+        }
+
+        function autoFillNotes() {
+            const board = getBoardState();
+            const allDigits = Array.from({ length: gridSize }, (_, i) => i + 1);
+            for (let i = 0; i < gridSize * gridSize; i++) {
+                const [row, col] = getPositionOfIndex(i);
+                notesBoard[i] = board[row][col] === 0 ? allDigits.filter(digit => canPlace(board, row, col, digit)) : [];
+            }
+            renderNotes();
+        }
+
+        function removeNotesFromPeers(row, col, value) {
+            const digit = parseInt(value);
+            const hasBoxes = subGridSize > 1;
+            const box = getBoxIndex(row, col);
+            for (let i = 0; i < gridSize * gridSize; i++) {
+                const [peerRow, peerCol] = getPositionOfIndex(i);
+                const isPeer = peerRow === row || peerCol === col || (hasBoxes && getBoxIndex(peerRow, peerCol) === box);
+                if (isPeer) notesBoard[i] = notesBoard[i].filter(note => note !== digit);
+            }
+        }
+
+        function renderBoard(isAnimated = false) {
+            cellInputs.forEach((input, index) => {
+                const [row, col] = getPositionOfIndex(index);
+                const digit = currentBoard[row][col];
+
+                input.value = digit === 0 ? '' : digit;
+                input.classList.remove('given', 'locked', 'anim-pop', 'anim-shake', 'anim-wave', 'error-cell', 'hint-highlight', 'highlight-match', 'selected-cell', 'constraint-line');
+                input.style.animationDelay = '0ms';
+                if (digit !== 0) input.classList.add('given');
+
+                if (isAnimated && animationsEnabled) {
+                    const staggerMs = index * NEW_BOARD_STAGGER_MS_PER_CELL;
+                    input.classList.add('anim-pop');
+                    input.style.animationDelay = `${staggerMs}ms`;
+                    setTimeout(() => {
+                        input.classList.remove('anim-pop');
+                        input.style.animationDelay = '0ms';
+                    }, NEW_BOARD_POP_MS + staggerMs);
+                }
+            });
+        }
+
+        // --- Status, number pad and highlights ---
+        function setStatus(text, type, kind = 'none') {
+            statusKind = kind;
+            messageEl.textContent = text;
+            messageEl.classList.remove('msg-success', 'msg-error', 'msg-neutral');
+            messageEl.classList.add('msg-' + type);
+        }
+
+        // How often each digit is on the board, indexed by digit
+        function countPlacedDigits() {
+            const counts = Array(gridSize + 1).fill(0);
+            cellInputs.forEach(input => {
+                if (input.value !== '') counts[input.value]++;
+            });
+            return counts;
+        }
+
+        // In note mode the pad shows the notes of the selected empty cell
+        function getNotesToShowOnPad() {
+            const isShowingNotes = noteMode && !fastFillMode && selectedCell && selectedCell.value === '';
+            return isShowingNotes ? notesBoard[getCellIndex(selectedCell)] : [];
+        }
+
+        function updateNumberPad() {
+            const counts = countPlacedDigits();
+            const notesOnPad = getNotesToShowOnPad();
+            let isHighlightedDigitComplete = false;
+
+            numTiles.forEach(tile => {
+                const digit = tile.dataset.val;
+                if (digit <= gridSize) {
+                    if (counts[digit] >= gridSize) {
+                        tile.classList.add('complete');
+                        tile.classList.remove('active-hl', 'selected-num');
+                        if (highlightedDigit === digit) isHighlightedDigitComplete = true;
+                    } else {
+                        tile.classList.remove('complete');
+                    }
+                }
+                tile.classList.toggle('note-active', notesOnPad.includes(parseInt(digit)));
+            });
+
+            if (selectedPadDigit && counts[selectedPadDigit] >= gridSize) {
+                selectedPadDigit = null;
+                highlightMatches('');
+            } else if (isHighlightedDigitComplete) {
+                highlightMatches('');
+            }
+        }
+
+        function clearSelectedPadTiles() {
+            numTiles.forEach(tile => tile.classList.remove('selected-num'));
+        }
+
+        function clearHighlights() {
+            cellInputs.forEach(input => input.classList.remove('highlight-match', 'constraint-line'));
+            numTiles.forEach(tile => { if (!tile.classList.contains('selected-num')) tile.classList.remove('active-hl'); });
+            highlightedDigit = '';
+        }
+
+        // Marks every cell holding `digit`; with "Highlight constraints" also the rows and
+        // columns those cells occupy
+        function highlightMatches(digit) {
+            clearHighlights(); highlightedDigit = digit;
+            if (!highlightEnabled || digit === '') return;
+
+            const matchingRows = new Set();
+            const matchingCols = new Set();
+            cellInputs.forEach(input => {
+                if (input.value !== digit) return;
+                const [row, col] = getCellPosition(input);
+                input.classList.add('highlight-match');
+                matchingRows.add(row);
+                matchingCols.add(col);
+            });
+
+            if (constraintsEnabled) {
+                cellInputs.forEach(input => {
+                    const [row, col] = getCellPosition(input);
+                    const isConstrained = matchingRows.has(row) || matchingCols.has(col);
+                    if (input.value !== digit && isConstrained) input.classList.add('constraint-line');
+                });
+            }
+
+            const matchingTile = numTileByValue[digit];
+            if (!fastFillMode && matchingTile && !matchingTile.classList.contains('complete')) matchingTile.classList.add('active-hl');
+        }
+
+        // --- Input ---
+        function toggleNoteMode() {
+            noteMode = !noteMode;
+            noteModeButton.classList.toggle('active', noteMode);
+            numberPadEl.classList.toggle('note-mode-active', noteMode);
+            updateNumberPad();
         }
 
         function selectCell(input) {
@@ -1025,42 +1351,46 @@
 
         function handleCellClick(e) {
             e.preventDefault();
-            const input = e.currentTarget; const val = input.value;
-            const isEditable = !input.classList.contains('given') && !input.classList.contains('locked');
+            const input = e.currentTarget;
+            if (fastFillMode) handleFastFillCellClick(input);
+            else handleSelectModeCellClick(input);
+        }
 
-            if (fastFillMode) {
-                if (selectedPadNum !== null && isEditable && String(val) !== String(selectedPadNum)) {
-                    // Instantly overwrite a wrongly placed number in Fast Fill Mode
-                    updateCellValue(input, selectedPadNum);
-                } else if (val !== '') {
-                    if (getNumTile(val).classList.contains('complete')) {
-                        selectedPadNum = null;
-                        clearSelectedPadTiles();
-                        clearHighlights();
-                    } else {
-                        if (selectedPadNum === val) {
-                            selectedPadNum = null;
-                            clearSelectedPadTiles();
-                            highlightMatches('');
-                        } else {
-                            selectedPadNum = val;
-                            clearSelectedPadTiles();
-                            getNumTile(val).classList.add('selected-num');
-                            highlightMatches(val);
-                        }
-                    }
-                } else if (selectedPadNum !== null) {
-                    if (isEditable) updateCellValue(input, selectedPadNum);
-                }
+        // Digit-first input: the pad digit is chosen first and every tap on a cell places it
+        function handleFastFillCellClick(input) {
+            const digit = input.value;
+            if (selectedPadDigit !== null && isEditableCell(input) && digit !== selectedPadDigit) {
+                updateCellValue(input, selectedPadDigit); // also overwrites a wrongly placed digit
+                return;
+            }
+            if (digit === '') return;
+
+            // Tapping a placed digit picks it as the pad digit, or drops it when it is picked already
+            if (numTileByValue[digit].classList.contains('complete')) {
+                selectedPadDigit = null;
+                clearSelectedPadTiles();
+                clearHighlights();
+            } else if (selectedPadDigit === digit) {
+                selectedPadDigit = null;
+                clearSelectedPadTiles();
+                highlightMatches('');
             } else {
-                if (isEditable) selectCell(input); else selectCell(null);
+                selectedPadDigit = digit;
+                clearSelectedPadTiles();
+                numTileByValue[digit].classList.add('selected-num');
+                highlightMatches(digit);
+            }
+        }
 
-                if (val !== '') {
-                    if (getNumTile(val).classList.contains('complete')) clearHighlights();
-                    else highlightMatches(val);
-                } else {
-                    if (currentHighlightVal !== '') highlightMatches(currentHighlightVal);
-                }
+        function handleSelectModeCellClick(input) {
+            selectCell(isEditableCell(input) ? input : null);
+
+            const digit = input.value;
+            if (digit !== '') {
+                if (numTileByValue[digit].classList.contains('complete')) clearHighlights();
+                else highlightMatches(digit);
+            } else if (highlightedDigit !== '') {
+                highlightMatches(highlightedDigit);
             }
         }
 
@@ -1068,20 +1398,29 @@
             const tile = e.currentTarget;
             if (tile.classList.contains('complete')) return; // Completely block clicking used up numbers
 
-            const val = tile.dataset.val;
-            if(val > gridSize) return;
+            const digit = tile.dataset.val;
+            if (digit > gridSize) return;
 
             if (fastFillMode) {
-                if (selectedPadNum === val) { selectedPadNum = null; tile.classList.remove('selected-num'); highlightMatches(''); }
-                else { clearSelectedPadTiles(); tile.classList.add('selected-num'); selectedPadNum = val; highlightMatches(val); }
+                if (selectedPadDigit === digit) {
+                    selectedPadDigit = null;
+                    tile.classList.remove('selected-num');
+                    highlightMatches('');
+                } else {
+                    clearSelectedPadTiles();
+                    tile.classList.add('selected-num');
+                    selectedPadDigit = digit;
+                    highlightMatches(digit);
+                }
+            } else if (selectedCell) {
+                updateCellValue(selectedCell, digit);
             } else {
-                if (selectedCell) updateCellValue(selectedCell, val);
-                else { if (currentHighlightVal === val) highlightMatches(''); else highlightMatches(val); }
+                highlightMatches(highlightedDigit === digit ? '' : digit);
             }
         }
 
         function isSelectedCellEditable() {
-            return selectedCell !== null && !selectedCell.classList.contains('locked') && !selectedCell.classList.contains('given');
+            return selectedCell !== null && isEditableCell(selectedCell);
         }
 
         function eraseSelectedCell() {
@@ -1092,216 +1431,97 @@
             return target.matches('input, select, textarea') && !target.matches('#sudoku-board input');
         }
 
-        function isMenuOpen() {
-            return document.querySelector('dialog[open]') !== null;
-        }
-
         function handleKeyboardInput(e) {
             if (fastFillMode || !isSelectedCellEditable()) return;
             if (e.ctrlKey || e.metaKey || e.altKey || isTypingInFormField(e.target) || isMenuOpen()) return;
+
             const key = e.key;
-            const validRegex = new RegExp('^[1-' + gridSize + ']$');
-            if (validRegex.test(key)) {
-                if (getNumTile(key).classList.contains('complete')) return;
-                updateCellValue(selectedCell, key);
-            }
-            else if (key === 'Backspace' || key === 'Delete') eraseSelectedCell();
-        }
-
-        function getBoardState() {
-            let board = Array.from({ length: gridSize }, () => Array(gridSize).fill(0));
-            getCellInputs().forEach(input => {
-                const [r, c] = getCellPosition(input);
-                if (input.value !== '') board[r][c] = parseInt(input.value);
-            });
-            return board;
-        }
-
-        function canPlace(board, row, col, num) {
-            for (let x = 0; x < gridSize; x++) {
-                if (board[row][x] === num) return false;
-                if (board[x][col] === num) return false;
-            }
-            if (subGridSize > 1) {
-                let startRow = row - (row % subGridSize);
-                let startCol = col - (col % subGridSize);
-                for (let i = 0; i < subGridSize; i++) {
-                    for (let j = 0; j < subGridSize; j++) {
-                        if (board[startRow + i][startCol + j] === num) return false;
-                    }
-                }
-            }
-            return true;
-        }
-
-        function hasConflict(board, row, col) {
-            let num = board[row][col];
-            if (num === 0) return false;
-            for (let i = 0; i < gridSize; i++) {
-                if (i !== col && board[row][i] === num) return true;
-                if (i !== row && board[i][col] === num) return true;
-            }
-            if (subGridSize > 1) {
-                let startRow = row - (row % subGridSize);
-                let startCol = col - (col % subGridSize);
-                for (let i = 0; i < subGridSize; i++) {
-                    for (let j = 0; j < subGridSize; j++) {
-                        let r = startRow + i;
-                        let c = startCol + j;
-                        if ((r !== row || c !== col) && board[r][c] === num) return true;
-                    }
-                }
-            }
-            return false;
-        }
-
-        function updateErrors() {
-            if (hardModeEnabled) {
-                getCellInputs().forEach(input => input.classList.remove('error-cell', 'anim-shake'));
-                return false;
-            }
-            let board = getBoardState();
-            let errorFound = false;
-            getCellInputs().forEach(input => {
-                const [r, c] = getCellPosition(input);
-
-                if (board[r][c] !== 0 && hasConflict(board, r, c)) {
-                    if (!input.classList.contains('given') && !input.classList.contains('locked')) {
-                        input.classList.add('error-cell');
-                    }
-                    errorFound = true;
-                } else {
-                    input.classList.remove('error-cell', 'anim-shake');
-                }
-            });
-            return errorFound;
-        }
-
-        function renderNotes() {
-            boardEl.querySelectorAll('.notes-display').forEach(display => { display.textContent = ''; });
-            getCellInputs().forEach((input, index) => {
-                if (input.value === '') {
-                    let notes = notesBoard[index] ? [...notesBoard[index]].sort((a,b) => a-b) : [];
-                    if (notes.length > 0) {
-                        let cutoff = Math.ceil(gridSize / 2);
-                        let topNotes = notes.filter(n => n <= cutoff).join('');
-                        let bottomNotes = notes.filter(n => n > cutoff).join('');
-                        
-                        input.parentElement.querySelector('.notes-top').textContent = topNotes;
-                        input.parentElement.querySelector('.notes-bottom').textContent = bottomNotes;
-                    }
-                }
-            });
-        }
-
-        function autoFillNotes() {
-            let board = getBoardState();
-            for (let i = 0; i < gridSize * gridSize; i++) {
-                let r = Math.floor(i / gridSize);
-                let c = i % gridSize;
-                if (board[r][c] === 0) {
-                    let possible = [];
-                    for (let n = 1; n <= gridSize; n++) {
-                        if (canPlace(board, r, c, n)) possible.push(n);
-                    }
-                    notesBoard[i] = possible;
-                } else {
-                    notesBoard[i] = [];
-                }
-            }
-            renderNotes();
-        }
-
-        function removeNotesFromAffected(row, col, val) {
-            let num = parseInt(val);
-            let g1 = subGridSize > 1 ? Math.floor(row / subGridSize) * subGridSize + Math.floor(col / subGridSize) : null;
-            
-            for (let i = 0; i < gridSize * gridSize; i++) {
-                let tr = Math.floor(i / gridSize);
-                let tc = i % gridSize;
-                let g2 = subGridSize > 1 ? Math.floor(tr / subGridSize) * subGridSize + Math.floor(tc / subGridSize) : null;
-                
-                if (tr === row || tc === col || (subGridSize > 1 && g1 === g2)) {
-                    if (notesBoard[i]) {
-                        notesBoard[i] = notesBoard[i].filter(n => n !== num);
-                    }
-                }
+            const isDigitOnBoard = /^[1-9]$/.test(key) && parseInt(key) <= gridSize;
+            if (isDigitOnBoard) {
+                if (!numTileByValue[key].classList.contains('complete')) updateCellValue(selectedCell, key);
+            } else if (key === 'Backspace' || key === 'Delete') {
+                eraseSelectedCell();
             }
         }
 
-        function updateCellValue(input, val) {
-            const [r, c] = getCellPosition(input);
-            const index = r * gridSize + c;
+        function playPopAnimation(input, durationMs) {
+            if (!animationsEnabled) return;
+            input.classList.add('anim-pop');
+            setTimeout(() => input.classList.remove('anim-pop'), durationMs);
+        }
 
-            // Handle manual note entry
-            if (noteMode && val !== 'erase' && input.value === '') {
-                let n = parseInt(val);
-                let currentNotes = notesBoard[index] || [];
-                
-                if (autoNotesToggle.checked) autoNotesToggle.checked = false;
-
-                if (currentNotes.includes(n)) {
-                    notesBoard[index] = currentNotes.filter(x => x !== n);
-                } else {
-                    notesBoard[index].push(n);
-                }
-                renderNotes();
-                updateNumberPad(); 
-                saveGameState();
-                return; 
-            }
-
-            input.classList.remove('anim-shake', 'error-cell', 'hint-highlight'); void input.offsetWidth;
-
-            if (input.value === String(val)) val = 'erase';
-
-            if (val === 'erase') {
-                if (input.value === '') {
-                    notesBoard[index] = [];
-                } else {
-                    input.value = '';
-                }
-
-                if (autoNotesToggle.checked) autoFillNotes();
-                else renderNotes();
-
-                if (!fastFillMode) highlightMatches('');
-                else if (currentHighlightVal !== '') highlightMatches(currentHighlightVal); 
-                
-                updateErrors(); updateNumberPad(); checkWinCondition(false); saveGameState(); return;
-            }
-
-            // Normal number placement
-            input.value = val;
-            notesBoard[index] = []; 
-            removeNotesFromAffected(r, c, val);
-
-            if (!fastFillMode) highlightMatches(val); 
-            else if (currentHighlightVal !== '') highlightMatches(currentHighlightVal); 
-
+        function refreshNotes() {
             if (autoNotesToggle.checked) autoFillNotes();
             else renderNotes();
+        }
 
-            if (!hardModeEnabled) {
-                let board = getBoardState();
+        // After an edit, digit-first input keeps its chosen digit highlighted; otherwise
+        // the highlight follows the cell that was edited
+        function refreshHighlightAfterEdit(editedDigit) {
+            if (!fastFillMode) highlightMatches(editedDigit);
+            else if (highlightedDigit !== '') highlightMatches(highlightedDigit);
+        }
 
-                if (parseInt(val) === solutionBoard[r][c]) {
-                    input.classList.add('locked');
-                    if (animationsEnabled) { input.classList.add('anim-pop'); setTimeout(() => input.classList.remove('anim-pop'), 350); }
-                } else if (hasConflict(board, r, c)) {
-                    input.classList.add('error-cell');
-                    if (animationsEnabled) input.classList.add('anim-shake');
-                    if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
-                } else {
-                    if (animationsEnabled) { input.classList.add('anim-pop'); setTimeout(() => input.classList.remove('anim-pop'), 350); }
-                }
-                updateErrors();
+        function toggleNote(index, digit) {
+            const notes = notesBoard[index];
+            notesBoard[index] = notes.includes(digit) ? notes.filter(note => note !== digit) : [...notes, digit];
+            // Typing notes by hand replaces the automatic ones
+            autoNotesToggle.checked = false;
+            renderNotes();
+            updateNumberPad();
+            saveGameState();
+        }
+
+        function eraseCell(input, index) {
+            if (input.value === '') notesBoard[index] = [];
+            else input.value = '';
+
+            refreshNotes();
+            refreshHighlightAfterEdit('');
+            updateErrors(); updateNumberPad(); checkWinCondition(false); saveGameState();
+        }
+
+        function placeDigitInCell(input, row, col, digit) {
+            input.value = digit;
+            notesBoard[row * gridSize + col] = [];
+            removeNotesFromPeers(row, col, digit);
+
+            refreshHighlightAfterEdit(digit);
+            refreshNotes();
+
+            // Hard mode ("Disable error checking") gives no feedback on the entry
+            const isCorrect = !hardModeEnabled && parseInt(digit) === solutionBoard[row][col];
+            const isVisibleMistake = !hardModeEnabled && !isCorrect && hasConflict(getBoardState(), row, col);
+            if (isVisibleMistake) {
+                input.classList.add('error-cell');
+                if (animationsEnabled) input.classList.add('anim-shake');
+                if (navigator.vibrate) navigator.vibrate(MISTAKE_VIBRATION_PATTERN_MS);
             } else {
-                if (animationsEnabled) { input.classList.add('anim-pop'); setTimeout(() => input.classList.remove('anim-pop'), 350); }
+                if (isCorrect) input.classList.add('locked');
+                playPopAnimation(input, CELL_POP_MS);
             }
+            if (!hardModeEnabled) updateErrors();
             updateNumberPad(); checkWinCondition(); saveGameState();
         }
 
+        // `value` is a digit, or 'erase'. Entering the digit a cell already holds erases it.
+        function updateCellValue(input, value) {
+            const [row, col] = getCellPosition(input);
+            const index = row * gridSize + col;
+
+            if (noteMode && value !== 'erase' && input.value === '') {
+                toggleNote(index, parseInt(value));
+                return;
+            }
+
+            input.classList.remove('anim-shake', 'error-cell', 'hint-highlight');
+            void input.offsetWidth; // reflow, so that a repeated shake plays again
+
+            if (value === 'erase' || input.value === String(value)) eraseCell(input, index);
+            else placeDigitInCell(input, row, col, value);
+        }
+
+        // --- Saved game ---
         // Storage can be blocked or full (private mode, quota); the game must still be playable.
         function readSavedState() {
             try {
@@ -1320,10 +1540,7 @@
         }
 
         function saveGameState() {
-            const userBoard = [];
-            getCellInputs().forEach(input => {
-                userBoard.push(input.value === '' ? 0 : parseInt(input.value));
-            });
+            const userBoard = cellInputs.map(input => (input.value === '' ? 0 : parseInt(input.value)));
             const state = {
                 solutionBoard: solutionBoard, currentBoard: currentBoard, userBoard: userBoard,
                 notesBoard: notesBoard,
@@ -1340,9 +1557,6 @@
             };
             writeSavedState(state);
         }
-
-        const SUPPORTED_GRID_SIZES = [4, 5, 9];
-        const HEX_COLOR_PATTERN = /^#[0-9a-f]{3,8}$/i;
 
         function isDigitGrid(grid, size, minDigit) {
             return Array.isArray(grid) && grid.length === size && grid.every(row =>
@@ -1388,21 +1602,8 @@
                 isAutoSolved: state.isAutoSolved === true,
                 elapsedMs: Number.isFinite(state.elapsedMs) && state.elapsedMs >= 0 ? state.elapsedMs : null,
                 hasGameFinished: state.hasGameFinished === true,
-                gameDifficulty: DIFFICULTY_NAMES[state.gameDifficulty] !== undefined ? String(state.gameDifficulty) : null
+                gameDifficulty: Object.hasOwn(DIFFICULTY_NAMES, state.gameDifficulty) ? String(state.gameDifficulty) : null
             };
-        }
-
-        // Small grids need no technique beyond singles, so Master cannot be generated there.
-        function updateMasterAvailability() {
-            const masterOption = difficultySelect.querySelector('option[value="75"]');
-            const isAvailable = parseInt(gridSizeSelect.value) >= 9;
-            if (!isAvailable && difficultySelect.value === '75') difficultySelect.value = '65';
-            masterOption.disabled = !isAvailable;
-        }
-
-        function setSelectValue(select, value, fallback) {
-            const isKnownOption = Array.from(select.options).some(option => option.value === String(value));
-            select.value = isKnownOption ? value : fallback;
         }
 
         function loadGameState() {
@@ -1416,8 +1617,8 @@
                 solutionBoard = state.solutionBoard; currentBoard = state.currentBoard;
 
                 const settings = state.settings;
-                setSelectValue(difficultySelect, settings.difficulty, '40');
-                setSelectValue(themeSelect, settings.theme, 'theme-light');
+                setSelectValue(difficultySelect, settings.difficulty, DEFAULT_DIFFICULTY);
+                setSelectValue(themeSelect, settings.theme, DEFAULT_THEME);
                 highlightToggle.checked = settings.highlight !== false;
                 // The toggle is "Disable animations" and the saved flag follows it: true means off
                 animationsToggle.checked = settings.animations === true;
@@ -1436,7 +1637,7 @@
                 gridSizeSelect.value = state.gridSize;
                 updateMasterAvailability();
 
-                notesBoard = state.notesBoard || Array(gridSize * gridSize).fill().map(() => []);
+                notesBoard = state.notesBoard || createEmptyNotes();
 
                 customThemeState = { ...customThemeState, ...state.customColors };
                 changeTheme(true);
@@ -1445,248 +1646,40 @@
                 if (!animationsEnabled) document.body.classList.add('animations-disabled');
                 highlightEnabled = highlightToggle.checked; hardModeEnabled = hardModeToggle.checked;
 
-                if (boardEl.querySelectorAll('.cell').length !== (gridSize * gridSize)) initGrid();
+                if (cellInputs.length !== gridSize * gridSize) initGrid();
 
                 renderBoard(false);
-                getCellInputs().forEach((input, index) => {
-                    const userVal = state.userBoard[index];
-                    if (userVal !== 0 && !input.classList.contains('given')) {
-                        input.value = userVal;
-                    }
+                cellInputs.forEach((input, index) => {
+                    const userDigit = state.userBoard[index];
+                    if (userDigit !== 0 && !input.classList.contains('given')) input.value = userDigit;
                 });
 
                 if (!hardModeEnabled) {
-                    getCellInputs().forEach((input, index) => {
-                        if (input.value !== '' && !input.classList.contains('given')) {
-                            const r = Math.floor(index / gridSize); const c = index % gridSize;
-                            if (parseInt(input.value) === solutionBoard[r][c]) {
-                                input.classList.add('locked');
-                            }
-                        }
-                    });
+                    cellInputs.filter(isCorrectPlayerEntry).forEach(input => input.classList.add('locked'));
                     updateErrors();
                 }
 
-                if (autoNotesToggle.checked) autoFillNotes();
-                else renderNotes();
+                refreshNotes();
 
                 if (state.isAutoSolved) setStatus('Puzzle Solved Automatically.', 'neutral', 'autoSolved');
                 updateNumberPad(); checkWinCondition(false); renderClock(); return true;
             } catch (e) { return false; }
         }
 
-        async function confirmSolveGame() {
-            const isConfirmed = await confirmAction({
-                title: 'Reveal the solution?',
-                message: 'This will end your current game.',
-                confirmLabel: 'Solve'
-            });
-            if (isConfirmed) solveGame();
-        }
-
-        function changeTheme(skipSave = false) {
-            const newTheme = themeSelect.value;
-            document.body.classList.remove('theme-light', 'theme-dark', 'theme-dracula', 'theme-custom');
-            document.body.classList.add(newTheme);
-            document.getElementById('custom-theme-panel').hidden = newTheme !== 'theme-custom';
-            if (newTheme === 'theme-custom') applyCustomTheme(true);
-            else {
-                const varsToClear = [
-                    '--bg-color', '--card-bg', '--controls-bg', '--grid-bg', '--grid-border', '--cell-bg', '--cell-given-bg', '--highlight-bg', '--cell-focus-bg',
-                    '--hint-bg', '--btn-hint-bg', '--text-main', '--text-muted', '--cell-given-text', '--cell-input-text', '--hint-text', '--btn-hint-text',
-                    '--link-color', '--nav-bg', '--btn-primary-bg', '--nav-text', '--btn-primary-text', '--cell-focus-shadow', '--pad-text'
-                ];
-                varsToClear.forEach(v => document.body.style.removeProperty(v));
-            }
-            updateQuickToggleIcon(); if (!skipSave) saveGameState();
-        }
-
-        function applyCustomTheme(skipSave = false) {
-            if (themeSelect.value !== 'theme-custom') return;
-            const themeVariables = {
-                '--bg-color': customThemeState.bg, '--card-bg': customThemeState.fg, '--controls-bg': customThemeState.fg, '--grid-bg': customThemeState.grid, '--grid-border': customThemeState.grid,
-                '--cell-bg': customThemeState.tile, '--cell-given-bg': customThemeState.tile, '--highlight-bg': customThemeState.tileHl, '--cell-focus-bg': customThemeState.tileHl,
-                '--hint-bg': customThemeState.hinted, '--btn-hint-bg': customThemeState.hinted, '--text-main': customThemeState.text, '--text-muted': customThemeState.text,
-                '--cell-given-text': customThemeState.text, '--cell-input-text': customThemeState.userText, '--hint-text': customThemeState.hintedText, '--btn-hint-text': customThemeState.hintedText,
-                '--link-color': customThemeState.link, '--cell-focus-shadow': customThemeState.link, '--nav-bg': customThemeState.btn, '--btn-primary-bg': customThemeState.btn,
-                '--nav-text': customThemeState.btnText, '--btn-primary-text': customThemeState.btnText, '--pad-text': customThemeState.text
-            };
-            Object.entries(themeVariables).forEach(([name, value]) => document.body.style.setProperty(name, value));
-            if (!skipSave) saveGameState();
-        }
-
-        // 'autoSolved' outlives board checks (and is saved); every other message is
-        // re-evaluated or cleared on the next board action.
-        let statusKind = 'none';
-
-        function setStatus(text, type, kind = 'none') {
-            statusKind = kind;
-            messageEl.textContent = text;
-            messageEl.classList.remove('msg-success', 'msg-error', 'msg-neutral');
-            messageEl.classList.add('msg-' + type);
-        }
-
-        function updateNumberPad() {
-            const counts = {}; for(let i=1; i<=gridSize; i++) counts[i] = 0;
-            getCellInputs().forEach(input => {
-                if (input.value !== '') counts[input.value]++;
-            });
-
-            let activePadComplete = false;
-
-            numTiles.forEach(tile => {
-                const val = tile.dataset.val;
-                if(val <= gridSize) {
-                    if (counts[val] >= gridSize) {
-                        tile.classList.add('complete');
-                        tile.classList.remove('active-hl', 'selected-num');
-                        if (currentHighlightVal === val) activePadComplete = true;
-                    }
-                    else {
-                        tile.classList.remove('complete');
-                    }
-                }
-
-                tile.classList.remove('note-active');
-                if (noteMode && !fastFillMode && selectedCell && selectedCell.value === '') {
-                    const [r, c] = getCellPosition(selectedCell);
-                    let cellNotes = notesBoard[r * gridSize + c] || [];
-                    if (cellNotes.includes(parseInt(val))) {
-                        tile.classList.add('note-active');
-                    }
-                }
-            });
-
-            if(selectedPadNum && counts[selectedPadNum] >= gridSize) {
-                selectedPadNum = null;
-                highlightMatches('');
-            } else if (activePadComplete) {
-                highlightMatches('');
-            }
-        }
-
-        function toggleHighlightSetting() {
-            highlightEnabled = highlightToggle.checked;
-            if (!highlightEnabled) clearHighlights(); else if (currentHighlightVal !== '') highlightMatches(currentHighlightVal);
-            saveGameState();
-        }
-
-        function clearHighlights() {
-            getCellInputs().forEach(input => input.classList.remove('highlight-match', 'constraint-line'));
-            numTiles.forEach(tile => { if (!tile.classList.contains('selected-num')) tile.classList.remove('active-hl'); });
-            currentHighlightVal = '';
-        }
-
-        function highlightMatches(val) {
-            clearHighlights(); currentHighlightVal = val;
-            if (!highlightEnabled || val === '') return;
-
-            let constraintRows = new Set();
-            let constraintCols = new Set();
-
-            getCellInputs().forEach(input => {
-                if (input.value == val) {
-                    const [r, c] = getCellPosition(input);
-
-                    input.classList.add('highlight-match');
-                    constraintRows.add(r);
-                    constraintCols.add(c);
-                }
-            });
-
-            if (constraintsEnabled) {
-                getCellInputs().forEach(input => {
-                    const [r, c] = getCellPosition(input);
-
-                    let isRowConstrained = constraintRows.has(r);
-                    let isColConstrained = constraintCols.has(c);
-
-                    if (input.value != val) {
-                        if (isRowConstrained || isColConstrained) {
-                            input.classList.add('constraint-line');
-                        }
-                    }
-                });
-            }
-
-            const matchingTile = getNumTile(val);
-            if(!fastFillMode && matchingTile && !matchingTile.classList.contains('complete')) matchingTile.classList.add('active-hl');
-        }
-
-        function toggleAnimationSetting() {
-            animationsEnabled = !animationsToggle.checked;
-            if (!animationsEnabled) {
-                document.body.classList.add('animations-disabled'); stopFireworks();
-                getCellInputs().forEach(input => {
-                    input.classList.remove('anim-pop', 'anim-shake', 'anim-wave');
-                    input.style.animationDelay = '0ms';
-                });
-            } else document.body.classList.remove('animations-disabled');
-            saveGameState();
-        }
-
-        function toggleHardMode() {
-            hardModeEnabled = hardModeToggle.checked;
-            if (!hardModeEnabled) {
-                getCellInputs().forEach(input => {
-                    if (input.value !== '' && !input.classList.contains('given')) {
-                        const [r, c] = getCellPosition(input);
-                        if (parseInt(input.value) === solutionBoard[r][c]) {
-                            input.classList.add('locked');
-                            input.classList.remove('error-cell', 'anim-shake');
-                        }
-                    }
-                });
-            } else {
-                getCellInputs().forEach(input => input.classList.remove('locked', 'error-cell', 'anim-shake'));
-            }
-            updateErrors();
-            checkWinCondition(); saveGameState();
-        }
-
-        function initGrid() {
-            boardEl.replaceChildren();
-            notesBoard = Array(gridSize * gridSize).fill().map(() => []);
-            const totalCells = gridSize * gridSize;
-            for (let i = 0; i < totalCells; i++) {
-                const row = Math.floor(i / gridSize); const col = i % gridSize;
-                const cell = document.createElement('div');
-                cell.className = 'cell';
-                const input = document.createElement('input');
-                input.type = 'text'; input.inputMode = 'none'; input.readOnly = true;
-                input.dataset.row = row; input.dataset.col = col;
-                input.addEventListener('click', handleCellClick);
-                const notesTop = document.createElement('div');
-                notesTop.className = 'notes-display notes-top';
-                const notesBottom = document.createElement('div');
-                notesBottom.className = 'notes-display notes-bottom';
-                cell.append(input, notesTop, notesBottom); boardEl.append(cell);
-            }
-        }
-
-        function isSafe(board, row, col, num) {
-            for (let x = 0; x < gridSize; x++) if (board[row][x] === num || board[x][col] === num) return false;
-            if (subGridSize > 1) {
-                let startRow = row - (row % subGridSize), startCol = col - (col % subGridSize);
-                for (let i = 0; i < subGridSize; i++) for (let j = 0; j < subGridSize; j++) if (board[i + startRow][j + startCol] === num) return false;
-            }
-            return true;
-        }
-
+        // --- Solving by search ---
+        // Fills the empty cells with a random valid solution by backtracking; false if there is none
         function fillBoard(board) {
-            for (let i = 0; i < gridSize; i++) {
-                for (let j = 0; j < gridSize; j++) {
-                    if (board[i][j] === 0) {
-                        let nums = Array.from({length: gridSize}, (_, k) => k + 1).sort(() => Math.random() - 0.5);
-                        for (let num of nums) {
-                            if (isSafe(board, i, j, num)) {
-                                board[i][j] = num;
-                                if (fillBoard(board)) return true;
-                                board[i][j] = 0; 
-                            }
-                        }
-                        return false;
+            for (let row = 0; row < gridSize; row++) {
+                for (let col = 0; col < gridSize; col++) {
+                    if (board[row][col] !== 0) continue;
+                    const digitsInRandomOrder = Array.from({ length: gridSize }, (_, i) => i + 1).sort(() => Math.random() - 0.5);
+                    for (const digit of digitsInRandomOrder) {
+                        if (!canPlace(board, row, col, digit)) continue;
+                        board[row][col] = digit;
+                        if (fillBoard(board)) return true;
+                        board[row][col] = 0;
                     }
+                    return false;
                 }
             }
             return true;
@@ -1700,7 +1693,6 @@
             const usedInRow = Array(gridSize).fill(0);
             const usedInCol = Array(gridSize).fill(0);
             const usedInBox = Array(boxCount).fill(0);
-            const boxOf = (r, c) => Math.floor(r / subGridSize) * subGridSize + Math.floor(c / subGridSize);
             const emptyCells = [];
 
             for (let r = 0; r < gridSize; r++) {
@@ -1708,7 +1700,7 @@
                     if (board[r][c] === 0) { emptyCells.push([r, c]); continue; }
                     const bit = 1 << (board[r][c] - 1);
                     usedInRow[r] |= bit; usedInCol[c] |= bit;
-                    if (boxCount) usedInBox[boxOf(r, c)] |= bit;
+                    if (boxCount) usedInBox[getBoxIndex(r, c)] |= bit;
                 }
             }
 
@@ -1719,7 +1711,7 @@
                 let bestIndex = -1; let bestCandidates = 0; let bestCount = gridSize + 1;
                 for (let i = 0; i < remaining; i++) {
                     const [r, c] = emptyCells[i];
-                    const used = usedInRow[r] | usedInCol[c] | (boxCount ? usedInBox[boxOf(r, c)] : 0);
+                    const used = usedInRow[r] | usedInCol[c] | (boxCount ? usedInBox[getBoxIndex(r, c)] : 0);
                     const candidates = allDigits & ~used;
                     let count = 0;
                     for (let m = candidates; m; m &= m - 1) count++;
@@ -1736,10 +1728,10 @@
                 for (let m = bestCandidates; m && found < limit; m &= m - 1) {
                     const bit = m & -m;
                     usedInRow[r] |= bit; usedInCol[c] |= bit;
-                    if (boxCount) usedInBox[boxOf(r, c)] |= bit;
+                    if (boxCount) usedInBox[getBoxIndex(r, c)] |= bit;
                     search(remaining - 1);
                     usedInRow[r] &= ~bit; usedInCol[c] &= ~bit;
-                    if (boxCount) usedInBox[boxOf(r, c)] &= ~bit;
+                    if (boxCount) usedInBox[getBoxIndex(r, c)] &= ~bit;
                 }
             }
             search(emptyCells.length);
@@ -1790,22 +1782,28 @@
             return geometryByGridSize[gridSize] = { houses, housesOfCell, sees, peers };
         }
 
+        // Digits and cells are held as bit masks, bit i standing for digit i + 1 (or the i-th cell of a house)
         function bitCount(mask) {
             let count = 0;
             for (; mask; mask &= mask - 1) count++;
             return count;
         }
 
-        function createLogicState(board) {
+        function isBitSet(mask, bitIndex) {
+            return ((mask >> bitIndex) & 1) === 1;
+        }
+
+        function createLogicState(board, maxChainNodes) {
             const cellCount = gridSize * gridSize;
             const allDigits = (1 << gridSize) - 1;
             const state = {
                 gridSize, cellCount, allDigits, geometry: getGeometry(),
                 values: Array(cellCount).fill(0), candidates: Array(cellCount).fill(allDigits), emptyCount: cellCount,
-                maxChainNodes: MAX_CHAIN_NODES
+                maxChainNodes
             };
             for (let cell = 0; cell < cellCount; cell++) {
-                const digit = board[Math.floor(cell / gridSize)][cell % gridSize];
+                const [row, col] = getPositionOfIndex(cell);
+                const digit = board[row][col];
                 if (digit !== 0) placeDigit(state, cell, digit - 1);
             }
             return state;
@@ -1851,8 +1849,8 @@
             return extend(0);
         }
 
-        function cellsWithDigit(state, house, digitIndex) {
-            return house.filter(cell => (state.candidates[cell] >> digitIndex) & 1);
+        function cellsWithDigit(state, cells, digitIndex) {
+            return cells.filter(cell => isBitSet(state.candidates[cell], digitIndex));
         }
 
         function applyNakedSingle(state) {
@@ -1917,7 +1915,7 @@
                 const digits = [];
                 for (let d = 0; d < state.gridSize; d++) {
                     let mask = 0;
-                    house.forEach((cell, i) => { if ((state.candidates[cell] >> d) & 1) mask |= 1 << i; });
+                    house.forEach((cell, i) => { if (isBitSet(state.candidates[cell], d)) mask |= 1 << i; });
                     cellMaskOfDigit[d] = mask;
                     if (bitCount(mask) >= 2 && bitCount(mask) <= k) digits.push(d);
                 }
@@ -1925,7 +1923,7 @@
                     const cellMask = combo.reduce((mask, d) => mask | cellMaskOfDigit[d], 0);
                     if (bitCount(cellMask) !== k) return false;
                     const ownDigits = combo.reduce((mask, d) => mask | (1 << d), 0);
-                    const ownCells = house.filter((cell, i) => (cellMask >> i) & 1);
+                    const ownCells = house.filter((cell, i) => isBitSet(cellMask, i));
                     return eliminateFromCells(state, ownCells, state.allDigits & ~ownDigits);
                 });
                 if (found) return true;
@@ -1945,7 +1943,7 @@
                     for (let base = 0; base < n; base++) {
                         let mask = 0;
                         for (let cover = 0; cover < n; cover++) {
-                            if ((state.candidates[cellAt(base, cover)] >> d) & 1) mask |= 1 << cover;
+                            if (isBitSet(state.candidates[cellAt(base, cover)], d)) mask |= 1 << cover;
                         }
                         coverMaskOfBase[base] = mask;
                         if (bitCount(mask) >= 2 && bitCount(mask) <= size) bases.push(base);
@@ -1955,7 +1953,7 @@
                         if (bitCount(coverMask) !== size) return false;
                         const victims = [];
                         for (let cover = 0; cover < n; cover++) {
-                            if (!((coverMask >> cover) & 1)) continue;
+                            if (!isBitSet(coverMask, cover)) continue;
                             for (let base = 0; base < n; base++) {
                                 if (!combo.includes(base)) victims.push(cellAt(base, cover));
                             }
@@ -2036,7 +2034,7 @@
                 if (pair !== state.candidates[second] || seesCell(state, first, second)) return false;
                 const victims = state.geometry.peers[first].filter(cell => seesCell(state, cell, second));
                 for (let a = 0; a < state.gridSize; a++) {
-                    if (!((pair >> a) & 1)) continue;
+                    if (!isBitSet(pair, a)) continue;
                     const otherDigit = pair & ~(1 << a);
                     for (const [endA, endB] of findStrongLinks(state, a)) {
                         const bridges = linkBridges(state, [endA, endB], first, second)
@@ -2098,7 +2096,7 @@
                     const victims = [];
                     for (let cell = 0; cell < state.cellCount; cell++) {
                         const isChainCell = chain[0].includes(cell) || chain[1].includes(cell);
-                        if (!((state.candidates[cell] >> d) & 1) || isChainCell) continue;
+                        if (!isBitSet(state.candidates[cell], d) || isChainCell) continue;
                         const seesColour = colour => chain[colour].some(chainCell => seesCell(state, cell, chainCell));
                         if (seesColour(0) && seesColour(1)) victims.push(cell);
                     }
@@ -2141,12 +2139,12 @@
             for (let cell = 0; cell < state.cellCount; cell++) {
                 const mask = state.candidates[cell];
                 for (let d = 0; d < n; d++) {
-                    if (!((mask >> d) & 1)) continue;
+                    if (!isBitSet(mask, d)) continue;
                     for (let other = 0; other < n; other++) {
-                        if (other !== d && (mask >> other) & 1) weak[cell * n + d].push(cell * n + other);
+                        if (other !== d && isBitSet(mask, other)) weak[cell * n + d].push(cell * n + other);
                     }
                     for (const peer of state.geometry.peers[cell]) {
-                        if ((state.candidates[peer] >> d) & 1) weak[cell * n + d].push(peer * n + d);
+                        if (isBitSet(state.candidates[peer], d)) weak[cell * n + d].push(peer * n + d);
                     }
                 }
                 if (bitCount(mask) === 2) {
@@ -2246,10 +2244,6 @@
             return [...sets.values()];
         }
 
-        function cellsHoldingDigit(state, cells, digitIndex) {
-            return cells.filter(cell => (state.candidates[cell] >> digitIndex) & 1);
-        }
-
         // ALS-XZ: two almost locked sets that share no cell and have a digit x such that every
         // x cell of one sees every x cell of the other (x is "restricted"). One set must then be
         // without x, which locks it onto its other digits, so a second shared digit z is in one of
@@ -2262,16 +2256,16 @@
                     const shared = setA.digits & setB.digits;
                     if (bitCount(shared) < 2 || setA.cells.some(cell => setB.cells.includes(cell))) continue;
                     for (let x = 0; x < state.gridSize; x++) {
-                        if (!((shared >> x) & 1)) continue;
-                        const xCellsA = cellsHoldingDigit(state, setA.cells, x);
-                        const xCellsB = cellsHoldingDigit(state, setB.cells, x);
+                        if (!isBitSet(shared, x)) continue;
+                        const xCellsA = cellsWithDigit(state, setA.cells, x);
+                        const xCellsB = cellsWithDigit(state, setB.cells, x);
                         const isRestricted = xCellsA.every(a => xCellsB.every(b => seesCell(state, a, b)));
                         if (!isRestricted) continue;
                         for (let z = 0; z < state.gridSize; z++) {
-                            if (z === x || !((shared >> z) & 1)) continue;
+                            if (z === x || !isBitSet(shared, z)) continue;
                             const zCells = [
-                                ...cellsHoldingDigit(state, setA.cells, z),
-                                ...cellsHoldingDigit(state, setB.cells, z)
+                                ...cellsWithDigit(state, setA.cells, z),
+                                ...cellsWithDigit(state, setB.cells, z)
                             ];
                             const victims = state.geometry.peers[zCells[0]].filter(cell => (
                                 zCells.every(zCell => seesCell(state, cell, zCell))
@@ -2312,8 +2306,7 @@
         // tried, so a board that gets stuck there returns maxTier + 1 (UNSOLVED_BY_LOGIC when even
         // Master gets stuck).
         function rateByLogic(board, maxTier = TIER.MASTER, maxChainNodes = MAX_CHAIN_NODES) {
-            const state = createLogicState(board);
-            state.maxChainNodes = maxChainNodes;
+            const state = createLogicState(board, maxChainNodes);
             let hardest = TIER.EASY;
             while (state.emptyCount > 0) {
                 const step = LOGIC_TECHNIQUES.find(technique => technique.tier <= maxTier && technique.apply(state));
@@ -2419,9 +2412,7 @@
             return generateCandidate(wanted, solvableTier, givensRange, Infinity);
         }
 
-        // Bumped by every new game; delayed callbacks from an earlier game check it and give up.
-        let gameGeneration = 0;
-
+        // --- Game flow ---
         function runInCurrentGame(callback, delayMs) {
             const generationWhenScheduled = gameGeneration;
             setTimeout(() => {
@@ -2429,12 +2420,8 @@
             }, delayMs);
         }
 
-        function hasNotes() {
-            return notesBoard.some(cellNotes => cellNotes.length > 0);
-        }
-
         function hasPlayerProgress() {
-            const hasEntries = Array.from(getCellInputs()).some(input => !input.classList.contains('given') && input.value !== '');
+            const hasEntries = cellInputs.some(input => !input.classList.contains('given') && input.value !== '');
             return hasEntries || hasNotes();
         }
 
@@ -2473,61 +2460,38 @@
             gameDifficulty = difficultySelect.value;
             startNewClock();
 
-            notesBoard = Array(gridSize * gridSize).fill().map(() => []);
-            renderBoard(true); 
-            
-            if (autoNotesToggle.checked) autoFillNotes();
-            else renderNotes();
+            notesBoard = createEmptyNotes();
+            renderBoard(true);
+            refreshNotes();
 
             updateNumberPad(); saveGameState(); renderClock();
         }
 
-        function renderBoard(animated = false) {
-            getCellInputs().forEach((input, index) => {
-                const r = Math.floor(index / gridSize); const c = index % gridSize;
-                const val = currentBoard[r][c];
-
-                input.value = val === 0 ? '' : val;
-                input.classList.remove('given', 'locked', 'anim-pop', 'anim-shake', 'anim-wave', 'error-cell', 'hint-highlight', 'highlight-match', 'selected-cell', 'constraint-line');
-                input.style.animationDelay = '0ms';
-                if (val !== 0) input.classList.add('given');
-
-                if (animated && animationsEnabled) {
-                    input.classList.add('anim-pop');
-                    input.style.animationDelay = `${(r * gridSize + c) * 3}ms`;
-                    setTimeout(() => {
-                        input.classList.remove('anim-pop');
-                        input.style.animationDelay = '0ms';
-                    }, 500 + ((r * gridSize + c) * 3));
-                }
-            });
-        }
-
         function revealHintCell(input, digit) {
-            const [r, c] = getCellPosition(input);
+            const [row, col] = getCellPosition(input);
 
             input.value = digit;
             input.classList.remove('anim-shake', 'error-cell', 'selected-cell');
             input.classList.add('hint-highlight'); selectCell(input);
             if (!hardModeEnabled) input.classList.add('locked');
-            if (animationsEnabled) { input.classList.add('anim-pop'); setTimeout(() => input.classList.remove('anim-pop'), 400); }
-            setTimeout(() => input.classList.remove('hint-highlight'), 1200);
+            playPopAnimation(input, HINT_POP_MS);
+            setTimeout(() => input.classList.remove('hint-highlight'), HINT_HIGHLIGHT_MS);
 
-            notesBoard[r * gridSize + c] = [];
-            removeNotesFromAffected(r, c, digit);
+            notesBoard[row * gridSize + col] = [];
+            removeNotesFromPeers(row, col, digit);
         }
 
         function giveHint() {
             if (statusKind === 'autoSolved') return;
             stopFireworks(); clearHighlights(); setStatus('', 'neutral');
-            if(fastFillMode) { fastFillToggle.checked = false; toggleFastFill(); } 
+            if (fastFillMode) { fastFillToggle.checked = false; toggleFastFill(); }
 
             const wrongCells = [];
             const emptyCells = [];
-            getCellInputs().forEach(input => {
-                const [r, c] = getCellPosition(input);
+            cellInputs.forEach(input => {
+                const [row, col] = getCellPosition(input);
                 if (input.value === '') emptyCells.push(input);
-                else if (!input.classList.contains('given') && parseInt(input.value) !== solutionBoard[r][c]) wrongCells.push(input);
+                else if (!input.classList.contains('given') && parseInt(input.value) !== solutionBoard[row][col]) wrongCells.push(input);
             });
 
             // Mistakes come first, so the hint never builds on a wrong value
@@ -2535,14 +2499,13 @@
             let hintMessage = 'No hints needed! The board is currently correct.';
             if (hintCells.length > 0) {
                 const hintCell = hintCells[Math.floor(Math.random() * hintCells.length)];
-                const [r, c] = getCellPosition(hintCell);
-                revealHintCell(hintCell, solutionBoard[r][c]);
+                const [row, col] = getCellPosition(hintCell);
+                revealHintCell(hintCell, solutionBoard[row][col]);
                 addHintPenalty();
                 hintMessage = wrongCells.length > 0 ? 'Corrected a mistake to help you progress!' : '';
             }
-            
-            if (autoNotesToggle.checked) autoFillNotes();
-            else renderNotes();
+
+            refreshNotes();
 
             updateErrors(); updateNumberPad(); checkWinCondition();
             // A win or hard-mode verdict from the check above takes precedence over the hint text
@@ -2550,136 +2513,148 @@
             saveGameState();
         }
 
+        async function confirmSolveGame() {
+            const isConfirmed = await confirmAction({
+                title: 'Reveal the solution?',
+                message: 'This will end your current game.',
+                confirmLabel: 'Solve'
+            });
+            if (isConfirmed) solveGame();
+        }
+
+        // The player's own entries are kept when they can still be completed; otherwise the
+        // generated solution is shown
+        function getSolutionToReveal() {
+            const board = getBoardState();
+            const hasConflicts = board.some((rowDigits, row) => rowDigits.some((_, col) => hasConflict(board, row, col)));
+            if (hasConflicts) return solutionBoard;
+
+            const completedBoard = board.map(rowDigits => [...rowDigits]);
+            return fillBoard(completedBoard) ? completedBoard : solutionBoard;
+        }
+
         function solveGame() {
-            let staggerIndex = 0;
             setStatus('Solving...', 'neutral'); stopFireworks(); clearHighlights(); selectCell(null);
             freezeClock(); hasGameFinished = true;
 
-            let board = getBoardState();
-            let tempBoard = board.map(row => [...row]);
-            let isSolvable = false;
-            let hasAnyConflicts = false;
-            
-            for(let r=0; r<gridSize; r++){
-                for(let c=0; c<gridSize; c++){
-                    if(hasConflict(board, r, c)) hasAnyConflicts = true;
-                }
-            }
-            
-            if (!hasAnyConflicts) isSolvable = fillBoard(tempBoard);
-            let finalSolution = isSolvable ? tempBoard : solutionBoard;
-
-            notesBoard = Array(gridSize * gridSize).fill().map(() => []);
+            const solution = getSolutionToReveal();
+            notesBoard = createEmptyNotes();
             renderNotes();
 
-            getCellInputs().forEach((input, index) => {
-                const r = Math.floor(index / gridSize); const c = index % gridSize;
-                if (!input.classList.contains('given') && (input.value == '' || parseInt(input.value) !== finalSolution[r][c])) {
-                    if (!hardModeEnabled) input.classList.add('locked');
-                    if (animationsEnabled) {
-                        runInCurrentGame(() => {
-                            input.value = finalSolution[r][c];
-                            input.classList.remove('anim-shake', 'error-cell', 'hint-highlight', 'selected-cell');
-                            input.classList.add('anim-pop');
-                            updateNumberPad();
-                        }, staggerIndex * 15);
-                        staggerIndex++;
-                    } else {
-                        input.value = finalSolution[r][c];
+            let animatedRevealCount = 0;
+            cellInputs.forEach((input, index) => {
+                const [row, col] = getPositionOfIndex(index);
+                const digit = solution[row][col];
+                const needsReveal = !input.classList.contains('given') && (input.value === '' || parseInt(input.value) !== digit);
+                if (!needsReveal) return;
+
+                if (!hardModeEnabled) input.classList.add('locked');
+                if (animationsEnabled) {
+                    runInCurrentGame(() => {
+                        input.value = digit;
                         input.classList.remove('anim-shake', 'error-cell', 'hint-highlight', 'selected-cell');
-                    }
+                        input.classList.add('anim-pop');
+                        updateNumberPad();
+                    }, animatedRevealCount * SOLVE_REVEAL_STAGGER_MS_PER_CELL);
+                    animatedRevealCount++;
+                } else {
+                    input.value = digit;
+                    input.classList.remove('anim-shake', 'error-cell', 'hint-highlight', 'selected-cell');
                 }
             });
-            
-            if(!animationsEnabled) updateNumberPad();
-            runInCurrentGame(() => { 
+
+            if (!animationsEnabled) updateNumberPad();
+            runInCurrentGame(() => {
                 updateErrors();
                 setStatus('Puzzle Solved Automatically.', 'neutral', 'autoSolved'); saveGameState(); renderClock();
-            }, (staggerIndex * 15) + 100);
+            }, animatedRevealCount * SOLVE_REVEAL_STAGGER_MS_PER_CELL + SOLVE_FINISH_DELAY_MS);
         }
-        
+
+        // A wave of enlarged cells runs from the top left to the bottom right corner
         function triggerWaveAnimation() {
             if (!animationsEnabled) return;
-            getCellInputs().forEach(input => {
-                const [r, c] = getCellPosition(input);
-                const delay = (r + c) * 50;
-
+            cellInputs.forEach(input => {
+                const [row, col] = getCellPosition(input);
                 runInCurrentGame(() => {
                     input.classList.add('anim-wave');
-                    setTimeout(() => input.classList.remove('anim-wave'), 600);
-                }, delay);
+                    setTimeout(() => input.classList.remove('anim-wave'), WAVE_MS);
+                }, (row + col) * WAVE_STAGGER_MS_PER_DIAGONAL);
             });
         }
 
         function checkWinCondition(triggerEffects = true) {
             if (statusKind === 'autoSolved') return;
 
-            let board = getBoardState();
-            let isComplete = true; let hasErrors = false;
-
-            for (let r = 0; r < gridSize; r++) {
-                for (let c = 0; c < gridSize; c++) {
-                    if (board[r][c] === 0) isComplete = false;
-                    if (board[r][c] !== 0 && hasConflict(board, r, c)) hasErrors = true;
-                }
-            }
+            const board = getBoardState();
+            const isComplete = board.every(rowDigits => rowDigits.every(digit => digit !== 0));
+            const hasErrors = board.some((rowDigits, row) => rowDigits.some((_, col) => hasConflict(board, row, col)));
 
             setStatus('', 'neutral');
+            if (!isComplete) return;
 
-            if (isComplete) {
-                if (!hasErrors) {
-                    setStatus(describeWin(finishTimedGame(triggerEffects)), 'success');
-                    clearHighlights(); selectCell(null); 
-                    if (animationsEnabled && triggerEffects) {
-                        triggerWaveAnimation();
-                        startFireworks();
-                    }
-                } else if (hardModeEnabled) setStatus('Board filled, but there are mistakes!', 'error');
+            if (!hasErrors) {
+                setStatus(describeWin(finishTimedGame(triggerEffects)), 'success');
+                clearHighlights(); selectCell(null);
+                if (animationsEnabled && triggerEffects) {
+                    triggerWaveAnimation();
+                    startFireworks();
+                }
+            } else if (hardModeEnabled) {
+                setStatus('Board filled, but there are mistakes!', 'error');
             }
         }
 
-        // --- Realistic Firework Engine ---
+        // --- Fireworks ---
+        // Start after the wave animation has begun
+        const FIREWORKS_START_DELAY_MS = 600;
+        const FIREWORK_BURST_INTERVAL_MS = 350;
+        const FIREWORK_BURST_COUNT = 16;
+        const PARTICLES_PER_BURST = 70;
+        const PARTICLE_FRICTION = 0.94;
+        const PARTICLE_GRAVITY = 0.1;
+        const PARTICLE_TRAIL_POINTS = 4;
+        const PARTICLE_FADE_OUT_LIFE = 60; // a particle starts fading when its life drops below this
+        const TRAIL_FADE_ALPHA = 0.15; // how much of the previous frame is wiped each frame
+
         const ctx = fireworkCanvas.getContext('2d');
-        let particles = []; 
-        let fireworkInterval; 
+        let particles = [];
+        let fireworkInterval;
         let fireworkStartTimeout;
         let animationFrameId;
         let isFiring = false;
+        let canInterruptFireworks = false; // set once the player may skip the show
 
-        function resizeCanvas() { 
+        function resizeCanvas() {
             fireworkCanvas.width = fireworkCanvas.offsetWidth;
             fireworkCanvas.height = fireworkCanvas.offsetHeight;
         }
 
         class Particle {
             constructor(x, y, hue) {
-                this.x = x; 
-                this.y = y; 
+                this.x = x;
+                this.y = y;
                 this.color = `hsl(${hue}, 100%, 60%)`;
                 this.angle = Math.random() * Math.PI * 2;
-                this.speed = Math.random() * 6 + 2; 
-                this.friction = 0.94;
-                this.gravity = 0.1;
+                this.speed = Math.random() * 6 + 2;
                 this.life = Math.random() * 80 + 40;
                 this.opacity = 1;
                 this.size = Math.random() * 2.5 + 1.5;
-                this.coords = [];
-                for(let i=0; i<4; i++) this.coords.push([x,y]);
+                this.coords = Array.from({ length: PARTICLE_TRAIL_POINTS }, () => [x, y]);
             }
             update() {
                 this.coords.pop();
                 this.coords.unshift([this.x, this.y]);
-                this.speed *= this.friction;
+                this.speed *= PARTICLE_FRICTION;
                 this.x += Math.cos(this.angle) * this.speed;
-                this.y += Math.sin(this.angle) * this.speed + this.gravity;
+                this.y += Math.sin(this.angle) * this.speed + PARTICLE_GRAVITY;
                 this.life -= 1;
-                this.opacity = Math.max(0, this.life / 60);
+                this.opacity = Math.max(0, this.life / PARTICLE_FADE_OUT_LIFE);
             }
             draw() {
                 ctx.globalAlpha = this.opacity;
                 ctx.beginPath();
-                const last = this.coords[this.coords.length - 1];
-                ctx.moveTo(last[0], last[1]);
+                const trailEnd = this.coords[this.coords.length - 1];
+                ctx.moveTo(trailEnd[0], trailEnd[1]);
                 ctx.lineTo(this.x, this.y);
                 ctx.strokeStyle = this.color;
                 ctx.lineWidth = this.size;
@@ -2692,8 +2667,8 @@
             const x = (fireworkCanvas.width * 0.2) + Math.random() * (fireworkCanvas.width * 0.6);
             const y = (fireworkCanvas.height * 0.1) + Math.random() * (fireworkCanvas.height * 0.4);
             const baseHue = Math.floor(Math.random() * 360);
-            
-            for (let i = 0; i < 70; i++) {
+
+            for (let i = 0; i < PARTICLES_PER_BURST; i++) {
                 const hue = baseHue + (Math.random() * 30 - 15);
                 particles.push(new Particle(x, y, hue));
             }
@@ -2701,20 +2676,21 @@
 
         function particleLoop() {
             if (!animationsEnabled) return;
-            
+
+            // Wiping only part of the last frame leaves the fading trails
             ctx.globalCompositeOperation = 'destination-out';
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.15)'; 
+            ctx.fillStyle = `rgba(0, 0, 0, ${TRAIL_FADE_ALPHA})`;
             ctx.fillRect(0, 0, fireworkCanvas.width, fireworkCanvas.height);
             ctx.globalCompositeOperation = 'source-over';
 
-            particles.forEach(p => { 
-                p.update(); 
-                p.draw(); 
+            particles.forEach(particle => {
+                particle.update();
+                particle.draw();
             });
-            particles = particles.filter(p => p.life > 0);
-            
-            if (particles.length > 0 || isFiring) { 
-                animationFrameId = requestAnimationFrame(particleLoop); 
+            particles = particles.filter(particle => particle.life > 0);
+
+            if (particles.length > 0 || isFiring) {
+                animationFrameId = requestAnimationFrame(particleLoop);
             } else {
                 fireworkCanvas.classList.remove('visible');
                 canInterruptFireworks = false;
@@ -2724,41 +2700,71 @@
 
         function startFireworks() {
             if (!animationsEnabled) return;
-            stopFireworks(); 
-            resizeCanvas(); 
+            stopFireworks();
+            resizeCanvas();
             fireworkCanvas.classList.add('visible');
             particles = [];
             isFiring = true;
             canInterruptFireworks = false;
-            
-            let fwCount = 0;
-            
-            // Delay fireworks slightly so the wave effect goes first
+
+            let burstsFired = 0;
             fireworkStartTimeout = setTimeout(() => {
-                canInterruptFireworks = true; // User can skip fireworks starting from now
+                canInterruptFireworks = true;
                 fireworkInterval = setInterval(() => {
                     createExplosion();
-                    fwCount++;
-                    if (fwCount > 15) { // Twice as long
+                    burstsFired++;
+                    if (burstsFired >= FIREWORK_BURST_COUNT) {
                         clearInterval(fireworkInterval);
                         isFiring = false;
                     }
-                }, 350);
-            }, 600); 
-            
+                }, FIREWORK_BURST_INTERVAL_MS);
+            }, FIREWORKS_START_DELAY_MS);
+
             if (!animationFrameId) particleLoop();
         }
 
         function stopFireworks() {
             clearTimeout(fireworkStartTimeout);
-            clearInterval(fireworkInterval); 
-            cancelAnimationFrame(animationFrameId); 
-            animationFrameId = null; 
+            clearInterval(fireworkInterval);
+            cancelAnimationFrame(animationFrameId);
+            animationFrameId = null;
             particles = [];
             isFiring = false;
             canInterruptFireworks = false;
-            if (ctx) ctx.clearRect(0, 0, fireworkCanvas.width, fireworkCanvas.height); 
+            ctx.clearRect(0, 0, fireworkCanvas.width, fireworkCanvas.height);
             fireworkCanvas.classList.remove('visible');
+        }
+
+        // --- Start ---
+        function initPage() {
+            initDialogs();
+
+            // Attached first so input keeps working whatever happens while loading or generating
+            difficultySelect.addEventListener('change', saveGameState);
+            gridSizeSelect.addEventListener('change', updateMasterAvailability);
+            numTiles.forEach(tile => tile.addEventListener('click', handlePadClick));
+            eraseTile.addEventListener('click', eraseSelectedCell);
+            document.addEventListener('keydown', handleKeyboardInput);
+
+            // Allow interruption of fireworks
+            ['mousedown', 'touchstart', 'keydown'].forEach(eventName => {
+                document.addEventListener(eventName, () => {
+                    if (canInterruptFireworks && fireworkCanvas.classList.contains('visible')) {
+                        stopFireworks();
+                    }
+                });
+            });
+
+            initClock();
+            initGrid();
+            const hasSavedData = loadGameState();
+            initColorPickers();
+
+            if (!hasSavedData) {
+                newGame();
+            }
+            updateQuickToggleIcon();
+            renderClock();
         }
 
         window.addEventListener('resize', () => { if (fireworkCanvas.classList.contains('visible')) resizeCanvas(); });
