@@ -1637,6 +1637,9 @@
                 gridSizeSelect.value = state.gridSize;
                 updateMasterAvailability();
 
+                // initGrid resets the notes, so it has to run before the saved ones are restored
+                if (cellInputs.length !== gridSize * gridSize) initGrid();
+
                 notesBoard = state.notesBoard || createEmptyNotes();
 
                 customThemeState = { ...customThemeState, ...state.customColors };
@@ -1645,8 +1648,6 @@
                 animationsEnabled = !animationsToggle.checked;
                 if (!animationsEnabled) document.body.classList.add('animations-disabled');
                 highlightEnabled = highlightToggle.checked; hardModeEnabled = hardModeToggle.checked;
-
-                if (cellInputs.length !== gridSize * gridSize) initGrid();
 
                 renderBoard(false);
                 cellInputs.forEach((input, index) => {
