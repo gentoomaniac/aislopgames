@@ -404,6 +404,7 @@
                     <option value="40" selected>Medium</option>
                     <option value="55">Hard</option>
                     <option value="65">Expert</option>
+                    <option value="75">Master</option>
                 </select>
                 <label>Difficulty</label>
             </div>
@@ -520,6 +521,7 @@
             
             // Attached first so input keeps working whatever happens while loading or generating
             $difficulty.on('change', saveGameState);
+            $gridSizeSelect.on('change', updateMasterAvailability);
             $('.num-tile').on('click', handlePadClick);
             $(document).on('keydown', handleKeyboardInput);
             
@@ -1068,6 +1070,16 @@
             };
         }
 
+        // Small grids need no technique beyond singles, so Master cannot be generated there.
+        function updateMasterAvailability() {
+            const $masterOption = $difficulty.find('option[value="75"]');
+            const isAvailable = parseInt($gridSizeSelect.val()) >= 9;
+            // Fall back before disabling: jQuery reads a disabled selected option as no value
+            if (!isAvailable && $difficulty.val() === '75') $difficulty.val('65');
+            $masterOption.prop('disabled', !isAvailable);
+            M.FormSelect.init($difficulty);
+        }
+
         function setSelectValue($select, value, fallback) {
             const isKnownOption = $select.find('option').toArray().some(option => option.value === String(value));
             $select.val(isKnownOption ? value : fallback);
@@ -1099,6 +1111,7 @@
 
                 setGridSize(state.gridSize);
                 $gridSizeSelect.val(state.gridSize);
+                updateMasterAvailability();
 
                 notesBoard = state.notesBoard || Array(gridSize * gridSize).fill().map(() => []);
 
@@ -1407,7 +1420,7 @@
         // A puzzle's difficulty is the hardest technique a candidate-based solver needs, always
         // taking the easiest step available. Full house is not a separate step: it is a naked
         // single (last cell of a house) and found as one.
-        const TIER = { EASY: 1, MEDIUM: 2, HARD: 3, EXPERT: 4, UNSOLVED_BY_LOGIC: 5 };
+        const TIER = { EASY: 1, MEDIUM: 2, HARD: 3, EXPERT: 4, MASTER: 5, UNSOLVED_BY_LOGIC: 6 };
 
         const geometryByGridSize = {};
 
@@ -1458,7 +1471,8 @@
             const allDigits = (1 << gridSize) - 1;
             const state = {
                 gridSize, cellCount, allDigits, geometry: getGeometry(),
-                values: Array(cellCount).fill(0), candidates: Array(cellCount).fill(allDigits), emptyCount: cellCount
+                values: Array(cellCount).fill(0), candidates: Array(cellCount).fill(allDigits), emptyCount: cellCount,
+                maxChainNodes: MAX_CHAIN_NODES
             };
             for (let cell = 0; cell < cellCount; cell++) {
                 const digit = board[Math.floor(cell / gridSize)][cell % gridSize];
@@ -1764,8 +1778,185 @@
             return false;
         }
 
+        // ---- Master techniques: chains and almost locked sets ----
+        // A chain node is a candidate: cell * gridSize + digitIndex. Two candidates are strongly
+        // linked when exactly one of them is true (two candidates of a cell, or the only two cells
+        // of a house for a digit) and weakly linked when at most one is true (same cell, or same
+        // digit in cells that see each other).
+
+        // Longest alternating inference chain tried, in candidates. 12 nodes is six strong links
+        // joined by five weak ones: about the longest a player can still follow by hand and
+        // check link by link. It also keeps the search cheap enough to rate puzzles in the browser.
+        const MAX_CHAIN_NODES = 12;
+
+        function areWeaklyLinked(state, nodeA, nodeB) {
+            const n = state.gridSize;
+            const cellA = Math.floor(nodeA / n);
+            const cellB = Math.floor(nodeB / n);
+            if (nodeA === nodeB) return false;
+            return cellA === cellB || (nodeA % n === nodeB % n && seesCell(state, cellA, cellB));
+        }
+
+        // For every candidate: the candidates it is strongly linked to and those it is weakly linked to.
+        function findChainLinks(state) {
+            const n = state.gridSize;
+            const strong = Array.from({ length: state.cellCount * n }, () => []);
+            const weak = Array.from({ length: state.cellCount * n }, () => []);
+            const addStrong = (a, b) => {
+                if (strong[a].includes(b)) return;
+                strong[a].push(b);
+                strong[b].push(a);
+            };
+
+            for (let cell = 0; cell < state.cellCount; cell++) {
+                const mask = state.candidates[cell];
+                for (let d = 0; d < n; d++) {
+                    if (!((mask >> d) & 1)) continue;
+                    for (let other = 0; other < n; other++) {
+                        if (other !== d && (mask >> other) & 1) weak[cell * n + d].push(cell * n + other);
+                    }
+                    for (const peer of state.geometry.peers[cell]) {
+                        if ((state.candidates[peer] >> d) & 1) weak[cell * n + d].push(peer * n + d);
+                    }
+                }
+                if (bitCount(mask) === 2) {
+                    const low = Math.log2(mask & -mask);
+                    addStrong(cell * n + low, cell * n + Math.log2(mask & (mask - 1)));
+                }
+            }
+            for (let d = 0; d < n; d++) {
+                for (const [a, b] of findStrongLinks(state, d)) addStrong(a * n + d, b * n + d);
+            }
+            return { strong, weak };
+        }
+
+        // The chain "start is false, so ... so end is true" shows that start or end is true.
+        // Candidates weakly linked to both therefore cannot be true. When end is start the chain
+        // is a loop that proves start true: its cell keeps only that digit and its peers lose it.
+        function applyChainConclusion(state, links, start, end) {
+            const n = state.gridSize;
+            const cellOf = node => Math.floor(node / n);
+            if (start === end) {
+                const cell = cellOf(start);
+                const digitMask = 1 << (start % n);
+                const clearedCell = eliminate(state, cell, state.allDigits & ~digitMask);
+                const clearedPeers = eliminateFromCells(state, state.geometry.peers[cell], digitMask);
+                return clearedCell || clearedPeers;
+            }
+            let changed = false;
+            for (const victim of links.weak[start]) {
+                if (victim !== end && areWeaklyLinked(state, victim, end)) {
+                    if (eliminate(state, cellOf(victim), 1 << (victim % n))) changed = true;
+                }
+            }
+            return changed;
+        }
+
+        // Adds one more candidate to every chain of `search`; true if a chain ending in a true
+        // candidate led to an elimination. A search state is node * 2 + (1 if the node is true).
+        function extendChainSearch(state, links, search) {
+            const next = [];
+            for (const searchState of search.frontier) {
+                const node = searchState >> 1;
+                const isTrue = (searchState & 1) === 1;
+                for (const target of isTrue ? links.weak[node] : links.strong[node]) {
+                    const targetState = target * 2 + (isTrue ? 0 : 1);
+                    if (search.seen[targetState]) continue;
+                    search.seen[targetState] = 1;
+                    next.push(targetState);
+                    if (!isTrue && applyChainConclusion(state, links, search.start, target)) return true;
+                }
+            }
+            search.frontier = next;
+            return false;
+        }
+
+        // Alternating inference chains, which include X-Chains (one digit) and XY-Chains (only
+        // two-candidate cells): from a candidate assumed false, strong links make the next
+        // candidate true and weak links make the one after it false, and so on. Breadth-first
+        // search over (candidate, true/false) finds the shortest chain to each candidate that
+        // ends up true. Every step is an implication, so the conclusions hold even when the
+        // search reuses a candidate in both roles. All searches grow one candidate at a time, so
+        // the shortest chain anywhere on the board is used first. Grouped nodes are not used.
+        function applyAlternatingChain(state) {
+            const links = findChainLinks(state);
+            const nodeCount = links.strong.length;
+            const searches = [];
+            for (let start = 0; start < nodeCount; start++) {
+                if (links.strong[start].length === 0) continue;
+                const seen = new Uint8Array(nodeCount * 2);
+                seen[start * 2] = 1;
+                searches.push({ start, seen, frontier: [start * 2] });
+            }
+            for (let chainNodes = 1; chainNodes < state.maxChainNodes; chainNodes++) {
+                if (searches.some(search => extendChainSearch(state, links, search))) return true;
+            }
+            return false;
+        }
+
+        // Longest almost locked set used by ALS-XZ, in cells. Bigger sets are rare in practice and
+        // hard to see by eye; this also bounds the search.
+        const MAX_ALS_CELLS = 4;
+
+        // Almost locked set: n cells of one house holding n + 1 different candidates in total.
+        function findAlmostLockedSets(state) {
+            const sets = new Map();
+            for (const house of state.geometry.houses) {
+                const openCells = house.filter(cell => state.candidates[cell] !== 0);
+                for (let size = 1; size <= MAX_ALS_CELLS; size++) {
+                    someCombination(openCells, size, combo => {
+                        const digits = combo.reduce((mask, cell) => mask | state.candidates[cell], 0);
+                        const key = combo.join(',');
+                        const isAlmostLocked = bitCount(digits) === size + 1;
+                        if (isAlmostLocked && !sets.has(key)) sets.set(key, { cells: [...combo], digits });
+                        return false;
+                    });
+                }
+            }
+            return [...sets.values()];
+        }
+
+        function cellsHoldingDigit(state, cells, digitIndex) {
+            return cells.filter(cell => (state.candidates[cell] >> digitIndex) & 1);
+        }
+
+        // ALS-XZ: two almost locked sets that share no cell and have a digit x such that every
+        // x cell of one sees every x cell of the other (x is "restricted"). One set must then be
+        // without x, which locks it onto its other digits, so a second shared digit z is in one of
+        // the two. Cells seeing every z cell of both sets cannot be z.
+        function applyAlsXz(state) {
+            const sets = findAlmostLockedSets(state);
+            for (let i = 0; i < sets.length; i++) {
+                for (let j = i + 1; j < sets.length; j++) {
+                    const [setA, setB] = [sets[i], sets[j]];
+                    const shared = setA.digits & setB.digits;
+                    if (bitCount(shared) < 2 || setA.cells.some(cell => setB.cells.includes(cell))) continue;
+                    for (let x = 0; x < state.gridSize; x++) {
+                        if (!((shared >> x) & 1)) continue;
+                        const xCellsA = cellsHoldingDigit(state, setA.cells, x);
+                        const xCellsB = cellsHoldingDigit(state, setB.cells, x);
+                        const isRestricted = xCellsA.every(a => xCellsB.every(b => seesCell(state, a, b)));
+                        if (!isRestricted) continue;
+                        for (let z = 0; z < state.gridSize; z++) {
+                            if (z === x || !((shared >> z) & 1)) continue;
+                            const zCells = [
+                                ...cellsHoldingDigit(state, setA.cells, z),
+                                ...cellsHoldingDigit(state, setB.cells, z)
+                            ];
+                            const victims = state.geometry.peers[zCells[0]].filter(cell => (
+                                zCells.every(zCell => seesCell(state, cell, zCell))
+                            ));
+                            if (eliminateFromCells(state, victims, 1 << z)) return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
         // Ordered easiest to hardest. Expert is what goes beyond the Hard set: Jellyfish, W-Wing and
-        // simple colouring. Puzzles that even these cannot finish are "unsolved by logic".
+        // simple colouring. Master needs chains or almost locked sets (no guessing, no trial and
+        // error). Puzzles that even these cannot finish are "unsolved by logic".
         const LOGIC_TECHNIQUES = [
             { tier: TIER.EASY, apply: applyNakedSingle },
             { tier: TIER.EASY, apply: applyHiddenSingle },
@@ -1782,14 +1973,17 @@
             { tier: TIER.HARD, apply: state => applyHiddenSubset(state, 4) },
             { tier: TIER.EXPERT, apply: applyWWing },
             { tier: TIER.EXPERT, apply: applySimpleColouring },
-            { tier: TIER.EXPERT, apply: state => applyFish(state, 4) }
+            { tier: TIER.EXPERT, apply: state => applyFish(state, 4) },
+            { tier: TIER.MASTER, apply: applyAlternatingChain },
+            { tier: TIER.MASTER, apply: applyAlsXz }
         ];
 
         // Returns the hardest tier needed to solve `board`. Techniques above `maxTier` are not
         // tried, so a board that gets stuck there returns maxTier + 1 (UNSOLVED_BY_LOGIC when even
-        // Expert gets stuck).
-        function rateByLogic(board, maxTier = TIER.EXPERT) {
+        // Master gets stuck).
+        function rateByLogic(board, maxTier = TIER.MASTER, maxChainNodes = MAX_CHAIN_NODES) {
             const state = createLogicState(board);
+            state.maxChainNodes = maxChainNodes;
             let hardest = TIER.EASY;
             while (state.emptyCount > 0) {
                 const step = LOGIC_TECHNIQUES.find(technique => technique.tier <= maxTier && technique.apply(state));
@@ -1803,24 +1997,36 @@
         // What each difficulty means: the hardest technique tier a puzzle needs (see TIER), with a
         // range for how many givens it keeps, so the tier is the rule and the givens are a nudge.
         // Small grids hardly ever need more than singles (measured over thousands of minimal
-        // puzzles: 4x4 never, 5x5 about 1% in Expert), so every difficulty there is an Easy-tier
-        // puzzle and the difficulties differ by how few givens are left. 9x9 uses all four tiers.
+        // puzzles: 4x4 never, 5x5 about 1% in Expert), so on 4x4 and 5x5 Easy to Expert are all
+        // Easy-tier puzzles that differ by how few givens are left. Master does not exist there
+        // (the option is disabled, see updateMasterAvailability). 9x9 uses all five tiers.
         const DIFFICULTY_PROFILES = {
             30: { tier: TIER.EASY, givens: { 4: [9, 10], 5: [15, 17], 9: [38, 46] } },
             40: { tier: TIER.MEDIUM, givens: { 4: [7, 8], 5: [12, 14], 9: [30, 35] } },
             55: { tier: TIER.HARD, givens: { 4: [5, 6], 5: [9, 11], 9: [26, 31] } },
-            65: { tier: TIER.EXPERT, givens: { 4: [0, 0], 5: [0, 0], 9: [0, 0] } }
+            65: { tier: TIER.EXPERT, givens: { 4: [0, 0], 5: [0, 0], 9: [0, 0] } },
+            75: { tier: TIER.MASTER, givens: { 4: [0, 0], 5: [0, 0], 9: [0, 0] } }
         };
-        const REACHABLE_TIER_BY_GRID_SIZE = { 4: TIER.EASY, 5: TIER.EASY, 9: TIER.EXPERT };
+        const REACHABLE_TIER_BY_GRID_SIZE = { 4: TIER.EASY, 5: TIER.EASY, 9: TIER.MASTER };
 
         // Rating needs many solver runs, so hard puzzles can take a while to find. After this
         // long the best puzzle found so far is used, so starting a game never feels stuck.
         const GENERATION_BUDGET_MS = 400;
 
+        // A 9x9 Master puzzle should need real chain thinking, not just a four-node Skyscraper or
+        // Turbot Fish, so it must stay unsolved when chains are cut to this many candidates
+        // (almost locked sets stay allowed). About one Master puzzle in three passes this test.
+        const SHORT_CHAIN_NODES = 6;
+
+        function needsLongChain(board) {
+            return rateByLogic(board, TIER.MASTER, SHORT_CHAIN_NODES) === TIER.UNSOLVED_BY_LOGIC;
+        }
+
         // Punches holes one at a time in random order and keeps only removals that leave exactly
         // one solution and, below Expert, still need nothing harder than `tier`. One pass is
-        // enough: once a cell is needed, it stays needed. Stops at `targetGivens`.
-        function punchHoles(solution, tier, targetGivens) {
+        // enough: once a cell is needed, it stays needed. Stops at `targetGivens`, or at
+        // `deadline` (a time from performance.now()); the board is valid at any point.
+        function punchHoles(solution, tier, targetGivens, deadline = Infinity) {
             const board = solution.map(row => [...row]);
             const cells = [];
             for (let r = 0; r < gridSize; r++) for (let c = 0; c < gridSize; c++) cells.push([r, c]);
@@ -1828,43 +2034,59 @@
 
             let givens = gridSize * gridSize;
             for (const [r, c] of cells) {
-                if (givens <= targetGivens) break;
+                if (givens <= targetGivens || performance.now() > deadline) break;
                 const digit = board[r][c];
                 board[r][c] = 0;
                 const isUnique = countSolutions(board, 2) === 1;
-                // Expert is the top tier, so only uniqueness limits the removals; the finished puzzle
-                // is rated afterwards (it can come out easier, which generatePuzzle retries).
-                const isStillRatable = tier === TIER.EXPERT || rateByLogic(board, tier) <= tier;
+                // Expert and Master are the top tiers, so only uniqueness limits the removals; the
+                // finished puzzle is rated afterwards (it can come out easier, which generatePuzzle retries).
+                const isStillRatable = tier >= TIER.EXPERT || rateByLogic(board, tier) <= tier;
                 if (isUnique && isStillRatable) givens--;
                 else board[r][c] = digit;
             }
             return { board, givens };
         }
 
-        // How far a puzzle's rating is from the wanted tier; puzzles no technique can finish are
-        // the worst fallback.
-        function tierDistance(rating, tier) {
-            return rating === TIER.UNSOLVED_BY_LOGIC ? Infinity : Math.abs(rating - tier);
+        // How far a candidate puzzle is from what the difficulty asks for: 0 is a perfect match,
+        // puzzles no technique can finish are the worst fallback.
+        function shortfall(candidate, wanted) {
+            if (candidate.rating === TIER.UNSOLVED_BY_LOGIC) return Infinity;
+            const gap = Math.abs(candidate.rating - wanted.tier);
+            const lacksDepth = wanted.needsLongChain && gap === 0 && !needsLongChain(candidate.board);
+            return lacksDepth ? 0.5 : gap;
+        }
+
+        function generateCandidate(wanted, punchTier, targetGivensRange, deadline) {
+            const solution = Array.from({ length: gridSize }, () => Array(gridSize).fill(0));
+            fillBoard(solution);
+            const [minGivens, maxGivens] = targetGivensRange;
+            const targetGivens = minGivens + Math.floor(Math.random() * (maxGivens - minGivens + 1));
+            const { board, givens } = punchHoles(solution, punchTier, targetGivens, deadline);
+            const candidate = { solution, board, givens, rating: rateByLogic(board) };
+            candidate.shortfall = shortfall(candidate, wanted);
+            return candidate;
         }
 
         function generatePuzzle(difficulty) {
             const profile = DIFFICULTY_PROFILES[difficulty];
-            const tier = Math.min(profile.tier, REACHABLE_TIER_BY_GRID_SIZE[gridSize]);
-            const [minGivens, maxGivens] = profile.givens[gridSize];
-            const startMs = performance.now();
+            const reachableTier = REACHABLE_TIER_BY_GRID_SIZE[gridSize];
+            const tier = Math.min(profile.tier, reachableTier);
+            const wanted = { tier, needsLongChain: tier === TIER.MASTER };
+            const givensRange = profile.givens[gridSize];
+            const deadline = performance.now() + GENERATION_BUDGET_MS;
 
             let best = null;
             do {
-                const solution = Array.from({ length: gridSize }, () => Array(gridSize).fill(0));
-                fillBoard(solution);
-                const targetGivens = minGivens + Math.floor(Math.random() * (maxGivens - minGivens + 1));
-                const { board, givens } = punchHoles(solution, tier, targetGivens);
-                const rating = rateByLogic(board);
-                const candidate = { solution, board, rating, givens };
-                if (rating === tier) return candidate;
-                if (!best || tierDistance(rating, tier) < tierDistance(best.rating, tier)) best = candidate;
-            } while (performance.now() - startMs < GENERATION_BUDGET_MS);
-            return best;
+                const candidate = generateCandidate(wanted, tier, givensRange, deadline);
+                if (candidate.shortfall === 0) return candidate;
+                if (!best || candidate.shortfall < best.shortfall) best = candidate;
+            } while (performance.now() < deadline);
+            if (best.shortfall < Infinity) return best;
+
+            // Out of time with nothing the logic can solve: Hard-tier punching always ends
+            // with a solvable puzzle, and is quick, so no deadline is needed.
+            const solvableTier = Math.min(TIER.HARD, reachableTier);
+            return generateCandidate(wanted, solvableTier, givensRange, Infinity);
         }
 
         // Bumped by every new game; delayed callbacks from an earlier game check it and give up.
