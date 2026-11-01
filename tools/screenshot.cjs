@@ -25,6 +25,7 @@ const GAMES = [
     { name: 'breakout', viewport: { width: 900, height: 700 }, focus: '#gameCanvas', paddingPx: 0, cover: true, anchor: 'top', playsBreakout: true },
     { name: 'minesweeper', viewport: { width: 700, height: 900 }, focus: '.window', paddingPx: 30, cover: true, anchor: 'top' },
     { name: 'snake', viewport: { width: 700, height: 900 }, focus: '.lcd', paddingPx: 90, cover: true, anchor: 'center' },
+    { name: 'star-swarm', viewport: { width: 700, height: 900 }, focus: '#screen', paddingPx: 0, cover: true, anchor: 'top', playsStarSwarm: true },
     { name: 'sudoku', viewport: { width: 700, height: 900 }, focus: '#sudoku-board', paddingPx: 30, cover: true, anchor: 'top' },
 ];
 
@@ -62,6 +63,17 @@ async function playBreakout(page) {
     }
 }
 
+// Star Swarm: start a run and fast-forward the simulation until the formation is complete and the
+// first enemies dive, so the shot shows the formation, a diver and the player's ship.
+async function playStarSwarm(page) {
+    await page.click('#start-btn');
+    await page.evaluate(() => {
+        for (let i = 0; i < 2000 && !enemies.some(enemy => enemy.state === 'DIVING'); i++) tick();
+        for (let i = 0; i < 40; i++) tick();
+    });
+    await wait(300);
+}
+
 async function main() {
     const outDir = path.resolve(process.argv[2] || path.join(REPO_ROOT, 'screenshots'));
     fs.mkdirSync(outDir, { recursive: true });
@@ -74,6 +86,7 @@ async function main() {
         await page.evaluate(() => document.fonts.ready);
         await wait(SETTLE_MS);
         if (game.playsBreakout) await playBreakout(page);
+        if (game.playsStarSwarm) await playStarSwarm(page);
 
         const file = path.join(outDir, game.name + '.png');
         await page.screenshot({ path: file, clip: await cardClip(page, game) });
