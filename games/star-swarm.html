@@ -2056,7 +2056,7 @@ function handleLeaderboardKey(e, key, isButtonFocused) {
 // Never resumes by itself: the player comes back to the pause screen and resumes on purpose
 function pauseIfPlaying() {
     if (gameState === GameState.PLAYING) togglePause();
-    else if (gameState === GameState.CONFIRMING) wasInterruptedWhileAsking = true;
+    else if (gameState === GameState.CONFIRMING) wasFocusLostWhileAsking = true;
 }
 window.addEventListener('blur', () => { clearInput(); pauseIfPlaying(); });
 document.addEventListener('visibilitychange', () => { if (document.hidden) pauseIfPlaying(); });
@@ -2105,14 +2105,14 @@ screenElement.addEventListener('pointercancel', releasePointer);
 
 // One dialog for everything that needs a yes/no. While it is open it owns the keyboard (see the keydown handler).
 let confirmHandlers = null;
-let wasInterruptedWhileAsking = false; // focus was lost or the tab hidden while the dialog was open
+let wasFocusLostWhileAsking = false; // focus was lost or the tab hidden while the dialog was open
 
 function showConfirm(title, message, onYes, onNo) {
     clearInput();
     // A focused element (e.g. the name input) must not swallow the answer keys
     if (document.activeElement) document.activeElement.blur();
     confirmHandlers = { onYes, onNo };
-    wasInterruptedWhileAsking = false;
+    wasFocusLostWhileAsking = false;
     ui.confirmTitle.textContent = title;
     ui.confirmMessage.textContent = message;
     show(ui.confirmDialog);
@@ -2152,7 +2152,7 @@ function confirmQuit() {
     showConfirm('QUIT GAME?', 'YOUR RUN ENDS AND ITS SCORE IS LOST.', exitToMenu, () => {
         gameState = stateBeforeAsking;
         // Like any blur during play: come back paused, never straight into the action
-        if (wasInterruptedWhileAsking) togglePause();
+        if (wasFocusLostWhileAsking && stateBeforeAsking === GameState.PLAYING) togglePause();
     });
 }
 
