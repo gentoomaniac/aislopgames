@@ -7,13 +7,6 @@
     
     <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap">
-    
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css" integrity="sha384-5KZdSYqynSzIjQGS2M1O3HW6HVDBjfNx0v5Y2eQuE3vvQ9NTiiPK9/GWc0yYCrgw" crossorigin="anonymous">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@simonwep/pickr@1.10.2/dist/themes/nano.min.css" integrity="sha384-JDMO9tLhflc1tgTLOOT92LaE3zl9sZLRtMCmn1GMHtAQA7H1sY/w6TLPMpV0gO0w" crossorigin="anonymous">
-    
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha384-vtXRMe3mGCbOeY7l30aIg8H9p3GdeSe4IFlP6G8JMa7o7lXvnz3GFKzPxzJdPfGK" crossorigin="anonymous"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js" integrity="sha384-ZOED+d9HxogEQwD+jFvux96iGQR9TxfJO+mPF2ZS0TuKH6eWrmvPsDpO6I0OWdiX" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@simonwep/pickr@1.10.2/dist/pickr.min.js" integrity="sha384-POhnuz20QInakpeVr1TnkfkX//rZ9Zjh6L5cRNyphiyDVU+SjJlwFmLGndaAepC4" crossorigin="anonymous"></script>
     <style>
         /* --- THEME VARIABLES --- */
         :root, body.theme-light {
@@ -54,58 +47,107 @@
         }
 
         /* --- GLOBAL LAYOUT --- */
-        /* Tapping never double-tap-zooms, while pinch zoom stays available */
-        body, body * { touch-action: manipulation; }
+        *, *::before, *::after { box-sizing: border-box; }
+        html { font-size: 14px; line-height: 1.5; }
+        @media (min-width: 993px) { html { font-size: 14.5px; } }
+        @media (min-width: 1201px) { html { font-size: 15px; } }
+        /* Tapping never double-tap-zooms, while pinch zoom stays available on the page; only the play area locks all gestures */
+        body { touch-action: manipulation; }
+        #sudoku-board, #number-pad { touch-action: none; }
         body {
-            font-family: 'Roboto', sans-serif; background-color: var(--bg-color); color: var(--text-main);
-            display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; 
-            overflow-x: hidden; transition: background-color 0.3s, color 0.3s; overscroll-behavior-y: contain; 
+            margin: 0; font-family: 'Roboto', sans-serif; background-color: var(--bg-color); color: var(--text-main);
+            display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh;
+            overflow-x: hidden; transition: background-color 0.3s, color 0.3s; overscroll-behavior-y: contain;
         }
+        button, select, input { font-family: inherit; }
+        button { cursor: pointer; }
+        h4, h5, p { margin: 0; }
 
-        nav { background-color: var(--nav-bg) !important; color: var(--nav-text) !important; transition: background-color 0.3s; height: 56px; line-height: 56px;}
-        nav .brand-logo { color: var(--nav-text) !important; font-weight: 500; font-size: 1.5rem;}
-        nav ul a { color: var(--nav-text) !important; }
-        nav .sidenav-trigger i { color: var(--nav-text) !important; }
+        .top-bar {
+            display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; height: 56px; padding: 0 8px;
+            background-color: var(--nav-bg); color: var(--nav-text); transition: background-color 0.3s;
+        }
+        .top-bar-actions { display: flex; justify-content: flex-end; }
+        .brand { display: flex; align-items: center; gap: 4px; font-weight: 500; font-size: 1.5rem; }
+        .icon-btn {
+            display: flex; align-items: center; justify-content: center; width: 48px; height: 48px;
+            border: none; border-radius: 50%; background: transparent; color: inherit;
+        }
+        .icon-btn:hover { background-color: rgba(128,128,128,0.2); }
 
-        .main-content { 
-            flex: 1 0 auto; display: flex; justify-content: center; align-items: center; 
+        .main-content {
+            flex: 1 0 auto; display: flex; justify-content: center; align-items: center;
             padding: 1rem; position: relative; overflow: hidden;
         }
-        
+
         .game-card {
-            padding: 1.5rem; border-radius: 12px; background-color: var(--card-bg); 
+            padding: 1.5rem; border-radius: 12px; background-color: var(--card-bg);
             width: 100%; max-width: min(100%, 65dvh, 500px); margin: 0 auto;
             position: relative; z-index: 10;
-            box-shadow: 0 8px 17px 2px rgba(0,0,0,0.14), 0 3px 14px 2px rgba(0,0,0,0.12), 0 5px 5px -3px rgba(0,0,0,0.2); 
+            box-shadow: 0 8px 17px 2px rgba(0,0,0,0.14), 0 3px 14px 2px rgba(0,0,0,0.12), 0 5px 5px -3px rgba(0,0,0,0.2);
             transition: background-color 0.3s;
             container-type: inline-size;
             display: flex; flex-direction: column; align-items: center;
         }
 
-        /* --- OVERRIDE MATERIALIZE --- */
-        .select-wrapper input.select-dropdown { color: var(--text-main) !important; border-bottom-color: var(--text-muted) !important; }
-        .dropdown-content { background-color: var(--card-bg) !important; }
-        .dropdown-content li > a, .dropdown-content li > span { color: var(--text-main) !important; }
-        label { color: var(--text-muted) !important; }
-        .switch label input[type=checkbox]:checked + .lever { background-color: var(--highlight-bg) !important; }
-        .switch label input[type=checkbox]:checked + .lever:after { background-color: var(--link-color) !important; }
-        .btn-custom-primary { background-color: var(--btn-primary-bg) !important; color: var(--btn-primary-text) !important; }
-        .btn-custom-hint { background-color: var(--btn-hint-bg) !important; color: var(--btn-hint-text) !important; }
-        .btn-custom-solve { color: var(--link-color) !important; font-weight: 500; }
+        /* --- FORM CONTROLS --- */
+        .btn, .btn-flat {
+            display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+            min-height: 36px; padding: 0 16px; border: none; border-radius: 2px;
+            font-size: 1rem; font-weight: 500; letter-spacing: 0.5px; text-transform: uppercase;
+            transition: background-color 0.2s, filter 0.2s;
+        }
+        .btn { box-shadow: 0 2px 2px 0 rgba(0,0,0,0.14), 0 3px 1px -2px rgba(0,0,0,0.12), 0 1px 5px 0 rgba(0,0,0,0.2); }
+        .btn:hover { filter: brightness(1.1); }
+        .btn:active { filter: brightness(0.9); }
+        .btn-flat { background: transparent; box-shadow: none; }
+        .btn-flat:hover { background-color: rgba(128,128,128,0.2); }
+        .btn-custom-primary { background-color: var(--btn-primary-bg); color: var(--btn-primary-text); }
+        .btn-custom-hint { background-color: var(--btn-hint-bg); color: var(--btn-hint-text); }
+        .btn-custom-solve { color: var(--link-color); }
+        .btn-muted { color: var(--text-muted); }
         .bottom-actions { display: flex; align-items: center; justify-content: center; gap: 15px; margin-top: 10px; margin-bottom: 0; flex-wrap: wrap; width: 100%; }
-        
-        .modal { background-color: var(--card-bg); color: var(--text-main); border-radius: 8px; max-width: 400px; }
-        .modal .modal-footer { background-color: var(--controls-bg); border-top: 1px solid var(--grid-bg); }
-        .modal .modal-content h4 { font-size: 1.5rem; margin-bottom: 1rem; }
+
+        .field { margin-top: 25px; }
+        .field label { display: block; margin-bottom: 4px; font-size: 0.8rem; color: var(--text-muted); }
+        select {
+            width: 100%; height: 2.6rem; padding: 0 8px; font-size: 1rem;
+            color: var(--text-main); background-color: var(--card-bg);
+            border: 1px solid var(--grid-bg); border-radius: 4px;
+        }
+        select:focus-visible { outline: 2px solid var(--link-color); outline-offset: 1px; }
+
+        .switch {
+            appearance: none; -webkit-appearance: none; flex: none; position: relative; margin: 0 4px;
+            width: 36px; height: 14px; border-radius: 15px; background-color: var(--grid-bg);
+            cursor: pointer; transition: background-color 0.2s;
+        }
+        .switch::after {
+            content: ''; position: absolute; top: -3px; left: -3px; width: 20px; height: 20px; border-radius: 50%;
+            background-color: #f1f1f1; box-shadow: 0 1px 3px 1px rgba(0,0,0,0.4); transition: left 0.2s, background-color 0.2s;
+        }
+        .switch:checked { background-color: var(--highlight-bg); }
+        .switch:checked::after { left: 19px; background-color: var(--link-color); }
+        .switch:focus-visible { outline: 2px solid var(--link-color); outline-offset: 6px; }
+
+        /* --- DIALOGS --- */
+        dialog { padding: 0; border: none; background-color: var(--card-bg); color: var(--text-main); }
+        dialog::backdrop { background-color: rgba(0,0,0,0.5); }
+
+        .modal { width: min(400px, calc(100% - 32px)); border-radius: 8px; box-shadow: 0 24px 38px 3px rgba(0,0,0,0.14), 0 9px 46px 8px rgba(0,0,0,0.12), 0 11px 15px -7px rgba(0,0,0,0.2); }
+        .modal-content { padding: 24px; }
+        .modal-content h4 { font-size: 1.5rem; font-weight: 400; margin-bottom: 1rem; }
         .modal p { color: var(--text-muted); }
-        #confirm-modal .modal-footer { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 4px 16px; }
-        #confirm-modal .modal-footer .btn, #confirm-modal .modal-footer .btn-flat { min-height: 48px; line-height: 48px; margin: 0; touch-action: manipulation; }
-        
-        /* --- SIDE MENU REORGANIZATION --- */
-        .sidenav { background-color: var(--card-bg) !important; width: 320px; }
-        .sidenav-content-wrapper { padding: 12px 24px; }
-        .sidenav-header { display: flex; align-items: center; gap: 12px; padding: 24px 24px 12px 24px; margin: 0; color: var(--text-main); font-weight: 500; font-size: 1.3rem; }
-        
+        .modal-footer { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 4px 16px; background-color: var(--controls-bg); border-top: 1px solid var(--grid-bg); }
+        .modal-footer .btn, .modal-footer .btn-flat { min-height: 48px; }
+
+        /* --- SETTINGS PANEL --- */
+        .side-panel { width: 320px; max-width: 90vw; height: 100%; max-height: none; margin: 0 auto 0 0; overflow-y: auto; box-shadow: 0 16px 24px 2px rgba(0,0,0,0.14), 0 6px 30px 5px rgba(0,0,0,0.12), 0 8px 10px -5px rgba(0,0,0,0.3); }
+        .side-panel-content-wrapper { padding: 8px 24px 12px 24px; }
+        .side-panel-header { display: flex; align-items: center; gap: 12px; padding: 24px 24px 12px 24px; font-weight: 500; font-size: 1.3rem; }
+        .side-panel-header .icon-btn { margin: -12px -12px -12px auto; }
+        .divider { height: 1px; margin: 0; border: none; background-color: var(--grid-bg); }
+
         .category-header {
             padding: 20px 24px 4px 24px;
             font-size: 0.8rem;
@@ -118,19 +160,30 @@
         }
 
         .settings-toggles { display: flex; flex-direction: column; gap: 16px; margin-top: 5px; }
-        .setting-row { display: flex; justify-content: space-between; align-items: center; padding-bottom: 12px; }
+        .setting-row { display: flex; justify-content: space-between; align-items: center; padding-bottom: 12px; cursor: pointer; }
         .setting-row:last-child { padding-bottom: 0; }
         .setting-label { font-size: 0.95rem; color: var(--text-main); }
 
-        #custom-theme-panel { background-color: rgba(0,0,0,0.05); padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid var(--grid-bg); }
+        #custom-theme-panel { background-color: rgba(0,0,0,0.05); padding: 15px; border-radius: 8px; margin-top: 15px; margin-bottom: 15px; border: 1px solid var(--grid-bg); }
         body.theme-dark #custom-theme-panel, body.theme-dracula #custom-theme-panel, body.theme-custom #custom-theme-panel { background-color: rgba(255,255,255,0.05); }
+        .custom-theme-title { display: block; font-size: 0.9rem; margin-bottom: 12px; color: var(--text-muted); font-weight: 500; }
         .theme-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 15px; align-items: end; }
         .color-picker-wrapper { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
-        .color-picker-wrapper label { font-size: 0.75rem; line-height: 1.1; }
-        .pcr-button { border-radius: 4px !important; width: 100% !important; height: 35px !important; border: 1px solid rgba(128,128,128,0.3); }
+        .color-picker-wrapper label { font-size: 0.75rem; line-height: 1.1; color: var(--text-muted); }
+        .color-picker-wrapper input[type=color] {
+            width: 100%; height: 35px; padding: 0; border: 1px solid rgba(128,128,128,0.3); border-radius: 4px;
+            background: none; cursor: pointer;
+        }
+        .color-picker-wrapper input[type=color]::-webkit-color-swatch-wrapper { padding: 0; }
+        .color-picker-wrapper input[type=color]::-webkit-color-swatch { border: none; border-radius: 3px; }
+        .color-picker-wrapper input[type=color]::-moz-color-swatch { border: none; border-radius: 3px; }
+        .preset-reset { display: flex; align-items: center; gap: 10px; margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--grid-bg); }
+        .preset-reset span { font-size: 0.8rem; color: var(--text-muted); }
+        .preset-reset select { width: auto; height: 30px; padding: 0 5px; font-size: 0.8rem; }
+        .preset-reset .btn-flat { min-height: 30px; padding: 0 10px; font-size: 0.8rem; color: var(--link-color); }
 
-        #btn-note-mode { border: 1px solid var(--grid-bg); transition: all 0.2s; }
-        #btn-note-mode.active { background-color: var(--link-color) !important; color: var(--card-bg) !important; border-color: var(--link-color); }
+        #btn-note-mode { background-color: var(--controls-bg); color: var(--text-main); border: 1px solid var(--grid-bg); transition: all 0.2s; }
+        #btn-note-mode.active { background-color: var(--link-color); color: var(--card-bg); border-color: var(--link-color); }
 
         /* --- SUDOKU GRID DYNAMIC SIZING --- */
         #sudoku-board-container { position: relative; aspect-ratio: 1; width: 100%; margin: 0 0 1rem 0; }
@@ -160,10 +213,10 @@
         
         .cell input {
             width: 100% !important; height: 100% !important; margin: 0 !important;
-            border: none !important; box-sizing: border-box !important; text-align: center; 
+            border: none !important; padding: 0; text-align: center; 
             font-size: clamp(1rem, 5.5cqw, 1.6rem); font-weight: 500;
             background-color: transparent; cursor: pointer; transition: background-color 0.15s, color 0.15s, box-shadow 0.15s;
-            touch-action: manipulation; user-select: none; caret-color: transparent; outline: none !important;
+            user-select: none; caret-color: transparent; outline: none !important;
             color: var(--cell-input-text) !important; -webkit-text-fill-color: var(--cell-input-text) !important; opacity: 1 !important;
             position: absolute; top: 0; left: 0; z-index: 2;
         }
@@ -206,7 +259,7 @@
             flex: 1 1 calc(11% - 8px); min-width: 35px; max-width: 50px; height: 45px; 
             display: flex; align-items: center; justify-content: center; background-color: var(--cell-given-bg); color: var(--pad-text);
             font-size: 1.25rem; font-weight: 700; border-radius: 6px; cursor: pointer; border: 1px solid var(--grid-bg); box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            transition: all 0.15s; user-select: none; touch-action: manipulation;
+            transition: all 0.15s; user-select: none;
         }
         
         @media (max-width: 400px) { .num-tile { flex: 1 1 calc(18% - 8px); } }
@@ -267,6 +320,7 @@
         .animations-disabled .anim-pop, .animations-disabled .anim-shake, .animations-disabled .anim-wave, .animations-disabled #firework-canvas { animation: none !important; transition: none !important; transform: none !important; opacity: 1 !important; display: none !important; }
 
         /* Z-Index 100 pushes fireworks in front of the card */
+        #firework-canvas.visible { display: block; }
         #firework-canvas { position: absolute; top: -50px; left: -50px; width: calc(100% + 100px); height: calc(100% + 100px); pointer-events: none; z-index: 100; display: none; }
         
         #message { min-height: 24px; font-weight: 500; font-size: 1.1rem; margin-top: 0.5rem; text-align: center; width: 100%;}
@@ -277,128 +331,124 @@
 </head>
 <body class="theme-light is-9x9">
 
-    <nav>
-        <div class="nav-wrapper container">
-            <a href="#" data-target="settings-sidenav" class="sidenav-trigger show-on-large left"><i class="material-icons">menu</i></a>
-            <a href="#" class="brand-logo center"><i class="material-icons">grid_on</i>Sudoku</a>
-            <ul class="right">
-                <li><a href="#new-game-modal" class="modal-trigger" title="New Game"><i class="material-icons">add</i></a></li>
-                <li><a href="#" onclick="quickToggleTheme(); return false;" title="Toggle Theme"><i id="quick-theme-icon" class="material-icons">brightness_4</i></a></li>
-            </ul>
+    <nav class="top-bar">
+        <div>
+            <button type="button" class="icon-btn" id="btn-settings" title="Settings" aria-label="Settings"><i class="material-icons">menu</i></button>
+        </div>
+        <div class="brand"><i class="material-icons">grid_on</i>Sudoku</div>
+        <div class="top-bar-actions">
+            <button type="button" class="icon-btn" id="btn-new-game" title="New Game" aria-label="New Game"><i class="material-icons">add</i></button>
+            <button type="button" class="icon-btn" onclick="quickToggleTheme()" title="Toggle Theme" aria-label="Toggle Theme"><i id="quick-theme-icon" class="material-icons">brightness_4</i></button>
         </div>
     </nav>
 
-    <ul id="settings-sidenav" class="sidenav">
-        <li><h5 class="sidenav-header"><i class="material-icons">settings</i> Settings</h5></li>
-        <li><div class="divider" style="background-color: var(--grid-bg); margin: 0;"></div></li>
-        
-        <li class="category-header">Theme & Visuals</li>
-        <li>
-            <div class="sidenav-content-wrapper" style="padding-top: 8px;">
-                <div class="input-field" style="margin-top: 0; margin-bottom: 0;">
-                    <select id="theme-select" onchange="changeTheme()">
-                        <option value="theme-light" selected>Light Mode</option>
-                        <option value="theme-dark">Dark Mode</option>
-                        <option value="theme-dracula">Dracula</option>
-                        <option value="theme-custom">Custom Theme...</option>
+    <dialog id="settings-dialog" class="side-panel">
+        <div class="side-panel-header">
+            <i class="material-icons">settings</i> Settings
+            <button type="button" class="icon-btn" id="btn-close-settings" title="Close" aria-label="Close settings"><i class="material-icons">close</i></button>
+        </div>
+        <hr class="divider">
+
+        <div class="category-header">Theme & Visuals</div>
+        <div class="side-panel-content-wrapper">
+            <div class="field" style="margin-top: 0;">
+                <label for="theme-select">Visual Theme</label>
+                <select id="theme-select" onchange="changeTheme()">
+                    <option value="theme-light" selected>Light Mode</option>
+                    <option value="theme-dark">Dark Mode</option>
+                    <option value="theme-dracula">Dracula</option>
+                    <option value="theme-custom">Custom Theme...</option>
+                </select>
+            </div>
+
+            <div id="custom-theme-panel" hidden>
+                <span class="custom-theme-title">Build your own theme:</span>
+                <div class="theme-grid">
+                    <div class="color-picker-wrapper"><label for="picker-bg">Background</label><input type="color" id="picker-bg"></div>
+                    <div class="color-picker-wrapper"><label for="picker-fg">Foreground</label><input type="color" id="picker-fg"></div>
+                    <div class="color-picker-wrapper"><label for="picker-grid">Grid</label><input type="color" id="picker-grid"></div>
+                    <div class="color-picker-wrapper"><label for="picker-tile">Grid tile</label><input type="color" id="picker-tile"></div>
+                    <div class="color-picker-wrapper"><label for="picker-tileHl">Tile HL</label><input type="color" id="picker-tileHl"></div>
+                    <div class="color-picker-wrapper"><label for="picker-hinted">Hinted</label><input type="color" id="picker-hinted"></div>
+                    <div class="color-picker-wrapper"><label for="picker-text">Given Text</label><input type="color" id="picker-text"></div>
+                    <div class="color-picker-wrapper"><label for="picker-userText">User Text</label><input type="color" id="picker-userText"></div>
+                    <div class="color-picker-wrapper"><label for="picker-hintedText">Hint Text</label><input type="color" id="picker-hintedText"></div>
+                    <div class="color-picker-wrapper"><label for="picker-link">Link/HL</label><input type="color" id="picker-link"></div>
+                    <div class="color-picker-wrapper"><label for="picker-btn">Button</label><input type="color" id="picker-btn"></div>
+                    <div class="color-picker-wrapper"><label for="picker-btnText">Btn Text</label><input type="color" id="picker-btnText"></div>
+                </div>
+
+                <div class="preset-reset">
+                    <span>Reset to preset:</span>
+                    <select id="preset-select" aria-label="Preset">
+                        <option value="" disabled selected>Choose...</option>
+                        <option value="light">Light</option>
+                        <option value="dark">Dark</option>
+                        <option value="dracula">Dracula</option>
                     </select>
-                    <label>Visual Theme</label>
-                </div>
-
-                <div id="custom-theme-panel" style="display: none; margin-top: 15px;">
-                    <span style="display: block; font-size: 0.9rem; margin-bottom: 12px; color: var(--text-muted); font-weight: 500;">
-                        Build your own theme:
-                    </span>
-                    <div class="theme-grid">
-                        <div class="color-picker-wrapper"><label>Background</label><div id="picker-bg"></div></div>
-                        <div class="color-picker-wrapper"><label>Foreground</label><div id="picker-fg"></div></div>
-                        <div class="color-picker-wrapper"><label>Grid</label><div id="picker-grid"></div></div>
-                        <div class="color-picker-wrapper"><label>Grid tile</label><div id="picker-tile"></div></div>
-                        <div class="color-picker-wrapper"><label>Tile HL</label><div id="picker-tileHl"></div></div>
-                        <div class="color-picker-wrapper"><label>Hinted</label><div id="picker-hinted"></div></div>
-                        <div class="color-picker-wrapper"><label>Given Text</label><div id="picker-text"></div></div>
-                        <div class="color-picker-wrapper"><label>User Text</label><div id="picker-userText"></div></div>
-                        <div class="color-picker-wrapper"><label>Hint Text</label><div id="picker-hintedText"></div></div>
-                        <div class="color-picker-wrapper"><label>Link/HL</label><div id="picker-link"></div></div>
-                        <div class="color-picker-wrapper"><label>Button</label><div id="picker-btn"></div></div>
-                        <div class="color-picker-wrapper"><label>Btn Text</label><div id="picker-btnText"></div></div>
-                    </div>
-
-                    <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--grid-bg); display: flex; align-items: center; gap: 10px;">
-                        <span style="font-size: 0.8rem; color: var(--text-muted);">Reset to preset:</span>
-                        <select id="preset-select" class="browser-default" style="display: block; width: auto; height: 30px; padding: 0 5px; font-size: 0.8rem; background: var(--card-bg); color: var(--text-main); border: 1px solid var(--grid-bg); border-radius: 4px; outline: none;">
-                            <option value="" disabled selected>Choose...</option>
-                            <option value="light">Light</option>
-                            <option value="dark">Dark</option>
-                            <option value="dracula">Dracula</option>
-                        </select>
-                        <button class="btn-flat waves-effect" style="height: 30px; line-height: 30px; padding: 0 10px; font-size: 0.8rem; color: var(--link-color);" onclick="resetCustomTheme()">Apply</button>
-                    </div>
-                </div>
-                
-                <div class="settings-toggles" style="margin-top: 15px;">
-                    <div class="setting-row">
-                        <span class="setting-label">Disable animations</span>
-                        <div class="switch"><label><input type="checkbox" id="toggle-animations" onchange="toggleAnimationSetting()"><span class="lever"></span></label></div>
-                    </div>
+                    <button type="button" class="btn-flat" onclick="resetCustomTheme()">Apply</button>
                 </div>
             </div>
-        </li>
 
-        <li><div class="divider" style="background-color: var(--grid-bg); margin: 0;"></div></li>
-        
-        <li class="category-header">Helpers & Guides</li>
-        <li>
-            <div class="sidenav-content-wrapper" style="padding-top: 8px;">
-                <div class="settings-toggles">
-                    <div class="setting-row">
-                        <span class="setting-label">Highlight matching numbers</span>
-                        <div class="switch"><label><input type="checkbox" id="toggle-highlight" checked onchange="toggleHighlightSetting()"><span class="lever"></span></label></div>
-                    </div>
-                    <div class="setting-row">
-                        <span class="setting-label">Highlight constraints</span>
-                        <div class="switch"><label><input type="checkbox" id="toggle-constraints" onchange="toggleConstraints()"><span class="lever"></span></label></div>
-                    </div>
-                    <div class="setting-row">
-                        <span class="setting-label">Auto-fill valid notes</span>
-                        <div class="switch"><label><input type="checkbox" id="toggle-auto-notes" onchange="toggleAutoNotes()"><span class="lever"></span></label></div>
-                    </div>
-                </div>
+            <div class="settings-toggles" style="margin-top: 15px;">
+                <label class="setting-row">
+                    <span class="setting-label">Disable animations</span>
+                    <input type="checkbox" class="switch" id="toggle-animations" onchange="toggleAnimationSetting()">
+                </label>
             </div>
-        </li>
-        
-        <li><div class="divider" style="background-color: var(--grid-bg); margin: 0;"></div></li>
-        
-        <li class="category-header">Controls & Difficulty</li>
-        <li>
-            <div class="sidenav-content-wrapper" style="padding-top: 8px;">
-                <div class="settings-toggles">
-                    <div class="setting-row">
-                        <span class="setting-label">Digit-first input</span>
-                        <div class="switch"><label><input type="checkbox" id="toggle-fast-fill" onchange="toggleFastFill()"><span class="lever"></span></label></div>
-                    </div>
-                    <div class="setting-row">
-                        <span class="setting-label">Disable error checking</span>
-                        <div class="switch"><label><input type="checkbox" id="toggle-hard-mode" onchange="toggleHardMode()"><span class="lever"></span></label></div>
-                    </div>
-                </div>
-            </div>
-        </li>
-    </ul>
+        </div>
 
-    <div id="new-game-modal" class="modal">
+        <hr class="divider">
+
+        <div class="category-header">Helpers & Guides</div>
+        <div class="side-panel-content-wrapper">
+            <div class="settings-toggles">
+                <label class="setting-row">
+                    <span class="setting-label">Highlight matching numbers</span>
+                    <input type="checkbox" class="switch" id="toggle-highlight" checked onchange="toggleHighlightSetting()">
+                </label>
+                <label class="setting-row">
+                    <span class="setting-label">Highlight constraints</span>
+                    <input type="checkbox" class="switch" id="toggle-constraints" onchange="toggleConstraints()">
+                </label>
+                <label class="setting-row">
+                    <span class="setting-label">Auto-fill valid notes</span>
+                    <input type="checkbox" class="switch" id="toggle-auto-notes" onchange="toggleAutoNotes()">
+                </label>
+            </div>
+        </div>
+
+        <hr class="divider">
+
+        <div class="category-header">Controls & Difficulty</div>
+        <div class="side-panel-content-wrapper">
+            <div class="settings-toggles">
+                <label class="setting-row">
+                    <span class="setting-label">Digit-first input</span>
+                    <input type="checkbox" class="switch" id="toggle-fast-fill" onchange="toggleFastFill()">
+                </label>
+                <label class="setting-row">
+                    <span class="setting-label">Disable error checking</span>
+                    <input type="checkbox" class="switch" id="toggle-hard-mode" onchange="toggleHardMode()">
+                </label>
+            </div>
+        </div>
+    </dialog>
+
+    <dialog id="new-game-dialog" class="modal">
         <div class="modal-content">
             <h4>Start New Game</h4>
             <p>Select grid size and difficulty to begin. Your current progress will be lost.</p>
-            <div class="input-field" style="margin-top: 25px;">
+            <div class="field">
+                <label for="grid-size-select">Grid Size</label>
                 <select id="grid-size-select">
                     <option value="9" selected>9x9 Standard</option>
                     <option value="5">5x5 Kids</option>
                     <option value="4">4x4 Kids</option>
                 </select>
-                <label>Grid Size</label>
             </div>
-            <div class="input-field" style="margin-top: 25px;">
+            <div class="field">
+                <label for="difficulty">Difficulty</label>
                 <select id="difficulty">
                     <option value="30">Easy</option>
                     <option value="40" selected>Medium</option>
@@ -406,31 +456,32 @@
                     <option value="65">Expert</option>
                     <option value="75">Master</option>
                 </select>
-                <label>Difficulty</label>
             </div>
         </div>
         <div class="modal-footer">
-            <a href="#!" class="modal-close waves-effect btn-flat" style="color: var(--text-muted);">Cancel</a>
-            <a href="#!" class="waves-effect waves-light btn-custom-primary btn" onclick="requestNewGame()">Start Game</a>
+            <button type="button" class="btn-flat btn-muted" id="btn-cancel-new-game">Cancel</button>
+            <button type="button" class="btn btn-custom-primary" onclick="requestNewGame()">Start Game</button>
         </div>
-    </div>
+    </dialog>
 
-    <div id="confirm-modal" class="modal">
-        <div class="modal-content">
-            <h4 id="confirm-title"></h4>
-            <p id="confirm-message"></p>
-        </div>
-        <div class="modal-footer">
-            <a href="#!" id="confirm-cancel" class="waves-effect btn-flat" style="color: var(--text-muted);">Cancel</a>
-            <a href="#!" id="confirm-accept" class="waves-effect waves-light btn-custom-primary btn"></a>
-        </div>
-    </div>
+    <dialog id="confirm-dialog" class="modal">
+        <form method="dialog">
+            <div class="modal-content">
+                <h4 id="confirm-title"></h4>
+                <p id="confirm-message"></p>
+            </div>
+            <div class="modal-footer">
+                <button type="submit" value="cancel" class="btn-flat btn-muted">Cancel</button>
+                <button type="submit" value="accept" id="confirm-accept" class="btn btn-custom-primary" autofocus></button>
+            </div>
+        </form>
+    </dialog>
 
     <main class="main-content">
         <canvas id="firework-canvas"></canvas>
 
         <div class="game-card">
-            
+
             <div id="sudoku-board-container">
                 <div id="sudoku-board" class="grid-9x9"></div>
             </div>
@@ -448,13 +499,13 @@
             </div>
 
             <div class="bottom-actions">
-                <button id="btn-note-mode" class="btn waves-effect waves-light" style="background-color: var(--controls-bg); color: var(--text-main);" onclick="toggleNoteMode()" title="Toggle Note Mode">
-                    <i class="material-icons left">edit</i>Notes
+                <button id="btn-note-mode" class="btn" onclick="toggleNoteMode()" title="Toggle Note Mode">
+                    <i class="material-icons">edit</i>Notes
                 </button>
-                <button class="btn waves-effect waves-light btn-custom-hint" onclick="giveHint()" title="Get a Hint">
-                    <i class="material-icons left">lightbulb_outline</i>Hint
+                <button class="btn btn-custom-hint" onclick="giveHint()" title="Get a Hint">
+                    <i class="material-icons">lightbulb_outline</i>Hint
                 </button>
-                <button class="btn-flat waves-effect btn-custom-solve" onclick="confirmSolveGame()">
+                <button class="btn-flat btn-custom-solve" onclick="confirmSolveGame()">
                     Solve Puzzle
                 </button>
             </div>
@@ -464,18 +515,22 @@
     </main>
 
     <script>
-        const $board = $('#sudoku-board');
-        const $message = $('#message');
-        const $difficulty = $('#difficulty');
-        const $gridSizeSelect = $('#grid-size-select');
-        const $themeSelect = $('#theme-select');
-        const $animToggle = $('#toggle-animations');
-        const $hardModeToggle = $('#toggle-hard-mode');
-        const $highlightToggle = $('#toggle-highlight');
-        const $constraintsToggle = $('#toggle-constraints');
-        const $fastFillToggle = $('#toggle-fast-fill');
-        const $body = $('body');
-        const $fireworkCanvas = $('#firework-canvas');
+        const boardEl = document.getElementById('sudoku-board');
+        const messageEl = document.getElementById('message');
+        const difficultySelect = document.getElementById('difficulty');
+        const gridSizeSelect = document.getElementById('grid-size-select');
+        const themeSelect = document.getElementById('theme-select');
+        const animationsToggle = document.getElementById('toggle-animations');
+        const hardModeToggle = document.getElementById('toggle-hard-mode');
+        const highlightToggle = document.getElementById('toggle-highlight');
+        const constraintsToggle = document.getElementById('toggle-constraints');
+        const autoNotesToggle = document.getElementById('toggle-auto-notes');
+        const fastFillToggle = document.getElementById('toggle-fast-fill');
+        const fireworkCanvas = document.getElementById('firework-canvas');
+        const numTiles = document.querySelectorAll('.num-tile');
+        const settingsDialog = document.getElementById('settings-dialog');
+        const newGameDialog = document.getElementById('new-game-dialog');
+        const confirmDialog = document.getElementById('confirm-dialog');
 
         let solutionBoard = [];
         let currentBoard = []; 
@@ -511,104 +566,98 @@
 
         const SAVED_STATE_KEY = 'zenSudokuState';
 
-        const pickrInstances = {};
+        function initPage() {
+            initDialogs();
 
-        $(document).ready(function() {
-            M.FormSelect.init($('select:not(.browser-default)'));
-            $('.sidenav').sidenav(); 
-            $('.modal:not(#confirm-modal)').modal();
-            initConfirmDialog();
-            
             // Attached first so input keeps working whatever happens while loading or generating
-            $difficulty.on('change', saveGameState);
-            $gridSizeSelect.on('change', updateMasterAvailability);
-            $('.num-tile').on('click', handlePadClick);
-            $(document).on('keydown', handleKeyboardInput);
-            
+            difficultySelect.addEventListener('change', saveGameState);
+            gridSizeSelect.addEventListener('change', updateMasterAvailability);
+            numTiles.forEach(tile => tile.addEventListener('click', handlePadClick));
+            document.addEventListener('keydown', handleKeyboardInput);
+
             // Allow interruption of fireworks
-            $(document).on('mousedown touchstart keydown', function() {
-                if (canInterruptFireworks && $fireworkCanvas.is(':visible')) {
-                    stopFireworks();
-                }
+            ['mousedown', 'touchstart', 'keydown'].forEach(eventName => {
+                document.addEventListener(eventName, () => {
+                    if (canInterruptFireworks && fireworkCanvas.classList.contains('visible')) {
+                        stopFireworks();
+                    }
+                });
             });
 
-            initGrid(); 
+            initGrid();
             const hasSavedData = loadGameState();
-            initPickers(); 
+            initColorPickers();
 
             if (!hasSavedData) {
                 newGame();
             }
             updateQuickToggleIcon();
-        });
+        }
 
-        function initPickers() {
-            const pickerConfig = {
-                theme: 'nano', useAsButton: false,
-                components: { preview: true, opacity: false, hue: true, interaction: { hex: true, input: true, clear: false, save: false } }
-            };
+        // <input type="color"> only accepts #rrggbb, but saved colours may be #rgb or carry an alpha pair
+        function toColorInputValue(color) {
+            let hex = color.slice(1);
+            if (hex.length <= 4) hex = [...hex].map(digit => digit + digit).join('');
+            return '#' + hex.slice(0, 6).toLowerCase();
+        }
+
+        function setColorInput(key, color) {
+            document.getElementById(`picker-${key}`).value = toColorInputValue(color);
+        }
+
+        function initColorPickers() {
             Object.keys(customThemeState).forEach(key => {
-                pickrInstances[key] = Pickr.create({ el: `#picker-${key}`, default: customThemeState[key], ...pickerConfig });
-                pickrInstances[key].on('change', (color) => {
-                    customThemeState[key] = color.toHEXA().toString(); applyCustomTheme(true);
-                }).on('changestop', () => { saveGameState(); });
+                const colorInput = document.getElementById(`picker-${key}`);
+                setColorInput(key, customThemeState[key]);
+                colorInput.addEventListener('input', () => {
+                    customThemeState[key] = colorInput.value; applyCustomTheme(true);
+                });
+                // 'change' fires when the player is done choosing, not on every step of a drag
+                colorInput.addEventListener('change', saveGameState);
             });
         }
 
-        // --- Confirm dialog ---
-        const $confirmModal = $('#confirm-modal');
-        let confirmModalInstance = null;
-        let isConfirmAccepted = false;
-        let resolveConfirm = null;
+        // --- Dialogs ---
+        function initDialogs() {
+            document.getElementById('btn-settings').addEventListener('click', () => settingsDialog.showModal());
+            document.getElementById('btn-close-settings').addEventListener('click', () => settingsDialog.close());
+            document.getElementById('btn-new-game').addEventListener('click', () => newGameDialog.showModal());
+            document.getElementById('btn-cancel-new-game').addEventListener('click', () => newGameDialog.close());
+            [settingsDialog, newGameDialog, confirmDialog].forEach(closeOnBackdropClick);
+        }
+
+        // A click on the backdrop is reported with the dialog itself as target, so tell it apart
+        // from clicks on the dialog's own padding by position. Keyboard clicks on a button
+        // have the button as target and never count.
+        function closeOnBackdropClick(dialog) {
+            dialog.addEventListener('click', (e) => {
+                if (e.target !== dialog) return;
+                const box = dialog.getBoundingClientRect();
+                const isInsideDialog = e.clientX >= box.left && e.clientX <= box.right &&
+                    e.clientY >= box.top && e.clientY <= box.bottom;
+                if (!isInsideDialog) dialog.close();
+            });
+        }
 
         // Resolves to true if the player confirms, false on cancel, Escape or a click outside.
         function confirmAction({ title, message, confirmLabel }) {
-            if (resolveConfirm) return Promise.resolve(false);
-            $('#confirm-title').text(title);
-            $('#confirm-message').text(message);
-            $('#confirm-accept').text(confirmLabel);
-            isConfirmAccepted = false;
+            if (confirmDialog.open) return Promise.resolve(false);
+            document.getElementById('confirm-title').textContent = title;
+            document.getElementById('confirm-message').textContent = message;
+            document.getElementById('confirm-accept').textContent = confirmLabel;
+            // Escape and backdrop clicks close the dialog without setting a return value
+            confirmDialog.returnValue = '';
             return new Promise(resolve => {
-                resolveConfirm = resolve;
-                confirmModalInstance.open();
+                confirmDialog.addEventListener('close', () => resolve(confirmDialog.returnValue === 'accept'), { once: true });
+                confirmDialog.showModal();
             });
-        }
-
-        function closeConfirmDialog(isAccepted) {
-            isConfirmAccepted = isAccepted;
-            confirmModalInstance.close();
-        }
-
-        function initConfirmDialog() {
-            confirmModalInstance = M.Modal.init($confirmModal[0], {
-                onOpenEnd: () => $('#confirm-accept').focus(),
-                onCloseEnd: () => {
-                    const resolve = resolveConfirm;
-                    resolveConfirm = null;
-                    resolve(isConfirmAccepted);
-                }
-            });
-            $('#confirm-accept').on('click', (e) => { e.preventDefault(); closeConfirmDialog(true); });
-            $('#confirm-cancel').on('click', (e) => { e.preventDefault(); closeConfirmDialog(false); });
-
-            // Capture phase and stopImmediatePropagation: Materialize would otherwise close every
-            // open modal on Escape, including the New Game modal underneath this dialog.
-            document.addEventListener('keydown', (e) => {
-                if (!resolveConfirm || !$confirmModal.hasClass('open')) return;
-                if (e.key === 'Escape') {
-                    e.stopImmediatePropagation();
-                    closeConfirmDialog(false);
-                } else if (e.key === 'Enter' && e.target.id !== 'confirm-cancel') {
-                    e.preventDefault();
-                    closeConfirmDialog(true);
-                }
-            }, true);
         }
 
         async function resetCustomTheme() {
-            const presetKey = $('#preset-select').val();
+            const presetSelect = document.getElementById('preset-select');
+            const presetKey = presetSelect.value;
             if (!presetKey) return;
-            const presetName = $('#preset-select option:selected').text();
+            const presetName = presetSelect.selectedOptions[0].textContent;
             const isConfirmed = await confirmAction({
                 title: 'Overwrite custom colors?',
                 message: `Your custom colors will be replaced with the ${presetName} preset.`,
@@ -618,31 +667,30 @@
                 const colors = themePresets[presetKey];
                 Object.keys(colors).forEach(key => {
                     customThemeState[key] = colors[key];
-                    if (pickrInstances[key]) pickrInstances[key].setColor(colors[key]);
+                    setColorInput(key, colors[key]);
                 });
-                applyCustomTheme(); saveGameState(); $('#preset-select').val('');
+                applyCustomTheme(); saveGameState(); presetSelect.value = '';
             }
         }
 
         function quickToggleTheme() {
-            const currentTheme = $themeSelect.val();
-            $themeSelect.val(currentTheme === 'theme-light' ? 'theme-dark' : 'theme-light');
-            M.FormSelect.init($('select:not(.browser-default)')); changeTheme(); 
+            themeSelect.value = themeSelect.value === 'theme-light' ? 'theme-dark' : 'theme-light';
+            changeTheme();
         }
 
         function updateQuickToggleIcon() {
-            $('#quick-theme-icon').text($themeSelect.val() === 'theme-light' ? 'brightness_4' : 'brightness_7');
+            document.getElementById('quick-theme-icon').textContent = themeSelect.value === 'theme-light' ? 'brightness_4' : 'brightness_7';
         }
 
         // --- Grid Core Resizing ---
         function setGridSize(size) {
             gridSize = size;
             
-            $board.removeClass('grid-9x9 grid-5x5 grid-4x4');
-            $body.removeClass('is-9x9 is-5x5 is-4x4');
-            
-            $board.addClass('grid-' + size + 'x' + size);
-            $body.addClass('is-' + size + 'x' + size);
+            boardEl.classList.remove('grid-9x9', 'grid-5x5', 'grid-4x4');
+            document.body.classList.remove('is-9x9', 'is-5x5', 'is-4x4');
+
+            boardEl.classList.add('grid-' + size + 'x' + size);
+            document.body.classList.add('is-' + size + 'x' + size);
 
             if (size === 4) {
                 subGridSize = 2;
@@ -653,27 +701,37 @@
             }
         }
 
+        function getCellInputs() {
+            return boardEl.querySelectorAll('input');
+        }
+
+        function getCellPosition(input) {
+            return [parseInt(input.dataset.row), parseInt(input.dataset.col)];
+        }
+
+        function getNumTile(val) {
+            return document.querySelector(`.num-tile[data-val='${val}']`);
+        }
+
+        function clearSelectedPadTiles() {
+            numTiles.forEach(tile => tile.classList.remove('selected-num'));
+        }
+
         function toggleFastFill() {
-            fastFillMode = $fastFillToggle.is(':checked');
-            selectCell(null); selectedPadNum = null; $('.num-tile').removeClass('selected-num');
+            fastFillMode = fastFillToggle.checked;
+            selectCell(null); selectedPadNum = null; clearSelectedPadTiles();
             highlightMatches(''); saveGameState();
         }
 
         function toggleNoteMode() {
             noteMode = !noteMode;
-            if (noteMode) {
-                $('#btn-note-mode').addClass('active');
-                $('#number-pad').addClass('note-mode-active');
-            } else {
-                $('#btn-note-mode').removeClass('active');
-                $('#number-pad').removeClass('note-mode-active');
-            }
+            document.getElementById('btn-note-mode').classList.toggle('active', noteMode);
+            document.getElementById('number-pad').classList.toggle('note-mode-active', noteMode);
             updateNumberPad();
         }
 
         async function toggleAutoNotes() {
-            const $autoNotesToggle = $('#toggle-auto-notes');
-            if ($autoNotesToggle.is(':checked')) {
+            if (autoNotesToggle.checked) {
                 autoFillNotes();
             } else {
                 if (hasNotes()) {
@@ -683,7 +741,7 @@
                         confirmLabel: 'Turn off'
                     });
                     if (!isConfirmed) {
-                        $autoNotesToggle.prop('checked', true);
+                        autoNotesToggle.checked = true;
                         return;
                     }
                 }
@@ -695,51 +753,52 @@
         }
 
         function toggleConstraints() {
-            constraintsEnabled = $constraintsToggle.is(':checked');
+            constraintsEnabled = constraintsToggle.checked;
             if (currentHighlightVal !== '') highlightMatches(currentHighlightVal);
             saveGameState();
         }
 
-        function selectCell($input) {
-            if (selectedCell) $(selectedCell).removeClass('selected-cell');
-            selectedCell = $input;
-            if ($input) $input.addClass('selected-cell');
+        function selectCell(input) {
+            if (selectedCell) selectedCell.classList.remove('selected-cell');
+            selectedCell = input;
+            if (input) input.classList.add('selected-cell');
             updateNumberPad(); // Reflect note mode selections dynamically
         }
 
         function handleCellClick(e) {
-            e.preventDefault(); 
-            const $input = $(this); const val = $input.val();
-            
+            e.preventDefault();
+            const input = e.currentTarget; const val = input.value;
+            const isEditable = !input.classList.contains('given') && !input.classList.contains('locked');
+
             if (fastFillMode) {
-                if (selectedPadNum !== null && !$input.hasClass('given') && !$input.hasClass('locked') && String(val) !== String(selectedPadNum)) {
+                if (selectedPadNum !== null && isEditable && String(val) !== String(selectedPadNum)) {
                     // Instantly overwrite a wrongly placed number in Fast Fill Mode
-                    updateCellValue($input, selectedPadNum);
+                    updateCellValue(input, selectedPadNum);
                 } else if (val !== '') {
-                    if ($(`.num-tile[data-val='${val}']`).hasClass('complete')) {
+                    if (getNumTile(val).classList.contains('complete')) {
                         selectedPadNum = null;
-                        $('.num-tile').removeClass('selected-num');
+                        clearSelectedPadTiles();
                         clearHighlights();
                     } else {
                         if (selectedPadNum === val) {
                             selectedPadNum = null;
-                            $('.num-tile').removeClass('selected-num');
+                            clearSelectedPadTiles();
                             highlightMatches('');
                         } else {
                             selectedPadNum = val;
-                            $('.num-tile').removeClass('selected-num');
-                            $(`.num-tile[data-val='${val}']`).addClass('selected-num');
+                            clearSelectedPadTiles();
+                            getNumTile(val).classList.add('selected-num');
                             highlightMatches(val);
                         }
                     }
-                } else if (selectedPadNum !== null) { 
-                    if (!$input.hasClass('given') && !$input.hasClass('locked')) updateCellValue($input, selectedPadNum); 
+                } else if (selectedPadNum !== null) {
+                    if (isEditable) updateCellValue(input, selectedPadNum);
                 }
             } else {
-                if (!$input.hasClass('given') && !$input.hasClass('locked')) selectCell($input); else selectCell(null); 
-                
+                if (isEditable) selectCell(input); else selectCell(null);
+
                 if (val !== '') {
-                    if ($(`.num-tile[data-val='${val}']`).hasClass('complete')) clearHighlights();
+                    if (getNumTile(val).classList.contains('complete')) clearHighlights();
                     else highlightMatches(val);
                 } else {
                     if (currentHighlightVal !== '') highlightMatches(currentHighlightVal);
@@ -747,15 +806,16 @@
             }
         }
 
-        function handlePadClick() {
-            if ($(this).hasClass('complete')) return; // Completely block clicking used up numbers
+        function handlePadClick(e) {
+            const tile = e.currentTarget;
+            if (tile.classList.contains('complete')) return; // Completely block clicking used up numbers
 
-            const val = $(this).attr('data-val');
-            if(val > gridSize) return; 
-            
+            const val = tile.dataset.val;
+            if(val > gridSize) return;
+
             if (fastFillMode) {
-                if (selectedPadNum === val) { selectedPadNum = null; $(this).removeClass('selected-num'); highlightMatches(''); } 
-                else { $('.num-tile').removeClass('selected-num'); $(this).addClass('selected-num'); selectedPadNum = val; highlightMatches(val); }
+                if (selectedPadNum === val) { selectedPadNum = null; tile.classList.remove('selected-num'); highlightMatches(''); }
+                else { clearSelectedPadTiles(); tile.classList.add('selected-num'); selectedPadNum = val; highlightMatches(val); }
             } else {
                 if (selectedCell) updateCellValue(selectedCell, val);
                 else { if (currentHighlightVal === val) highlightMatches(''); else highlightMatches(val); }
@@ -763,21 +823,20 @@
         }
 
         function isTypingInFormField(target) {
-            return $(target).is('input, select, textarea') && !$(target).is('#sudoku-board input');
+            return target.matches('input, select, textarea') && !target.matches('#sudoku-board input');
         }
 
         function isMenuOpen() {
-            const isSidenavOpen = $('.sidenav').toArray().some(el => M.Sidenav.getInstance(el).isOpen);
-            return isSidenavOpen || $('.modal.open').length > 0;
+            return document.querySelector('dialog[open]') !== null;
         }
 
         function handleKeyboardInput(e) {
-            if (fastFillMode || !selectedCell || selectedCell.hasClass('locked') || selectedCell.hasClass('given')) return; 
+            if (fastFillMode || !selectedCell || selectedCell.classList.contains('locked') || selectedCell.classList.contains('given')) return;
             if (e.ctrlKey || e.metaKey || e.altKey || isTypingInFormField(e.target) || isMenuOpen()) return;
             const key = e.key;
             const validRegex = new RegExp('^[1-' + gridSize + ']$');
             if (validRegex.test(key)) {
-                if ($(`.num-tile[data-val='${key}']`).hasClass('complete')) return;
+                if (getNumTile(key).classList.contains('complete')) return;
                 updateCellValue(selectedCell, key);
             }
             else if (key === 'Backspace' || key === 'Delete') updateCellValue(selectedCell, 'erase');
@@ -785,11 +844,9 @@
 
         function getBoardState() {
             let board = Array.from({ length: gridSize }, () => Array(gridSize).fill(0));
-            $('#sudoku-board input').each(function() {
-                let r = parseInt($(this).attr('data-row'));
-                let c = parseInt($(this).attr('data-col'));
-                let val = $(this).val();
-                if (val !== '') board[r][c] = parseInt(val);
+            getCellInputs().forEach(input => {
+                const [r, c] = getCellPosition(input);
+                if (input.value !== '') board[r][c] = parseInt(input.value);
             });
             return board;
         }
@@ -834,43 +891,38 @@
 
         function updateErrors() {
             if (hardModeEnabled) {
-                $('#sudoku-board input').removeClass('error-cell anim-shake');
+                getCellInputs().forEach(input => input.classList.remove('error-cell', 'anim-shake'));
                 return false;
             }
             let board = getBoardState();
             let errorFound = false;
-            $('#sudoku-board input').each(function() {
-                let $input = $(this);
-                let r = parseInt($input.attr('data-row'));
-                let c = parseInt($input.attr('data-col'));
-                
+            getCellInputs().forEach(input => {
+                const [r, c] = getCellPosition(input);
+
                 if (board[r][c] !== 0 && hasConflict(board, r, c)) {
-                    if (!$input.hasClass('given') && !$input.hasClass('locked')) {
-                        if (!$input.hasClass('error-cell')) {
-                            $input.addClass('error-cell');
-                        }
+                    if (!input.classList.contains('given') && !input.classList.contains('locked')) {
+                        input.classList.add('error-cell');
                     }
                     errorFound = true;
                 } else {
-                    $input.removeClass('error-cell anim-shake');
+                    input.classList.remove('error-cell', 'anim-shake');
                 }
             });
             return errorFound;
         }
 
         function renderNotes() {
-            $('.notes-top').empty();
-            $('.notes-bottom').empty();
-            $('#sudoku-board input').each(function(index) {
-                if ($(this).val() === '') {
+            boardEl.querySelectorAll('.notes-display').forEach(display => { display.textContent = ''; });
+            getCellInputs().forEach((input, index) => {
+                if (input.value === '') {
                     let notes = notesBoard[index] ? [...notesBoard[index]].sort((a,b) => a-b) : [];
                     if (notes.length > 0) {
                         let cutoff = Math.ceil(gridSize / 2);
                         let topNotes = notes.filter(n => n <= cutoff).join('');
                         let bottomNotes = notes.filter(n => n > cutoff).join('');
                         
-                        $(this).siblings('.notes-top').text(topNotes);
-                        $(this).siblings('.notes-bottom').text(bottomNotes);
+                        input.parentElement.querySelector('.notes-top').textContent = topNotes;
+                        input.parentElement.querySelector('.notes-bottom').textContent = bottomNotes;
                     }
                 }
             });
@@ -911,18 +963,16 @@
             }
         }
 
-        function updateCellValue($input, val) {
-            const r = parseInt($input.attr('data-row')); const c = parseInt($input.attr('data-col'));
+        function updateCellValue(input, val) {
+            const [r, c] = getCellPosition(input);
             const index = r * gridSize + c;
 
             // Handle manual note entry
-            if (noteMode && val !== 'erase' && $input.val() === '') {
+            if (noteMode && val !== 'erase' && input.value === '') {
                 let n = parseInt(val);
                 let currentNotes = notesBoard[index] || [];
                 
-                if ($('#toggle-auto-notes').is(':checked')) {
-                    $('#toggle-auto-notes').prop('checked', false);
-                }
+                if (autoNotesToggle.checked) autoNotesToggle.checked = false;
 
                 if (currentNotes.includes(n)) {
                     notesBoard[index] = currentNotes.filter(x => x !== n);
@@ -935,18 +985,18 @@
                 return; 
             }
 
-            $input.removeClass('anim-shake error-cell hint-highlight'); void $input[0].offsetWidth; 
+            input.classList.remove('anim-shake', 'error-cell', 'hint-highlight'); void input.offsetWidth;
 
-            if ($input.val() === String(val)) val = 'erase';
+            if (input.value === String(val)) val = 'erase';
 
             if (val === 'erase') {
-                if ($input.val() === '') {
+                if (input.value === '') {
                     notesBoard[index] = [];
                 } else {
-                    $input.val(''); 
+                    input.value = '';
                 }
-                
-                if ($('#toggle-auto-notes').is(':checked')) autoFillNotes();
+
+                if (autoNotesToggle.checked) autoFillNotes();
                 else renderNotes();
 
                 if (!fastFillMode) highlightMatches('');
@@ -956,32 +1006,32 @@
             }
 
             // Normal number placement
-            $input.val(val);
+            input.value = val;
             notesBoard[index] = []; 
             removeNotesFromAffected(r, c, val);
 
             if (!fastFillMode) highlightMatches(val); 
             else if (currentHighlightVal !== '') highlightMatches(currentHighlightVal); 
 
-            if ($('#toggle-auto-notes').is(':checked')) autoFillNotes();
+            if (autoNotesToggle.checked) autoFillNotes();
             else renderNotes();
 
             if (!hardModeEnabled) {
                 let board = getBoardState();
-                
+
                 if (parseInt(val) === solutionBoard[r][c]) {
-                    $input.addClass('locked');
-                    if (animationsEnabled) { $input.addClass('anim-pop'); setTimeout(() => $input.removeClass('anim-pop'), 350); } 
+                    input.classList.add('locked');
+                    if (animationsEnabled) { input.classList.add('anim-pop'); setTimeout(() => input.classList.remove('anim-pop'), 350); }
                 } else if (hasConflict(board, r, c)) {
-                    $input.addClass('error-cell');
-                    if (animationsEnabled) $input.addClass('anim-shake');
+                    input.classList.add('error-cell');
+                    if (animationsEnabled) input.classList.add('anim-shake');
                     if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
-                } else { 
-                    if (animationsEnabled) { $input.addClass('anim-pop'); setTimeout(() => $input.removeClass('anim-pop'), 350); } 
+                } else {
+                    if (animationsEnabled) { input.classList.add('anim-pop'); setTimeout(() => input.classList.remove('anim-pop'), 350); }
                 }
-                updateErrors(); 
-            } else { 
-                if (animationsEnabled) { $input.addClass('anim-pop'); setTimeout(() => $input.removeClass('anim-pop'), 350); } 
+                updateErrors();
+            } else {
+                if (animationsEnabled) { input.classList.add('anim-pop'); setTimeout(() => input.classList.remove('anim-pop'), 350); }
             }
             updateNumberPad(); checkWinCondition(); saveGameState();
         }
@@ -1005,16 +1055,16 @@
 
         function saveGameState() {
             const userBoard = [];
-            $('#sudoku-board input').each(function() {
-                const val = $(this).val(); userBoard.push(val === '' ? 0 : parseInt(val));
+            getCellInputs().forEach(input => {
+                userBoard.push(input.value === '' ? 0 : parseInt(input.value));
             });
             const state = {
                 solutionBoard: solutionBoard, currentBoard: currentBoard, userBoard: userBoard,
                 notesBoard: notesBoard,
                 settings: {
-                    difficulty: $difficulty.val(), theme: $themeSelect.val(), highlight: $highlightToggle.is(':checked'),
-                    animations: $animToggle.is(':checked'), hardMode: $hardModeToggle.is(':checked'), fastFill: fastFillMode,
-                    gridSize: gridSize, constraints: constraintsEnabled, autoNotes: $('#toggle-auto-notes').is(':checked')
+                    difficulty: difficultySelect.value, theme: themeSelect.value, highlight: highlightToggle.checked,
+                    animations: animationsToggle.checked, hardMode: hardModeToggle.checked, fastFill: fastFillMode,
+                    gridSize: gridSize, constraints: constraintsEnabled, autoNotes: autoNotesToggle.checked
                 },
                 customColors: customThemeState,
                 isAutoSolved: statusKind === 'autoSolved'
@@ -1072,17 +1122,15 @@
 
         // Small grids need no technique beyond singles, so Master cannot be generated there.
         function updateMasterAvailability() {
-            const $masterOption = $difficulty.find('option[value="75"]');
-            const isAvailable = parseInt($gridSizeSelect.val()) >= 9;
-            // Fall back before disabling: jQuery reads a disabled selected option as no value
-            if (!isAvailable && $difficulty.val() === '75') $difficulty.val('65');
-            $masterOption.prop('disabled', !isAvailable);
-            M.FormSelect.init($difficulty);
+            const masterOption = difficultySelect.querySelector('option[value="75"]');
+            const isAvailable = parseInt(gridSizeSelect.value) >= 9;
+            if (!isAvailable && difficultySelect.value === '75') difficultySelect.value = '65';
+            masterOption.disabled = !isAvailable;
         }
 
-        function setSelectValue($select, value, fallback) {
-            const isKnownOption = $select.find('option').toArray().some(option => option.value === String(value));
-            $select.val(isKnownOption ? value : fallback);
+        function setSelectValue(select, value, fallback) {
+            const isKnownOption = Array.from(select.options).some(option => option.value === String(value));
+            select.value = isKnownOption ? value : fallback;
         }
 
         function loadGameState() {
@@ -1096,57 +1144,55 @@
                 solutionBoard = state.solutionBoard; currentBoard = state.currentBoard;
 
                 const settings = state.settings;
-                setSelectValue($difficulty, settings.difficulty, '40');
-                setSelectValue($themeSelect, settings.theme, 'theme-light');
-                $highlightToggle.prop('checked', settings.highlight !== false);
+                setSelectValue(difficultySelect, settings.difficulty, '40');
+                setSelectValue(themeSelect, settings.theme, 'theme-light');
+                highlightToggle.checked = settings.highlight !== false;
                 // The toggle is "Disable animations" and the saved flag follows it: true means off
-                $animToggle.prop('checked', settings.animations === true);
-                $hardModeToggle.prop('checked', settings.hardMode === true);
-                $fastFillToggle.prop('checked', settings.fastFill === true);
-                $constraintsToggle.prop('checked', settings.constraints === true);
-                $('#toggle-auto-notes').prop('checked', settings.autoNotes === true);
+                animationsToggle.checked = settings.animations === true;
+                hardModeToggle.checked = settings.hardMode === true;
+                fastFillToggle.checked = settings.fastFill === true;
+                constraintsToggle.checked = settings.constraints === true;
+                autoNotesToggle.checked = settings.autoNotes === true;
 
                 fastFillMode = settings.fastFill === true;
                 constraintsEnabled = settings.constraints === true;
 
                 setGridSize(state.gridSize);
-                $gridSizeSelect.val(state.gridSize);
+                gridSizeSelect.value = state.gridSize;
                 updateMasterAvailability();
 
                 notesBoard = state.notesBoard || Array(gridSize * gridSize).fill().map(() => []);
 
-                M.FormSelect.init($('select:not(.browser-default)'));
                 customThemeState = { ...customThemeState, ...state.customColors };
                 changeTheme(true);
 
-                animationsEnabled = !$animToggle.is(':checked');
-                if (!animationsEnabled) $body.addClass('animations-disabled');
-                highlightEnabled = $highlightToggle.is(':checked'); hardModeEnabled = $hardModeToggle.is(':checked');
+                animationsEnabled = !animationsToggle.checked;
+                if (!animationsEnabled) document.body.classList.add('animations-disabled');
+                highlightEnabled = highlightToggle.checked; hardModeEnabled = hardModeToggle.checked;
 
-                if ($('#sudoku-board .cell').length !== (gridSize * gridSize)) initGrid();
+                if (boardEl.querySelectorAll('.cell').length !== (gridSize * gridSize)) initGrid();
 
                 renderBoard(false);
-                const $inputs = $('#sudoku-board input');
-                $inputs.each(function(index) {
+                getCellInputs().forEach((input, index) => {
                     const userVal = state.userBoard[index];
-                    if (userVal !== 0 && !$(this).hasClass('given')) {
-                        $(this).val(userVal);
+                    if (userVal !== 0 && !input.classList.contains('given')) {
+                        input.value = userVal;
                     }
                 });
 
                 if (!hardModeEnabled) {
-                    $('#sudoku-board input').each(function(index) {
-                        if ($(this).val() !== '' && !$(this).hasClass('given')) {
+                    getCellInputs().forEach((input, index) => {
+                        if (input.value !== '' && !input.classList.contains('given')) {
                             const r = Math.floor(index / gridSize); const c = index % gridSize;
-                            if (parseInt($(this).val()) === solutionBoard[r][c]) {
-                                $(this).addClass('locked');
+                            if (parseInt(input.value) === solutionBoard[r][c]) {
+                                input.classList.add('locked');
                             }
                         }
                     });
                     updateErrors();
                 }
 
-                if ($('#toggle-auto-notes').is(':checked')) autoFillNotes();
+                if (autoNotesToggle.checked) autoFillNotes();
                 else renderNotes();
 
                 if (state.isAutoSolved) setStatus('Puzzle Solved Automatically.', 'neutral', 'autoSolved');
@@ -1164,31 +1210,33 @@
         }
 
         function changeTheme(skipSave = false) {
-            const newTheme = $themeSelect.val();
-            $body.removeClass('theme-light theme-dark theme-dracula theme-custom').addClass(newTheme);
-            if (newTheme === 'theme-custom') { $('#custom-theme-panel').slideDown(200); applyCustomTheme(true); } 
+            const newTheme = themeSelect.value;
+            document.body.classList.remove('theme-light', 'theme-dark', 'theme-dracula', 'theme-custom');
+            document.body.classList.add(newTheme);
+            document.getElementById('custom-theme-panel').hidden = newTheme !== 'theme-custom';
+            if (newTheme === 'theme-custom') applyCustomTheme(true);
             else {
-                $('#custom-theme-panel').slideUp(200);
                 const varsToClear = [
                     '--bg-color', '--card-bg', '--controls-bg', '--grid-bg', '--grid-border', '--cell-bg', '--cell-given-bg', '--highlight-bg', '--cell-focus-bg',
                     '--hint-bg', '--btn-hint-bg', '--text-main', '--text-muted', '--cell-given-text', '--cell-input-text', '--hint-text', '--btn-hint-text',
                     '--link-color', '--nav-bg', '--btn-primary-bg', '--nav-text', '--btn-primary-text', '--cell-focus-shadow', '--pad-text'
                 ];
-                varsToClear.forEach(v => $body[0].style.removeProperty(v));
+                varsToClear.forEach(v => document.body.style.removeProperty(v));
             }
             updateQuickToggleIcon(); if (!skipSave) saveGameState();
         }
 
         function applyCustomTheme(skipSave = false) {
-            if ($themeSelect.val() !== 'theme-custom') return;
-            $body.css({
+            if (themeSelect.value !== 'theme-custom') return;
+            const themeVariables = {
                 '--bg-color': customThemeState.bg, '--card-bg': customThemeState.fg, '--controls-bg': customThemeState.fg, '--grid-bg': customThemeState.grid, '--grid-border': customThemeState.grid,
                 '--cell-bg': customThemeState.tile, '--cell-given-bg': customThemeState.tile, '--highlight-bg': customThemeState.tileHl, '--cell-focus-bg': customThemeState.tileHl,
                 '--hint-bg': customThemeState.hinted, '--btn-hint-bg': customThemeState.hinted, '--text-main': customThemeState.text, '--text-muted': customThemeState.text,
                 '--cell-given-text': customThemeState.text, '--cell-input-text': customThemeState.userText, '--hint-text': customThemeState.hintedText, '--btn-hint-text': customThemeState.hintedText,
                 '--link-color': customThemeState.link, '--cell-focus-shadow': customThemeState.link, '--nav-bg': customThemeState.btn, '--btn-primary-bg': customThemeState.btn,
                 '--nav-text': customThemeState.btnText, '--btn-primary-text': customThemeState.btnText, '--pad-text': customThemeState.text
-            });
+            };
+            Object.entries(themeVariables).forEach(([name, value]) => document.body.style.setProperty(name, value));
             if (!skipSave) saveGameState();
         }
 
@@ -1198,139 +1246,146 @@
 
         function setStatus(text, type, kind = 'none') {
             statusKind = kind;
-            $message.text(text).removeClass('msg-success msg-error msg-neutral').addClass('msg-' + type);
+            messageEl.textContent = text;
+            messageEl.classList.remove('msg-success', 'msg-error', 'msg-neutral');
+            messageEl.classList.add('msg-' + type);
         }
 
         function updateNumberPad() {
             const counts = {}; for(let i=1; i<=gridSize; i++) counts[i] = 0;
-            $('#sudoku-board input').each(function() {
-                const val = $(this).val(); if (val !== '') counts[val]++;
+            getCellInputs().forEach(input => {
+                if (input.value !== '') counts[input.value]++;
             });
-            
+
             let activePadComplete = false;
-            
-            $('.num-tile').each(function() {
-                const val = $(this).attr('data-val');
+
+            numTiles.forEach(tile => {
+                const val = tile.dataset.val;
                 if(val <= gridSize) {
                     if (counts[val] >= gridSize) {
-                        $(this).addClass('complete').removeClass('active-hl selected-num');
+                        tile.classList.add('complete');
+                        tile.classList.remove('active-hl', 'selected-num');
                         if (currentHighlightVal === val) activePadComplete = true;
                     }
                     else {
-                        $(this).removeClass('complete');
+                        tile.classList.remove('complete');
                     }
                 }
-                
-                $(this).removeClass('note-active');
-                if (noteMode && !fastFillMode && selectedCell && selectedCell.val() === '') {
-                    let r = parseInt(selectedCell.attr('data-row'));
-                    let c = parseInt(selectedCell.attr('data-col'));
+
+                tile.classList.remove('note-active');
+                if (noteMode && !fastFillMode && selectedCell && selectedCell.value === '') {
+                    const [r, c] = getCellPosition(selectedCell);
                     let cellNotes = notesBoard[r * gridSize + c] || [];
                     if (cellNotes.includes(parseInt(val))) {
-                        $(this).addClass('note-active');
+                        tile.classList.add('note-active');
                     }
                 }
             });
-            
-            if(selectedPadNum && counts[selectedPadNum] >= gridSize) { 
-                selectedPadNum = null; 
-                highlightMatches(''); 
+
+            if(selectedPadNum && counts[selectedPadNum] >= gridSize) {
+                selectedPadNum = null;
+                highlightMatches('');
             } else if (activePadComplete) {
                 highlightMatches('');
             }
         }
 
         function toggleHighlightSetting() {
-            highlightEnabled = $highlightToggle.is(':checked');
+            highlightEnabled = highlightToggle.checked;
             if (!highlightEnabled) clearHighlights(); else if (currentHighlightVal !== '') highlightMatches(currentHighlightVal);
             saveGameState();
         }
 
-        function clearHighlights() { 
-            $('#sudoku-board input').removeClass('highlight-match constraint-line'); 
-            $('.num-tile:not(.selected-num)').removeClass('active-hl'); 
-            currentHighlightVal = ''; 
+        function clearHighlights() {
+            getCellInputs().forEach(input => input.classList.remove('highlight-match', 'constraint-line'));
+            numTiles.forEach(tile => { if (!tile.classList.contains('selected-num')) tile.classList.remove('active-hl'); });
+            currentHighlightVal = '';
         }
 
         function highlightMatches(val) {
             clearHighlights(); currentHighlightVal = val;
             if (!highlightEnabled || val === '') return;
-            
+
             let constraintRows = new Set();
             let constraintCols = new Set();
-            
-            $('#sudoku-board input').each(function() { 
-                if ($(this).val() == val) {
-                    let r = parseInt($(this).attr('data-row'));
-                    let c = parseInt($(this).attr('data-col'));
-                    
-                    $(this).addClass('highlight-match'); 
+
+            getCellInputs().forEach(input => {
+                if (input.value == val) {
+                    const [r, c] = getCellPosition(input);
+
+                    input.classList.add('highlight-match');
                     constraintRows.add(r);
                     constraintCols.add(c);
                 }
             });
-            
+
             if (constraintsEnabled) {
-                $('#sudoku-board input').each(function() {
-                    let r = parseInt($(this).attr('data-row'));
-                    let c = parseInt($(this).attr('data-col'));
-                    
+                getCellInputs().forEach(input => {
+                    const [r, c] = getCellPosition(input);
+
                     let isRowConstrained = constraintRows.has(r);
                     let isColConstrained = constraintCols.has(c);
-                    
-                    if ($(this).val() != val) {
+
+                    if (input.value != val) {
                         if (isRowConstrained || isColConstrained) {
-                            $(this).addClass('constraint-line');
+                            input.classList.add('constraint-line');
                         }
                     }
                 });
             }
-            
-            if(!fastFillMode) $(`.num-tile[data-val='${val}']`).not('.complete').addClass('active-hl');
+
+            const matchingTile = getNumTile(val);
+            if(!fastFillMode && matchingTile && !matchingTile.classList.contains('complete')) matchingTile.classList.add('active-hl');
         }
 
         function toggleAnimationSetting() {
-            animationsEnabled = !$animToggle.is(':checked');
+            animationsEnabled = !animationsToggle.checked;
             if (!animationsEnabled) {
-                $body.addClass('animations-disabled'); stopFireworks(); 
-                $('#sudoku-board input').removeClass('anim-pop anim-shake anim-wave').css('animation-delay', '0ms');
-            } else $body.removeClass('animations-disabled');
+                document.body.classList.add('animations-disabled'); stopFireworks();
+                getCellInputs().forEach(input => {
+                    input.classList.remove('anim-pop', 'anim-shake', 'anim-wave');
+                    input.style.animationDelay = '0ms';
+                });
+            } else document.body.classList.remove('animations-disabled');
             saveGameState();
         }
 
         function toggleHardMode() {
-            hardModeEnabled = $hardModeToggle.is(':checked');
+            hardModeEnabled = hardModeToggle.checked;
             if (!hardModeEnabled) {
-                $('#sudoku-board input').each(function() {
-                    const $input = $(this);
-                    if ($input.val() !== '' && !$input.hasClass('given')) {
-                        const r = parseInt($input.attr('data-row'));
-                        const c = parseInt($input.attr('data-col'));
-                        if (parseInt($input.val()) === solutionBoard[r][c]) {
-                            $input.addClass('locked').removeClass('error-cell anim-shake');
+                getCellInputs().forEach(input => {
+                    if (input.value !== '' && !input.classList.contains('given')) {
+                        const [r, c] = getCellPosition(input);
+                        if (parseInt(input.value) === solutionBoard[r][c]) {
+                            input.classList.add('locked');
+                            input.classList.remove('error-cell', 'anim-shake');
                         }
                     }
                 });
             } else {
-                $('#sudoku-board input').removeClass('locked error-cell anim-shake');
+                getCellInputs().forEach(input => input.classList.remove('locked', 'error-cell', 'anim-shake'));
             }
             updateErrors();
             checkWinCondition(); saveGameState();
         }
 
         function initGrid() {
-            $board.empty();
+            boardEl.replaceChildren();
             notesBoard = Array(gridSize * gridSize).fill().map(() => []);
             const totalCells = gridSize * gridSize;
             for (let i = 0; i < totalCells; i++) {
                 const row = Math.floor(i / gridSize); const col = i % gridSize;
-                const $cell = $('<div>').addClass('cell');
-                const $input = $('<input>')
-                    .attr({ type: 'text', inputmode: 'none', readonly: true, 'data-row': row, 'data-col': col })
-                    .on('click', handleCellClick);
-                const $notesTop = $('<div>').addClass('notes-display notes-top');
-                const $notesBottom = $('<div>').addClass('notes-display notes-bottom');
-                $cell.append($input).append($notesTop).append($notesBottom); $board.append($cell);
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                const input = document.createElement('input');
+                input.type = 'text'; input.inputMode = 'none'; input.readOnly = true;
+                input.dataset.row = row; input.dataset.col = col;
+                input.addEventListener('click', handleCellClick);
+                const notesTop = document.createElement('div');
+                notesTop.className = 'notes-display notes-top';
+                const notesBottom = document.createElement('div');
+                notesBottom.className = 'notes-display notes-bottom';
+                cell.append(input, notesTop, notesBottom); boardEl.append(cell);
             }
         }
 
@@ -2104,12 +2159,12 @@
         }
 
         function hasPlayerProgress() {
-            const hasEntries = $('#sudoku-board input:not(.given)').toArray().some(input => input.value !== '');
+            const hasEntries = Array.from(getCellInputs()).some(input => !input.classList.contains('given') && input.value !== '');
             return hasEntries || hasNotes();
         }
 
         function isPuzzleFinished() {
-            return statusKind === 'autoSolved' || $message.hasClass('msg-success');
+            return statusKind === 'autoSolved' || messageEl.classList.contains('msg-success');
         }
 
         // Asks first when the current puzzle has progress that a new game would throw away.
@@ -2122,13 +2177,13 @@
                 });
                 if (!isConfirmed) return;
             }
-            $('#new-game-modal').modal('close');
+            newGameDialog.close();
             newGame();
         }
 
         function newGame() {
             gameGeneration++;
-            const selectedSize = parseInt($gridSizeSelect.val());
+            const selectedSize = parseInt(gridSizeSelect.value);
             if (selectedSize !== gridSize) {
                 setGridSize(selectedSize);
                 initGrid();
@@ -2136,42 +2191,49 @@
 
             setStatus('', 'neutral'); stopFireworks(); clearHighlights(); selectCell(null);
 
-            const puzzle = generatePuzzle($difficulty.val());
+            const puzzle = generatePuzzle(difficultySelect.value);
             solutionBoard = puzzle.solution;
             currentBoard = puzzle.board;
 
             notesBoard = Array(gridSize * gridSize).fill().map(() => []);
             renderBoard(true); 
             
-            if ($('#toggle-auto-notes').is(':checked')) autoFillNotes();
+            if (autoNotesToggle.checked) autoFillNotes();
             else renderNotes();
-            
+
             updateNumberPad(); saveGameState();
         }
 
         function renderBoard(animated = false) {
-            const $inputs = $('#sudoku-board input');
-            $inputs.each(function(index) {
+            getCellInputs().forEach((input, index) => {
                 const r = Math.floor(index / gridSize); const c = index % gridSize;
-                const val = currentBoard[r][c]; const $input = $(this);
-                
-                $input.val(val === 0 ? '' : val).removeClass('given locked anim-pop anim-shake anim-wave error-cell hint-highlight highlight-match selected-cell constraint-line').css('animation-delay', '0ms');
-                if (val !== 0) $input.addClass('given');
+                const val = currentBoard[r][c];
+
+                input.value = val === 0 ? '' : val;
+                input.classList.remove('given', 'locked', 'anim-pop', 'anim-shake', 'anim-wave', 'error-cell', 'hint-highlight', 'highlight-match', 'selected-cell', 'constraint-line');
+                input.style.animationDelay = '0ms';
+                if (val !== 0) input.classList.add('given');
 
                 if (animated && animationsEnabled) {
-                    $input.addClass('anim-pop').css('animation-delay', `${(r * gridSize + c) * 3}ms`);
-                    setTimeout(() => $input.removeClass('anim-pop').css('animation-delay', '0ms'), 500 + ((r * gridSize + c) * 3));
+                    input.classList.add('anim-pop');
+                    input.style.animationDelay = `${(r * gridSize + c) * 3}ms`;
+                    setTimeout(() => {
+                        input.classList.remove('anim-pop');
+                        input.style.animationDelay = '0ms';
+                    }, 500 + ((r * gridSize + c) * 3));
                 }
             });
         }
 
-        function revealHintCell($input, digit) {
-            const r = parseInt($input.attr('data-row')); const c = parseInt($input.attr('data-col'));
+        function revealHintCell(input, digit) {
+            const [r, c] = getCellPosition(input);
 
-            $input.val(digit).removeClass('anim-shake error-cell selected-cell').addClass('hint-highlight'); selectCell($input);
-            if (!hardModeEnabled) $input.addClass('locked');
-            if (animationsEnabled) { $input.addClass('anim-pop'); setTimeout(() => $input.removeClass('anim-pop'), 400); }
-            setTimeout(() => $input.removeClass('hint-highlight'), 1200);
+            input.value = digit;
+            input.classList.remove('anim-shake', 'error-cell', 'selected-cell');
+            input.classList.add('hint-highlight'); selectCell(input);
+            if (!hardModeEnabled) input.classList.add('locked');
+            if (animationsEnabled) { input.classList.add('anim-pop'); setTimeout(() => input.classList.remove('anim-pop'), 400); }
+            setTimeout(() => input.classList.remove('hint-highlight'), 1200);
 
             notesBoard[r * gridSize + c] = [];
             removeNotesFromAffected(r, c, digit);
@@ -2180,38 +2242,37 @@
         function giveHint() {
             if (statusKind === 'autoSolved') return;
             stopFireworks(); clearHighlights(); setStatus('', 'neutral');
-            if(fastFillMode) { $fastFillToggle.prop('checked', false); toggleFastFill(); } 
+            if(fastFillMode) { fastFillToggle.checked = false; toggleFastFill(); } 
 
             const wrongCells = [];
             const emptyCells = [];
-            $('#sudoku-board input').each(function() {
-                const $input = $(this);
-                const r = parseInt($input.attr('data-row')); const c = parseInt($input.attr('data-col'));
-                if ($input.val() === '') emptyCells.push($input);
-                else if (!$input.hasClass('given') && parseInt($input.val()) !== solutionBoard[r][c]) wrongCells.push($input);
+            getCellInputs().forEach(input => {
+                const [r, c] = getCellPosition(input);
+                if (input.value === '') emptyCells.push(input);
+                else if (!input.classList.contains('given') && parseInt(input.value) !== solutionBoard[r][c]) wrongCells.push(input);
             });
 
             // Mistakes come first, so the hint never builds on a wrong value
             const hintCells = wrongCells.length > 0 ? wrongCells : emptyCells;
             let hintMessage = 'No hints needed! The board is currently correct.';
             if (hintCells.length > 0) {
-                const $hintCell = hintCells[Math.floor(Math.random() * hintCells.length)];
-                const r = parseInt($hintCell.attr('data-row')); const c = parseInt($hintCell.attr('data-col'));
-                revealHintCell($hintCell, solutionBoard[r][c]);
+                const hintCell = hintCells[Math.floor(Math.random() * hintCells.length)];
+                const [r, c] = getCellPosition(hintCell);
+                revealHintCell(hintCell, solutionBoard[r][c]);
                 hintMessage = wrongCells.length > 0 ? 'Corrected a mistake to help you progress!' : '';
             }
             
-            if ($('#toggle-auto-notes').is(':checked')) autoFillNotes();
+            if (autoNotesToggle.checked) autoFillNotes();
             else renderNotes();
 
             updateErrors(); updateNumberPad(); checkWinCondition();
             // A win or hard-mode verdict from the check above takes precedence over the hint text
-            if (hintMessage && $message.text() === '') setStatus(hintMessage, 'neutral', 'hint');
+            if (hintMessage && messageEl.textContent === '') setStatus(hintMessage, 'neutral', 'hint');
             saveGameState();
         }
 
         function solveGame() {
-            const $inputs = $('#sudoku-board input'); let staggerIndex = 0;
+            let staggerIndex = 0;
             setStatus('Solving...', 'neutral'); stopFireworks(); clearHighlights(); selectCell(null);
 
             let board = getBoardState();
@@ -2231,17 +2292,22 @@
             notesBoard = Array(gridSize * gridSize).fill().map(() => []);
             renderNotes();
 
-            $inputs.each(function(index) {
-                const r = Math.floor(index / gridSize); const c = index % gridSize; const $input = $(this);
-                if (!$input.hasClass('given') && ($input.val() == '' || parseInt($input.val()) !== finalSolution[r][c])) {
-                    if (!hardModeEnabled) $input.addClass('locked');
+            getCellInputs().forEach((input, index) => {
+                const r = Math.floor(index / gridSize); const c = index % gridSize;
+                if (!input.classList.contains('given') && (input.value == '' || parseInt(input.value) !== finalSolution[r][c])) {
+                    if (!hardModeEnabled) input.classList.add('locked');
                     if (animationsEnabled) {
-                        runInCurrentGame(() => { 
-                            $input.val(finalSolution[r][c]).removeClass('anim-shake error-cell hint-highlight selected-cell').addClass('anim-pop'); 
-                            updateNumberPad(); 
+                        runInCurrentGame(() => {
+                            input.value = finalSolution[r][c];
+                            input.classList.remove('anim-shake', 'error-cell', 'hint-highlight', 'selected-cell');
+                            input.classList.add('anim-pop');
+                            updateNumberPad();
                         }, staggerIndex * 15);
                         staggerIndex++;
-                    } else $input.val(finalSolution[r][c]).removeClass('anim-shake error-cell hint-highlight selected-cell');
+                    } else {
+                        input.value = finalSolution[r][c];
+                        input.classList.remove('anim-shake', 'error-cell', 'hint-highlight', 'selected-cell');
+                    }
                 }
             });
             
@@ -2254,16 +2320,13 @@
         
         function triggerWaveAnimation() {
             if (!animationsEnabled) return;
-            const $inputs = $('#sudoku-board input');
-            $inputs.each(function() {
-                const $input = $(this);
-                const r = parseInt($input.attr('data-row'));
-                const c = parseInt($input.attr('data-col'));
-                const delay = (r + c) * 50; 
-                
+            getCellInputs().forEach(input => {
+                const [r, c] = getCellPosition(input);
+                const delay = (r + c) * 50;
+
                 runInCurrentGame(() => {
-                    $input.addClass('anim-wave');
-                    setTimeout(() => $input.removeClass('anim-wave'), 600);
+                    input.classList.add('anim-wave');
+                    setTimeout(() => input.classList.remove('anim-wave'), 600);
                 }, delay);
             });
         }
@@ -2296,7 +2359,7 @@
         }
 
         // --- Realistic Firework Engine ---
-        const ctx = $fireworkCanvas[0].getContext('2d');
+        const ctx = fireworkCanvas.getContext('2d');
         let particles = []; 
         let fireworkInterval; 
         let fireworkStartTimeout;
@@ -2304,8 +2367,8 @@
         let isFiring = false;
 
         function resizeCanvas() { 
-            $fireworkCanvas[0].width = $fireworkCanvas.outerWidth(); 
-            $fireworkCanvas[0].height = $fireworkCanvas.outerHeight(); 
+            fireworkCanvas.width = fireworkCanvas.offsetWidth;
+            fireworkCanvas.height = fireworkCanvas.offsetHeight;
         }
 
         class Particle {
@@ -2346,8 +2409,8 @@
         }
 
         function createExplosion() {
-            const x = ($fireworkCanvas.width() * 0.2) + Math.random() * ($fireworkCanvas.width() * 0.6); 
-            const y = ($fireworkCanvas.height() * 0.1) + Math.random() * ($fireworkCanvas.height() * 0.4);
+            const x = (fireworkCanvas.width * 0.2) + Math.random() * (fireworkCanvas.width * 0.6);
+            const y = (fireworkCanvas.height * 0.1) + Math.random() * (fireworkCanvas.height * 0.4);
             const baseHue = Math.floor(Math.random() * 360);
             
             for (let i = 0; i < 70; i++) {
@@ -2361,7 +2424,7 @@
             
             ctx.globalCompositeOperation = 'destination-out';
             ctx.fillStyle = 'rgba(0, 0, 0, 0.15)'; 
-            ctx.fillRect(0, 0, $fireworkCanvas[0].width, $fireworkCanvas[0].height);
+            ctx.fillRect(0, 0, fireworkCanvas.width, fireworkCanvas.height);
             ctx.globalCompositeOperation = 'source-over';
 
             particles.forEach(p => { 
@@ -2373,9 +2436,9 @@
             if (particles.length > 0 || isFiring) { 
                 animationFrameId = requestAnimationFrame(particleLoop); 
             } else {
-                $fireworkCanvas.hide();
+                fireworkCanvas.classList.remove('visible');
                 canInterruptFireworks = false;
-                ctx.clearRect(0, 0, $fireworkCanvas[0].width, $fireworkCanvas[0].height);
+                ctx.clearRect(0, 0, fireworkCanvas.width, fireworkCanvas.height);
             }
         }
 
@@ -2383,7 +2446,7 @@
             if (!animationsEnabled) return;
             stopFireworks(); 
             resizeCanvas(); 
-            $fireworkCanvas.show(); 
+            fireworkCanvas.classList.add('visible');
             particles = [];
             isFiring = true;
             canInterruptFireworks = false;
@@ -2414,11 +2477,13 @@
             particles = [];
             isFiring = false;
             canInterruptFireworks = false;
-            if (ctx) ctx.clearRect(0, 0, $fireworkCanvas[0].width, $fireworkCanvas[0].height); 
-            $fireworkCanvas.hide();
+            if (ctx) ctx.clearRect(0, 0, fireworkCanvas.width, fireworkCanvas.height); 
+            fireworkCanvas.classList.remove('visible');
         }
 
-        $(window).on('resize', () => { if ($fireworkCanvas.is(':visible')) resizeCanvas(); });
+        window.addEventListener('resize', () => { if (fireworkCanvas.classList.contains('visible')) resizeCanvas(); });
+
+        initPage();
 
     </script>
 </body>
