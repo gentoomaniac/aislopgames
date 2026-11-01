@@ -695,7 +695,7 @@
         // Keyed by '<grid size>:<difficulty>', value is the time in milliseconds.
         const DIFFICULTY_NAMES = { '30': 'Easy', '40': 'Medium', '55': 'Hard', '65': 'Expert', '75': 'Master' };
         const GRID_SIZE_NAMES = { 9: '9x9', 5: '5x5', 4: '4x4' };
-        let bestTimesFallback = {}; // only used while storage is blocked or a write failed
+        let bestTimesFallback = {}; // only filled while storage is blocked or a write failed
 
         function bestTimeKey(size, difficulty) {
             return size + ':' + difficulty;
@@ -704,19 +704,30 @@
         // Master is only generated for 9x9
         function isKnownBestTimeKey(key) {
             const [size, difficulty] = key.split(':');
-            return GRID_SIZE_NAMES[size] !== undefined && DIFFICULTY_NAMES[difficulty] !== undefined &&
+            return Object.hasOwn(GRID_SIZE_NAMES, size) && Object.hasOwn(DIFFICULTY_NAMES, difficulty) &&
                 !(size !== '9' && difficulty === '75');
         }
 
+        function isValidBestTime(ms) {
+            return Number.isFinite(ms) && ms > 0;
+        }
+
         // The stored object as it is, including entries we can't read; those are left alone on save.
+        // Times the session could not write are laid over it, so a failed save still shows up.
         function readStoredBestTimes() {
+            let stored = {};
             try {
-                const stored = JSON.parse(localStorage.getItem(BEST_TIMES_KEY));
-                if (stored && typeof stored === 'object' && !Array.isArray(stored)) return stored;
+                const parsed = JSON.parse(localStorage.getItem(BEST_TIMES_KEY));
+                if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) stored = parsed;
             } catch (e) {
-                // Blocked or corrupt storage: fall through to the in-memory copy
+                // Blocked or corrupt storage: only the in-memory copy is left
             }
-            return { ...bestTimesFallback };
+            Object.keys(bestTimesFallback).forEach(key => {
+                const fallbackMs = bestTimesFallback[key];
+                const isStoredFaster = isValidBestTime(stored[key]) && stored[key] <= fallbackMs;
+                if (isValidBestTime(fallbackMs) && !isStoredFaster) stored[key] = fallbackMs;
+            });
+            return stored;
         }
 
         // Every access reads storage again, so a second open tab is never overwritten
@@ -725,7 +736,7 @@
             const validTimes = {};
             Object.keys(stored).forEach(key => {
                 const ms = stored[key];
-                if (isKnownBestTimeKey(key) && Number.isFinite(ms) && ms > 0) validTimes[key] = ms;
+                if (isKnownBestTimeKey(key) && isValidBestTime(ms)) validTimes[key] = ms;
             });
             return validTimes;
         }
